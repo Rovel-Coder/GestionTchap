@@ -1,0 +1,589 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Personnel — Gestion Tchap{% endblock %}
+
+{% block content %}
+<div class="view" x-data="personnelView()" x-init="load()">
+
+    {# ── Toolbar ── #}
+    <div class="view-toolbar">
+        <div class="toolbar-left" style="gap:10px;flex-wrap:wrap;align-items:center;">
+            <span class="view-title">REGISTRE DU PERSONNEL</span>
+            <span class="badge" x-text="filtered.length + ' agent' + (filtered.length > 1 ? 's' : '')"></span>
+
+            {# Filtre Catégorie #}
+            <div class="pf-wrapper" x-data="{ open: false }">
+                <button class="nav-btn" :class="{ active: Object.keys(filters.categorie).length > 0, 'pf-open': open }"
+                    @click.stop="open = !open">
+                    <svg class="pf-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                    Catégorie
+                    <span class="pf-active-badge" x-show="Object.keys(filters.categorie).length > 0" x-text="Object.keys(filters.categorie).length"></span>
+                </button>
+                <div class="pf-menu" x-show="open" @click.outside="open = false" x-cloak>
+                    <div class="pf-menu-header">
+                        <span class="pf-menu-header-title">Catégorie</span>
+                        <button class="pf-menu-clear" x-show="Object.keys(filters.categorie).length > 0"
+                            @click.stop="filters.categorie = {}; page = 1">Effacer</button>
+                    </div>
+                    <template x-for="cat in ['gav','soo','off','civ']" :key="cat">
+                        <div class="pf-item" :class="{ 'pf-item-on': filters.categorie[cat] }"
+                            @click.stop="toggleFilter('categorie', cat, !filters.categorie[cat])">
+                            <div class="pf-cb"><i class="fa-solid fa-check pf-cb-check" style="font-size:9px;"></i></div>
+                            <span class="pf-item-text" x-text="catLabel(cat)"></span>
+                            <span class="pf-item-count" x-text="countByCategorie(cat)"></span>
+                        </div>
+                    </template>
+                    <div class="pf-menu-footer">
+                        <button class="pf-menu-apply" @click="open = false">Appliquer</button>
+                    </div>
+                </div>
+            </div>
+
+            {# Filtre Statut #}
+            <div class="pf-wrapper" x-data="{ open: false }">
+                <button class="nav-btn" :class="{ active: Object.keys(filters.statut).length > 0, 'pf-open': open }"
+                    @click.stop="open = !open">
+                    <svg class="pf-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                    Statut
+                    <span class="pf-active-badge" x-show="Object.keys(filters.statut).length > 0" x-text="Object.keys(filters.statut).length"></span>
+                </button>
+                <div class="pf-menu" x-show="open" @click.outside="open = false" x-cloak>
+                    <div class="pf-menu-header">
+                        <span class="pf-menu-header-title">Statut</span>
+                        <button class="pf-menu-clear" x-show="Object.keys(filters.statut).length > 0"
+                            @click.stop="filters.statut = {}; page = 1">Effacer</button>
+                    </div>
+                    <template x-for="s in ['actif','reserve','admin_civil','admin_militaire']" :key="s">
+                        <div class="pf-item" :class="{ 'pf-item-on': filters.statut[s] }"
+                            @click.stop="toggleFilter('statut', s, !filters.statut[s])">
+                            <div class="pf-cb"><i class="fa-solid fa-check pf-cb-check" style="font-size:9px;"></i></div>
+                            <span class="pf-item-text" x-text="statutLabel(s)"></span>
+                            <span class="pf-item-count" x-text="countByStatut(s)"></span>
+                        </div>
+                    </template>
+                    <div class="pf-menu-footer">
+                        <button class="pf-menu-apply" @click="open = false">Appliquer</button>
+                    </div>
+                </div>
+            </div>
+
+            {# Filtre Unité #}
+            <div class="pf-wrapper" x-data="{ open: false }">
+                <button class="nav-btn" :class="{ active: Object.keys(filters.unite).length > 0, 'pf-open': open }"
+                    @click.stop="open = !open">
+                    <svg class="pf-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                    Unité
+                    <span class="pf-active-badge" x-show="Object.keys(filters.unite).length > 0" x-text="Object.keys(filters.unite).length"></span>
+                </button>
+                <div class="pf-menu" x-show="open" @click.outside="open = false" x-cloak style="max-height:300px;overflow-y:auto;">
+                    <div class="pf-menu-header" style="position:sticky;top:0;background:var(--bg-elevated);z-index:1;">
+                        <span class="pf-menu-header-title">Unité</span>
+                        <button class="pf-menu-clear" x-show="Object.keys(filters.unite).length > 0"
+                            @click.stop="filters.unite = {}; page = 1">Effacer</button>
+                    </div>
+                    <template x-for="u in unites" :key="u.id">
+                        <div class="pf-item" :class="{ 'pf-item-on': filters.unite[u.id] }"
+                            @click.stop="toggleFilter('unite', u.id, !filters.unite[u.id])">
+                            <div class="pf-cb"><i class="fa-solid fa-check pf-cb-check" style="font-size:9px;"></i></div>
+                            <span class="pf-item-text" x-text="u.Nom"></span>
+                            <span class="pf-item-count" x-text="countByUnite(u.id)"></span>
+                        </div>
+                    </template>
+                    <div class="pf-menu-footer" style="position:sticky;bottom:0;">
+                        <button class="pf-menu-apply" @click="open = false">Appliquer</button>
+                    </div>
+                </div>
+            </div>
+
+            {# Filtre Salons #}
+            <div class="pf-wrapper" x-data="{ open: false }">
+                <button class="nav-btn" :class="{ active: Object.keys(filters.salons).length > 0, 'pf-open': open }"
+                    @click.stop="open = !open">
+                    <svg class="pf-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                    Salons
+                    <span class="pf-active-badge" x-show="Object.keys(filters.salons).length > 0" x-text="Object.keys(filters.salons).length"></span>
+                </button>
+                <div class="pf-menu" x-show="open" @click.outside="open = false" x-cloak>
+                    <div class="pf-menu-header">
+                        <span class="pf-menu-header-title">Salons</span>
+                        <button class="pf-menu-clear" x-show="Object.keys(filters.salons).length > 0"
+                            @click.stop="filters.salons = {}; page = 1">Effacer</button>
+                    </div>
+                    <div class="pf-item" :class="{ 'pf-item-on': filters.salons['avec'] }"
+                        @click.stop="toggleFilter('salons', 'avec', !filters.salons['avec']); if(filters.salons['avec']) delete filters.salons['sans'];">
+                        <div class="pf-cb"><i class="fa-solid fa-check pf-cb-check" style="font-size:9px;"></i></div>
+                        <span class="pf-item-text">Avec salons</span>
+                    </div>
+                    <div class="pf-item" :class="{ 'pf-item-on': filters.salons['sans'] }"
+                        @click.stop="toggleFilter('salons', 'sans', !filters.salons['sans']); if(filters.salons['sans']) delete filters.salons['avec'];">
+                        <div class="pf-cb"><i class="fa-solid fa-check pf-cb-check" style="font-size:9px;"></i></div>
+                        <span class="pf-item-text">Sans salons</span>
+                    </div>
+                    <div class="pf-menu-footer">
+                        <button class="pf-menu-apply" @click="open = false">Appliquer</button>
+                    </div>
+                </div>
+            </div>
+
+            {# Reset filtres #}
+            <button x-show="hasActiveFilters" class="pf-reset"
+                @click="clearFilters()" title="Effacer tous les filtres">✕</button>
+        </div>
+
+        <div class="toolbar-right">
+            <div class="search-box">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" :value="search" @input="search = $event.target.value; page = 1" @focus="$el.removeAttribute('readonly')" readonly placeholder="Rechercher…" autocomplete="off" spellcheck="false">
+            </div>
+
+            {% if permissions.canAdmin %}
+            <button class="btn-icon" @click="syncFromTchap()" title="Synchroniser depuis Tchap">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            </button>
+            {% endif %}
+            {% if permissions.canManage %}
+            <button class="btn-icon" @click="applyToTchap()" title="Appliquer salons vers Tchap">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+            <label class="btn-ghost" style="cursor:pointer;display:flex;align-items:center;gap:7px;" title="Importer des membres depuis un fichier CSV">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <span>Importer CSV</span>
+                <input type="file" accept=".csv,.txt" style="display:none" @change="loadCsvFile($event)">
+            </label>
+            <button class="btn-primary" @click="openModal('create')">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Ajouter
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    {# ── Spinner ── #}
+    <div x-show="loading" style="flex:1;display:flex;align-items:center;justify-content:center;">
+        <div class="spinner"></div>
+    </div>
+
+    {# ── Table ── #}
+    <div class="table-wrapper" x-show="!loading">
+        <table class="data-table">
+            <colgroup>
+                <col style="width:180px">
+                <col style="width:150px">
+                <col style="width:140px">
+                <col style="width:auto">
+                {% if permissions.canManage %}<col style="width:40px">{% endif %}
+            </colgroup>
+            <thead>
+                <tr>
+                    <th>Nom</th>
+                    <th>Prénom</th>
+                    <th>Unité</th>
+                    <th>Salons assignés</th>
+                    {% if permissions.canManage %}<th></th>{% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                <tr x-show="filtered.length === 0 && !loading">
+                    <td colspan="{{ permissions.canManage ? 5 : 4 }}" class="empty-state">Aucun agent trouvé</td>
+                </tr>
+                <template x-for="agent in paginated" :key="agent.id">
+                    <tr>
+                        <td class="td-nom" data-label="Nom"
+                            @click="openModal('detail', agent)" style="cursor:pointer;"
+                            x-text="agent.Nom"></td>
+                        <td data-label="Prénom" x-text="agent.Prenom"></td>
+                        <td data-label="Unité">
+                            <template x-for="uid in (agent.Unite || [])" :key="uid">
+                                <span class="unite-badge" x-text="getUniteName(uid)"></span>
+                            </template>
+                            <span x-show="!agent.Unite || agent.Unite.length === 0"
+                                style="font-size:11px;color:var(--text-muted);">—</span>
+                        </td>
+                        <td data-label="Salons assignés" class="td-salons">
+                            <div class="td-salons">
+                                <template x-for="salon in getAgentSalons(agent)" :key="salon.id">
+                                    <span class="salon-tag" :class="'type-' + salon.Type"
+                                        @click.stop="openSalonDetail(salon)"
+                                        x-text="salon.Nom"></span>
+                                </template>
+                                <span x-show="getAgentSalons(agent).length === 0"
+                                    style="font-size:11px;color:var(--text-muted);">Aucun</span>
+                            </div>
+                        </td>
+                        {% if permissions.canManage %}
+                        <td data-label="" class="td-actions">
+                            <button class="btn-icon" @click.stop="openModal('edit', agent)" title="Modifier">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            </button>
+                        </td>
+                        {% endif %}
+                    </tr>
+                </template>
+            </tbody>
+        </table>
+    </div>
+
+    {# ── Pagination ── #}
+    <div class="pagination-bar" x-show="!loading">
+        <div class="pagination-size">
+            Lignes par page :
+            <select x-model.number="perPage" @change="page = 1">
+                <option value="10">10</option>
+                <option value="25">25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+            </select>
+        </div>
+        <div class="pagination-info"
+            x-text="filtered.length === 0 ? '0 agent' : ((page - 1) * perPage + 1) + ' – ' + Math.min(page * perPage, filtered.length) + ' sur ' + filtered.length + ' agent' + (filtered.length > 1 ? 's' : '')">
+        </div>
+        <div class="pagination-controls">
+            <button class="pagination-btn" :disabled="page === 1" @click="page--">&#8249;</button>
+            <template x-for="p in visiblePages" :key="'p' + p">
+                <span x-show="p === '...'" style="padding:0 4px;color:var(--text-muted);line-height:30px;">…</span>
+                <button x-show="p !== '...'" class="pagination-btn" :class="{ active: p === page }"
+                    @click="page = p" x-text="p"></button>
+            </template>
+            <button class="pagination-btn" :disabled="page === totalPages" @click="page++">&#8250;</button>
+        </div>
+    </div>
+
+    {# ── Modal Créer / Modifier / Détail ── #}
+    <div class="modal-overlay" x-show="modalOpen" x-cloak @click.self="closeModal()">
+        <div class="modal modal-large">
+            <div class="modal-header">
+                <h3 x-text="modalMode === 'create' ? 'Ajouter un agent' : (modalMode === 'edit' ? 'Modifier un agent' : 'Détail agent')"></h3>
+                <button class="btn-icon" @click="closeModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div x-show="modalError" class="alert-error" x-text="modalError"></div>
+
+                <template x-if="modalMode === 'detail'">
+                    <div class="detail-grid">
+                        <div class="detail-row"><strong>NiGend</strong><span x-text="form.NiGend || '—'"></span></div>
+                        <div class="detail-row"><strong>Nom</strong><span class="td-nom" x-text="form.Nom || '—'"></span></div>
+                        <div class="detail-row"><strong>Prénom</strong><span x-text="form.Prenom || '—'"></span></div>
+                        <div class="detail-row"><strong>Grade</strong><span x-text="form.Grade || '—'"></span></div>
+                        <div class="detail-row"><strong>Mail</strong><span x-text="form.Mail || '—'"></span></div>
+                        <div class="detail-row"><strong>user_id Tchap</strong><span style="font-family:monospace;font-size:12px;" x-text="form.user_id || '—'"></span></div>
+                        <div class="detail-row"><strong>Rôle</strong><span x-text="form.Role || '—'"></span></div>
+                        <div class="detail-row"><strong>Statut</strong><span x-text="statutLabel(form.Statut)"></span></div>
+                        <div class="detail-row"><strong>Subdivision</strong><span x-text="subdivLabel(form.Subdivision)"></span></div>
+                        <div class="detail-row">
+                            <strong>Unités</strong>
+                            <div style="display:flex;flex-wrap:wrap;gap:4px;">
+                                <template x-if="form.Unite && form.Unite.length">
+                                    <template x-for="uid in form.Unite" :key="uid">
+                                        <span class="unite-badge" x-text="getUniteName(uid)"></span>
+                                    </template>
+                                </template>
+                                <span x-show="!form.Unite || !form.Unite.length" style="color:var(--text-muted);">—</span>
+                            </div>
+                        </div>
+                        <div class="detail-row">
+                            <strong>Salons assignés</strong>
+                            <div style="display:flex;flex-wrap:wrap;gap:4px;">
+                                <template x-for="salon in getAgentSalons(form)" :key="salon.id">
+                                    <span class="salon-tag" :class="'type-' + salon.Type" x-text="salon.Nom"></span>
+                                </template>
+                                <span x-show="getAgentSalons(form).length === 0" style="color:var(--text-muted);">Aucun</span>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+                <template x-if="modalMode !== 'detail'">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>NiGend <small style="text-transform:none;">(6 chiffres)</small></label>
+                            <input type="text" x-model="form.NiGend" maxlength="6" pattern="\d{6}">
+                        </div>
+                        <div class="form-group">
+                            <label>Nom</label>
+                            <input type="text" x-model="form.Nom" maxlength="100">
+                        </div>
+                        <div class="form-group">
+                            <label>Prénom</label>
+                            <input type="text" x-model="form.Prenom" maxlength="100">
+                        </div>
+                        <div class="form-group">
+                            <label>Grade</label>
+                            <select x-model="form.Grade">
+                                <option value="">— Sélectionner —</option>
+                                <template x-for="g in allGrades" :key="g">
+                                    <option :value="g" x-text="g"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Mail</label>
+                            <input type="email" x-model="form.Mail" maxlength="200">
+                        </div>
+                        <div class="form-group">
+                            <label>user_id Tchap</label>
+                            <input type="text" x-model="form.user_id" maxlength="200"
+                                placeholder="@prenom.nom:agent.interieur.tchap.gouv.fr"
+                                @blur="form.user_id = mailToMatrixId(form.user_id)">
+                            <div x-show="form.user_id && !form.user_id.startsWith('@')"
+                                style="margin-top:4px;font-size:11px;color:var(--red-light);">
+                                ⚠ Le user_id doit commencer par @ (ex : @prenom.nom:agent.interieur.tchap.gouv.fr)
+                            </div>
+                            <div x-show="form.user_id && form.user_id.startsWith('@') && form.user_id.includes(':')"
+                                style="margin-top:4px;font-size:11px;color:#6ec38a;">
+                                ✓ Format Matrix valide
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Statut</label>
+                            <select x-model="form.Statut">
+                                <option value="actif">Actif</option>
+                                <option value="reserve">Réserve</option>
+                                <option value="admin_civil">Administratif - Civil</option>
+                                <option value="admin_militaire">Administratif - Militaire</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Subdivision</label>
+                            <select x-model="form.Subdivision">
+                                <option value="">— Sélectionner —</option>
+                                <option value="dept">Gendarmerie départementale</option>
+                                <option value="mobile">Gendarmerie mobile</option>
+                                <option value="grepub">Garde républicaine</option>
+                                <option value="air">Gendarmerie de l'air et de l'espace</option>
+                                <option value="maritime">Gendarmerie maritime</option>
+                                <option value="cta">Corps technique et administratif</option>
+                            </select>
+                        </div>
+                        {% if permissions.canAdmin %}
+                        <div class="form-group">
+                            <label>Rôle</label>
+                            <select x-model="form.Role">
+                                <option value="lecteur">Lecteur</option>
+                                <option value="gestionnaire">Gestionnaire</option>
+                                <option value="superviseur_crise">Superviseur Crise</option>
+                                <option value="admin">Administrateur</option>
+                            </select>
+                        </div>
+                        {% endif %}
+                        <div class="form-group form-full">
+                            <label>Unités</label>
+                            <div class="multi-select">
+                                <template x-for="u in unites" :key="u.id">
+                                    <label class="multi-select-item">
+                                        <input type="checkbox"
+                                            :checked="form.Unite && form.Unite.includes(u.id)"
+                                            @change="toggleUnite(u.id, $event.target.checked)">
+                                        <span x-text="u.Nom"></span>
+                                    </label>
+                                </template>
+                            </div>
+                        </div>
+                        <div class="form-group form-full">
+                            <label>Salons extra <small style="text-transform:none;">(hors unités)</small></label>
+                            <div class="multi-select">
+                                <template x-for="s in salons" :key="s.id">
+                                    <label class="multi-select-item">
+                                        <input type="checkbox"
+                                            :checked="form.Salons_Extra && form.Salons_Extra.includes(s.id)"
+                                            @change="toggleSalonExtra(s.id, $event.target.checked)">
+                                        <span x-text="s.Nom"></span>
+                                    </label>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            <div class="modal-footer" x-show="modalMode !== 'detail'">
+                <button class="btn-ghost" @click="closeModal()">Annuler</button>
+                <button class="btn-primary" :disabled="saving" @click="save()">
+                    <i x-show="saving" class="fa-solid fa-spinner fa-spin"></i>
+                    <span x-show="!saving" x-text="modalMode === 'create' ? 'Ajouter' : 'Enregistrer'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {# ── Modal Import CSV (email-based) ── #}
+    <div class="modal-overlay" x-show="importOpen" x-cloak @click.self="closeCsvModal()">
+        <div class="modal" style="max-width:860px;width:95vw;">
+            <div class="modal-header">
+                <h3>
+                    <i class="fa-solid fa-users" style="margin-right:8px;color:var(--blue-light);"></i>
+                    Import CSV — <span x-text="csvRows.length + ' ligne' + (csvRows.length > 1 ? 's' : '')"></span>
+                </h3>
+                <button class="btn-icon" @click="closeCsvModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                {# Compteurs #}
+                <div style="display:flex;align-items:center;gap:18px;margin-bottom:14px;flex-wrap:wrap;">
+                    <span style="font-size:12px;">
+                        <strong style="color:#6ec38a;" x-text="csvToAdd.length"></strong>
+                        <span style="color:var(--text-muted);"> à ajouter</span>
+                    </span>
+                    <span style="font-size:12px;">
+                        <strong style="color:var(--gold);" x-text="csvToUpdate.length"></strong>
+                        <span style="color:var(--text-muted);"> à mettre à jour</span>
+                    </span>
+                    <span x-show="csvInvalid.length" style="font-size:12px;">
+                        <strong style="color:var(--red-light);" x-text="csvInvalid.length"></strong>
+                        <span style="color:var(--text-muted);"> invalide(s)</span>
+                    </span>
+                    <button x-show="csvInvalid.length" class="btn-ghost"
+                        style="margin-left:auto;font-size:11px;padding:3px 10px;"
+                        @click="csvRows = csvRows.filter(r => r.valid)">
+                        Nettoyer les invalides
+                    </button>
+                </div>
+
+                {# À ajouter #}
+                <div x-show="csvToAdd.length" style="margin-bottom:16px;">
+                    <div style="display:flex;align-items:center;gap:7px;padding:6px 0;margin-bottom:6px;font-family:var(--font-display);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#6ec38a;">
+                        <i class="fa-solid fa-check"></i>
+                        À ajouter (<span x-text="csvToAdd.length"></span>)
+                    </div>
+                    <div style="overflow-x:auto;max-height:280px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);">
+                        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                            <thead>
+                                <tr>
+                                    <th class="csv-th" style="width:30px;"></th>
+                                    <th class="csv-th">EMAIL</th>
+                                    <th class="csv-th" style="width:140px;">PRÉNOM</th>
+                                    <th class="csv-th" style="width:160px;">NOM</th>
+                                    <th class="csv-th" style="width:220px;">TCHAP ID</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="(row, i) in csvRows" :key="'add-' + i">
+                                    <tr x-show="row.valid && !row.existingAgent" class="csv-edit-row">
+                                        <td class="csv-edit-td" style="text-align:center;">
+                                            <button @click="csvRows.splice(i, 1)" class="csv-del-btn" title="Supprimer">
+                                                <i class="fa-solid fa-xmark" style="font-size:11px;"></i>
+                                            </button>
+                                        </td>
+                                        <td class="csv-edit-td">
+                                            <span style="font-family:monospace;font-size:11px;color:var(--text-secondary);padding:0 4px;" x-text="row.mail"></span>
+                                        </td>
+                                        <td class="csv-edit-td">
+                                            <input x-model="row.prenom" class="csv-cell-input" placeholder="Prénom">
+                                        </td>
+                                        <td class="csv-edit-td">
+                                            <input x-model="row.nom" class="csv-cell-input" placeholder="NOM">
+                                        </td>
+                                        <td class="csv-edit-td">
+                                            <input x-model="row.tchapId" class="csv-cell-input" style="font-family:monospace;font-size:11px;" placeholder="@prenom.nom:homeserver">
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                {# À mettre à jour #}
+                <div x-show="csvToUpdate.length" style="margin-bottom:16px;">
+                    <div style="display:flex;align-items:center;gap:7px;padding:6px 0;margin-bottom:6px;font-family:var(--font-display);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);">
+                        <i class="fa-solid fa-pen"></i>
+                        À mettre à jour (<span x-text="csvToUpdate.length"></span>)
+                    </div>
+                    <div style="overflow-x:auto;max-height:280px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);">
+                        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                            <thead>
+                                <tr>
+                                    <th class="csv-th" style="width:30px;"></th>
+                                    <th class="csv-th">AGENT ACTUEL</th>
+                                    <th class="csv-th" style="width:140px;">PRÉNOM (nouveau)</th>
+                                    <th class="csv-th" style="width:160px;">NOM (nouveau)</th>
+                                    <th class="csv-th" style="width:220px;">TCHAP ID (nouveau)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="(row, i) in csvRows" :key="'upd-' + i">
+                                    <tr x-show="row.valid && row.existingAgent" class="csv-edit-row csv-edit-row-update">
+                                        <td class="csv-edit-td" style="text-align:center;">
+                                            <button @click="csvRows.splice(i, 1)" class="csv-del-btn" title="Supprimer">
+                                                <i class="fa-solid fa-xmark" style="font-size:11px;"></i>
+                                            </button>
+                                        </td>
+                                        <td class="csv-edit-td">
+                                            <span style="font-size:11px;color:var(--text-secondary);"
+                                                x-text="row.existingAgent ? ([row.existingAgent.Prenom, row.existingAgent.Nom].filter(Boolean).join(' ') || row.mail) : ''"></span>
+                                        </td>
+                                        <td class="csv-edit-td">
+                                            <input x-model="row.prenom" class="csv-cell-input" :placeholder="row.existingAgent ? (row.existingAgent.Prenom || '—') : ''">
+                                        </td>
+                                        <td class="csv-edit-td">
+                                            <input x-model="row.nom" class="csv-cell-input" :placeholder="row.existingAgent ? (row.existingAgent.Nom || '—') : ''">
+                                        </td>
+                                        <td class="csv-edit-td">
+                                            <input x-model="row.tchapId" class="csv-cell-input" style="font-family:monospace;font-size:11px;" :placeholder="row.existingAgent ? (row.existingAgent.user_id || '—') : ''">
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                {# Invalides #}
+                <div x-show="csvInvalid.length">
+                    <div style="display:flex;align-items:center;gap:7px;padding:6px 0;margin-bottom:4px;font-family:var(--font-display);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--red-light);">
+                        <i class="fa-solid fa-xmark"></i>
+                        Invalides — ignorés (<span x-text="csvInvalid.length"></span>)
+                    </div>
+                    <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                        <template x-for="row in csvInvalid" :key="row.raw">
+                            <span style="font-family:var(--font-display);font-size:10px;padding:2px 8px;border-radius:3px;background:var(--bg-elevated);color:var(--text-muted);border:1px solid var(--border);opacity:.7;" x-text="row.raw"></span>
+                        </template>
+                    </div>
+                </div>
+
+                <div x-show="!csvRows.length" style="padding:20px 0;text-align:center;color:var(--text-muted);font-style:italic;">
+                    Aucune adresse email valide trouvée dans le fichier.
+                </div>
+            </div>
+            <div class="modal-footer" style="justify-content:space-between;">
+                <div style="font-size:12px;color:var(--text-muted);" x-show="csvImporting">
+                    Traitement en cours…
+                </div>
+                <div style="display:flex;gap:10px;">
+                    <button class="btn-ghost" @click="closeCsvModal()" :disabled="csvImporting">Annuler</button>
+                    <button class="btn-primary"
+                        @click="confirmCsvImport()"
+                        :disabled="(!csvToAdd.length && !csvToUpdate.length) || csvImporting">
+                        <i x-show="csvImporting" class="fa-solid fa-spinner fa-spin"></i>
+                        <i x-show="!csvImporting" class="fa-solid fa-check"></i>
+                        <span x-show="csvToAdd.length && csvToUpdate.length"
+                            x-text="'Ajouter ' + csvToAdd.length + ' · MAJ ' + csvToUpdate.length"></span>
+                        <span x-show="csvToAdd.length && !csvToUpdate.length"
+                            x-text="'Importer ' + csvToAdd.length + ' agent' + (csvToAdd.length > 1 ? 's' : '')"></span>
+                        <span x-show="!csvToAdd.length && csvToUpdate.length"
+                            x-text="'MAJ ' + csvToUpdate.length + ' agent' + (csvToUpdate.length > 1 ? 's' : '')"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── Confirmation suppression ── #}
+    <div class="modal-overlay" x-show="deleteTarget" x-cloak @click.self="deleteTarget = null">
+        <div class="modal modal-sm">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-triangle-exclamation" style="color:var(--red-light);"></i> Confirmer la suppression</h3>
+            </div>
+            <div class="modal-body">
+                <p>Supprimer <strong x-text="deleteTarget ? deleteTarget.Prenom + ' ' + deleteTarget.Nom : ''"></strong> ?</p>
+                <p style="font-size:12px;color:var(--text-muted);margin-top:6px;">Cette action est irréversible.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-ghost" @click="deleteTarget = null">Annuler</button>
+                <button class="btn-danger" :disabled="saving" @click="deleteAgent()">
+                    <i x-show="saving" class="fa-solid fa-spinner fa-spin"></i>
+                    <span x-show="!saving">Supprimer</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

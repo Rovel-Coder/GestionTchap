@@ -1,0 +1,236 @@
+'use strict';
+
+const express = require('express');
+const bot     = require('./client');
+
+const router = express.Router();
+
+// Health check sans authentification
+router.get('/health', (_req, res) => {
+    const cfg = bot.getBotConfig();
+    res.json({
+        ok:        true,
+        ready:     bot.isReady(),
+        userId:    cfg.userId || null,
+        homeserver: cfg.homeserver || null,
+    });
+});
+
+// Middleware auth sur toutes les autres routes
+router.use((req, res, next) => {
+    const key = req.headers['x-api-key'];
+    if (!key || key !== process.env.API_KEY) {
+        return res.status(401).json({ error: 'Clé API invalide' });
+    }
+    next();
+});
+
+// POST /login — authentifie le bot et démarre/redémarre la session E2EE
+router.post('/login', async (req, res) => {
+    const { homeserver, username, password } = req.body ?? {};
+    if (!homeserver || !username || !password) {
+        return res.status(400).json({ error: 'homeserver, username et password requis' });
+    }
+    try {
+        const result = await bot.loginAndRestart(homeserver, username, password);
+        res.json(result);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// GET /whoami — identité du bot connecté
+router.get('/whoami', async (_req, res) => {
+    try {
+        const data = await bot.get().getWhoAmI();
+        res.json(data);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// GET /rooms/:roomId/members — membres d'un salon (format compatible avec TchapService PHP)
+router.get('/rooms/:roomId/members', async (req, res) => {
+    try {
+        const members = await bot.get().getRoomMembers(req.params.roomId, undefined, ['join']);
+        const chunk   = members.map(m => ({
+            state_key: m.membershipFor,
+            content:   { membership: m.content?.membership ?? 'join' },
+        }));
+        res.json({ chunk });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST /rooms/:roomId/invite
+// Utilise fetch direct vers l'API Matrix (bypass matrix-bot-sdk qui produit M_INVALID_PARAM sur Tchap)
+router.post('/rooms/:roomId/invite', async (req, res) => {
+    const { userId } = req.body ?? {};
+    if (!userId) return res.status(400).json({ error: 'userId requis' });
+
+    if (typeof userId !== 'string' || !userId.startsWith('@') || !userId.includes(':')) {
+        console.error(`[invite] userId invalide : ${JSON.stringify(userId)}`);
+        return res.status(400).json({ error: `userId invalide : "${userId}" — format attendu @utilisateur:homeserver` });
+    }
+
+    const roomId = req.params.roomId;
+    const cfg    = bot.getBotConfig();
+
+    if (!cfg.homeserver || !cfg.accessToken) {
+        return res.status(503).json({ error: 'Bot non configuré (homeserver ou accessToken manquant)' });
+    }
+
+    const url = `${cfg.homeserver.replace(/\/$/, '')}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/invite`;
+    console.log(`[invite] ${userId} → ${roomId}`);
+
+    try {
+        const resp = await fetch(url, {
+            method:  'POST',
+            headers: { 'Authorization': `Bearer ${cfg.accessToken}`, 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ user_id: userId }),
+        });
+        const data = await resp.json().catch(() => ({}));
+
+        if (!resp.ok) {
+            console.error(`[invite] Échec HTTP=${resp.status} : ${JSON.stringify(data)}`);
+            const errMsg = data.error ?? data.errcode ?? `HTTP ${resp.status}`;
+            return res.status(resp.status === 403 ? 403 : 500).json({ error: errMsg });
+        }
+
+        res.json({ ok: true });
+    } catch (e) {
+        console.error(`[invite] Erreur réseau : ${e.message}`);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST /rooms/:roomId/kick
+// Utilise fetch direct vers l'API Matrix (cohérence avec /invite)
+router.post('/rooms/:roomId/kick', async (req, res) => {
+    const { userId, reason } = req.body ?? {};
+    if (!userId) return res.status(400).json({ error: 'userId requis' });
+
+    const roomId = req.params.roomId;
+    const cfg    = bot.getBotConfig();
+
+    if (!cfg.homeserver || !cfg.accessToken) {
+        return res.status(503).json({ error: 'Bot non configuré' });
+    }
+
+    const url = `${cfg.homeserver.replace(/\/$/, '')}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/kick`;
+    console.log(`[kick] ${userId} ← ${roomId}`);
+
+    try {
+        const resp = await fetch(url, {
+            method:  'POST',
+            headers: { 'Authorization': `Bearer ${cfg.accessToken}`, 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ user_id: userId, reason: reason ?? 'Gestion automatique' }),
+        });
+        const data = await resp.json().catch(() => ({}));
+
+        if (!resp.ok) {
+            console.error(`[kick] Échec HTTP=${resp.status} : ${JSON.stringify(data)}`);
+            const errMsg = data.error ?? data.errcode ?? `HTTP ${resp.status}`;
+            return res.status(resp.status === 403 ? 403 : 500).json({ error: errMsg });
+        }
+
+        res.json({ ok: true });
+    } catch (e) {
+        console.error(`[kick] Erreur réseau : ${e.message}`);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST /rooms/:roomId/leave — le bot quitte lui-même le salon
+router.post('/rooms/:roomId/leave', async (req, res) => {
+    const roomId = req.params.roomId;
+    const cfg    = bot.getBotConfig();
+
+    if (!cfg.homeserver || !cfg.accessToken) {
+        return res.status(503).json({ error: 'Bot non configuré (homeserver ou accessToken manquant)' });
+    }
+
+    const url = `${cfg.homeserver.replace(/\/$/, '')}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/leave`;
+    console.log(`[leave] ${roomId}`);
+
+    try {
+        const resp = await fetch(url, {
+            method:  'POST',
+            headers: { 'Authorization': `Bearer ${cfg.accessToken}`, 'Content-Type': 'application/json' },
+            body:    JSON.stringify({}),
+        });
+        const data = await resp.json().catch(() => ({}));
+
+        if (!resp.ok) {
+            console.error(`[leave] Échec HTTP=${resp.status} : ${JSON.stringify(data)}`);
+            const errMsg = data.error ?? data.errcode ?? `HTTP ${resp.status}`;
+            return res.status(resp.status === 403 ? 403 : 500).json({ error: errMsg });
+        }
+
+        res.json({ ok: true });
+    } catch (e) {
+        console.error(`[leave] Erreur réseau : ${e.message}`);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST /rooms — créer un salon
+router.post('/rooms', async (req, res) => {
+    const { name, topic, preset } = req.body ?? {};
+    if (!name) return res.status(400).json({ error: 'name requis' });
+    try {
+        const roomId = await bot.get().createRoom({
+            name,
+            topic:            topic ?? '',
+            preset:           preset ?? 'private_chat',
+            creation_content: { 'm.federate': false },
+        });
+        res.json({ room_id: roomId });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// PUT /rooms/:roomId/power-levels — modifier le niveau de permission d'un utilisateur
+router.put('/rooms/:roomId/power-levels', async (req, res) => {
+    const { userId, level } = req.body ?? {};
+    if (!userId || level === undefined) return res.status(400).json({ error: 'userId et level requis' });
+    try {
+        const c       = bot.get();
+        const current = await c.getRoomStateEvent(req.params.roomId, 'm.room.power_levels', '');
+        current.users          = current.users ?? {};
+        current.users[userId]  = level;
+        await c.sendStateEvent(req.params.roomId, 'm.room.power_levels', '', current);
+        res.json({ ok: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// GET /rooms/:roomId/state — état complet d'un salon
+router.get('/rooms/:roomId/state', async (req, res) => {
+    try {
+        const state = await bot.get().getRoomState(req.params.roomId);
+        res.json(state);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST /rooms/:roomId/send — envoyer un message dans un salon E2EE
+router.post('/rooms/:roomId/send', async (req, res) => {
+    const { body, msgtype } = req.body ?? {};
+    if (!body) return res.status(400).json({ error: 'body requis' });
+    try {
+        const eventId = await bot.get().sendMessage(req.params.roomId, {
+            msgtype: msgtype ?? 'm.text',
+            body,
+        });
+        res.json({ event_id: eventId });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+module.exports = router;

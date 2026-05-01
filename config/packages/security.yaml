@@ -1,0 +1,47 @@
+security:
+    password_hashers:
+        App\Security\AppUser:
+            algorithm: bcrypt
+            cost: 12
+
+    providers:
+        app_user_provider:
+            id: App\Security\AppUserProvider
+
+    role_hierarchy:
+        ROLE_GESTIONNAIRE:      [ROLE_USER]
+        ROLE_SUPERVISEUR_CRISE: [ROLE_GESTIONNAIRE]
+        ROLE_ADMIN:             [ROLE_SUPERVISEUR_CRISE]
+        ROLE_SYSADMIN:          [ROLE_ADMIN]
+
+    firewalls:
+        dev:
+            pattern: ^/(_(profiler|wdt)|css|images|js)/
+            security: false
+
+        main:
+            lazy: true
+            provider: app_user_provider
+            form_login:
+                login_path: app_login
+                check_path: app_login
+                username_parameter: identifier
+                password_parameter: password
+                default_target_path: app_personnel
+                always_use_default_target_path: false
+                enable_csrf: true
+            logout:
+                path: app_logout
+                target: app_login
+            login_throttling:
+                max_attempts: 10
+                interval: '15 minutes'
+            remember_me:
+                secret: '%env(APP_SECRET)%'
+                lifetime: 604800
+
+    access_control:
+        - { path: ^/login,    roles: PUBLIC_ACCESS }
+        - { path: ^/register, roles: PUBLIC_ACCESS }
+        - { path: ^/api/auth/is-first-user, roles: PUBLIC_ACCESS }
+        - { path: ^/,         roles: ROLE_USER }

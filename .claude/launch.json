@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "PHP Built-in Server",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "php -S 0.0.0.0:%PORT% -t public/"],
+      "port": 8000,
+      "autoPort": true
+    }
+  ]
+}

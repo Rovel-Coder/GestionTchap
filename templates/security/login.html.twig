@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connexion — Gestion Tchap</title>
+    <link rel="stylesheet" href="{{ asset('assets/app.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous">
+</head>
+<body class="auth-body">
+
+<div class="auth-container">
+    <div class="auth-card">
+        <div class="auth-logo">
+            <svg width="56" height="64" viewBox="0 0 32 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M16 1L30 8.5V25.5L16 33L2 25.5V8.5L16 1Z" fill="#C9A84C" fill-opacity="0.15" stroke="#C9A84C" stroke-width="1.5"/>
+                <path d="M16 7L26 12.5V22.5L16 28L6 22.5V12.5L16 7Z" fill="#C9A84C" fill-opacity="0.1"/>
+                <text x="16" y="21" text-anchor="middle" font-family="Orbitron,sans-serif" font-size="10" font-weight="700" fill="#C9A84C">TC</text>
+            </svg>
+            <h1>GESTION TCHAP</h1>
+            <p>Application de gestion des salons Tchap</p>
+        </div>
+
+        {% if error %}
+        <div class="alert-error">
+            <i class="fa-solid fa-circle-xmark"></i>
+            {{ error.messageKey|trans(error.messageData, 'security') }}
+        </div>
+        {% endif %}
+
+        {% for flash_type, messages in app.flashes %}
+            {% for message in messages %}
+            <div class="alert-{{ flash_type == 'error' ? 'error' : 'success' }}">{{ message }}</div>
+            {% endfor %}
+        {% endfor %}
+
+        <form method="post" class="auth-form">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token('authenticate') }}">
+
+            <div class="form-group">
+                <label for="identifier">
+                    <i class="fa-solid fa-user"></i> Identifiant / Email
+                </label>
+                <input
+                    type="text"
+                    id="identifier"
+                    name="identifier"
+                    value="{{ last_username }}"
+                    autocomplete="username"
+                    autofocus
+                    required
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="password">
+                    <i class="fa-solid fa-lock"></i> Mot de passe
+                </label>
+                <input
+                    type="password"
+                    id="password"
+                    name="password"
+                    autocomplete="current-password"
+                    required
+                >
+            </div>
+
+            <div class="form-group form-check">
+                <input type="checkbox" id="remember_me" name="_remember_me" class="form-check-input">
+                <label for="remember_me" class="form-check-label">Se souvenir de moi</label>
+            </div>
+
+            <button type="submit" class="btn-primary btn-full">
+                <i class="fa-solid fa-right-to-bracket"></i> Se connecter
+            </button>
+        </form>
+    </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,271 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Salons — Gestion Tchap{% endblock %}
+
+{% block content %}
+<div class="view" x-data="salonView()" x-init="load()">
+
+    {# ── Toolbar ── #}
+    <div class="view-toolbar">
+        <div class="toolbar-left">
+            <span class="view-title">SALONS TCHAP</span>
+            <span class="badge" x-text="filtered.length + ' salon' + (filtered.length > 1 ? 's' : '')"></span>
+        </div>
+        <div class="toolbar-right">
+            <div class="salon-filter-chips">
+                <button class="salon-filter-btn" :class="{ active: typeFilter === 'Tous' }" @click="typeFilter = 'Tous'">Tous</button>
+                <button class="salon-filter-btn" :class="{ active: typeFilter === 'operationnel' }" @click="typeFilter = 'operationnel'">Opérationnels</button>
+                <button class="salon-filter-btn" :class="{ active: typeFilter === 'information' }" @click="typeFilter = 'information'">Information</button>
+                <button class="salon-filter-btn" :class="{ active: typeFilter === 'crise' }" @click="typeFilter = 'crise'">Crise</button>
+                <button class="salon-filter-btn" :class="{ active: typeFilter === 'admin' }" @click="typeFilter = 'admin'">Admin</button>
+            </div>
+            {% if permissions.canManage %}
+            <label class="btn-ghost" style="cursor:pointer;display:flex;align-items:center;gap:7px;" title="Importer des salons depuis un CSV"
+                @click="importOpen = true">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Importer CSV
+            </label>
+            <button class="btn-primary" @click="openModal('create')">
+                <i class="fa-solid fa-plus"></i> Créer un salon
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    {# ── Spinner ── #}
+    <div x-show="loading" style="flex:1;display:flex;align-items:center;justify-content:center;">
+        <div class="spinner"></div>
+    </div>
+
+    {# ── Grille de cartes ── #}
+    <div class="cards-grid" x-show="!loading">
+        <div x-show="filtered.length === 0" class="empty-state" style="grid-column:1/-1;">
+            Aucun salon trouvé
+        </div>
+        <template x-for="salon in paginated" :key="salon.id">
+            <div class="card" :class="'type-' + salon.Type">
+                <div class="card-header">
+                    <span class="card-name" x-text="salon.Nom || ''"></span>
+                    <span class="card-type-badge" x-text="salon.Type || ''"></span>
+                </div>
+                <div x-show="salon.room_id" class="card-meta" style="font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+                    x-text="salon.room_id"></div>
+                <div x-show="!salon.room_id" class="card-meta" style="color:var(--red-light);font-size:10px;">
+                    ⚠ Pas de room_id
+                </div>
+                <div x-show="salon.Description" class="card-desc" x-text="salon.Description"></div>
+
+                <div x-show="getUniteIdsForSalon(salon.id).length > 0" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">
+                    <template x-for="uid in getUniteIdsForSalon(salon.id)" :key="uid">
+                        <span style="font-size:10px;background:rgba(45,108,223,.15);color:var(--blue-light);border-radius:4px;padding:1px 6px;"
+                            x-text="unites.find(u => u.id === uid)?.Nom || '#' + uid"></span>
+                    </template>
+                </div>
+
+                <div class="card-stats">
+                    <div class="card-stat">
+                        <span class="stat-value" x-text="getAgentCount(salon.id)"></span>
+                        <span class="stat-label">Agents</span>
+                    </div>
+                    <div class="card-stat" x-show="salon._memberCount !== undefined">
+                        <span class="stat-value" :style="{ color: 'var(--blue-light)' }" x-text="salon._memberCount"></span>
+                        <span class="stat-label">Tchap</span>
+                    </div>
+                </div>
+
+                <div x-show="salon._botPresent !== undefined" style="margin-top:6px;">
+                    <span :style="{ color: salon._botPresent ? '#6ec38a' : 'var(--red-light)', fontSize: '10px' }"
+                        x-text="salon._botPresent ? '✓ Bot présent' : '✗ Bot absent'"></span>
+                </div>
+
+                <div class="card-actions">
+                    <button class="btn-icon" @click="openModal('detail', salon)" title="Voir membres">
+                        <i class="fa-solid fa-eye"></i>
+                    </button>
+                    {% if permissions.canManage %}
+                    <button class="btn-icon" x-show="!salon.room_id"
+                        @click="createTchapRoom(salon)" title="Créer la room sur Tchap"
+                        style="color:var(--gold);" :disabled="salon._loading">
+                        <i class="fa-solid fa-plus" :class="{ 'fa-spin': salon._loading }"></i>
+                    </button>
+                    <button class="btn-icon" x-show="!!salon.room_id"
+                        @click="fetchMembers(salon)" title="Synchroniser membres" style="color:var(--blue-light);"
+                        :disabled="salon._loading">
+                        <i class="fa-solid fa-rotate" :class="{ 'fa-spin': salon._loading }"></i>
+                    </button>
+                    <button class="btn-icon" @click="openModal('edit', salon)" title="Modifier">
+                        <i class="fa-solid fa-pen"></i>
+                    </button>
+                    {% endif %}
+                    {% if permissions.canAdmin %}
+                    <button class="btn-icon" @click="confirmDelete(salon)" title="Supprimer" style="color:var(--red-light);">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </template>
+    </div>
+
+    {# ── Pagination ── #}
+    <div class="pagination-bar" x-show="!loading && totalPages > 1">
+        <div class="pagination-size">
+            Afficher
+            <select x-model.number="perPage" @change="page = 1">
+                <option value="12">12</option>
+                <option value="24">24</option>
+                <option value="48">48</option>
+            </select>
+            par page
+        </div>
+        <div class="pagination-info"
+            x-text="filtered.length + ' salon' + (filtered.length > 1 ? 's' : '') + ' — page ' + page + ' / ' + totalPages"></div>
+        <div class="pagination-controls">
+            <button class="pagination-btn" :disabled="page === 1" @click="page--">&#8249;</button>
+            <template x-for="p in visiblePages" :key="'p' + p">
+                <span x-show="p === '...'" style="padding:0 4px;color:var(--text-muted);line-height:30px;">…</span>
+                <button x-show="p !== '...'" class="pagination-btn" :class="{ active: p === page }"
+                    @click="page = p" x-text="p"></button>
+            </template>
+            <button class="pagination-btn" :disabled="page === totalPages" @click="page++">&#8250;</button>
+        </div>
+    </div>
+
+    {# ── Modal Créer / Modifier / Détail ── #}
+    <div class="modal-overlay" x-show="modalOpen" x-cloak @click.self="closeModal()">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 x-text="modalMode === 'create' ? 'Créer un salon' : (modalMode === 'edit' ? 'Modifier un salon' : 'Détail salon')"></h3>
+                <button class="btn-icon" @click="closeModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div x-show="modalError" class="alert-error" x-text="modalError"></div>
+
+                <template x-if="modalMode === 'detail'">
+                    <div class="detail-grid">
+                        <div class="detail-row"><strong>Nom</strong><span x-text="form.Nom"></span></div>
+                        <div class="detail-row"><strong>Type</strong><span x-text="form.Type"></span></div>
+                        <div class="detail-row"><strong>Description</strong><span x-text="form.Description || '—'"></span></div>
+                        <div class="detail-row"><strong>room_id</strong><span style="font-family:monospace;font-size:12px;" x-text="form.room_id || '—'"></span></div>
+                        <div class="detail-row"><strong>Agents assignés</strong><span x-text="getAgentCount(form.id) + ' agent(s)'"></span></div>
+                        <div class="detail-row">
+                            <strong>Unités</strong>
+                            <span x-text="getUniteIdsForSalon(form.id).map(uid => (unites.find(u => u.id === uid) || {}).Nom || ('#' + uid)).join(', ') || '—'"></span>
+                        </div>
+                    </div>
+                </template>
+
+                <template x-if="modalMode !== 'detail'">
+                    <div class="form-grid">
+                        <div class="form-group form-full">
+                            <label>Nom *</label>
+                            <input type="text" x-model="form.Nom" maxlength="200">
+                        </div>
+                        <div class="form-group">
+                            <label>Type</label>
+                            <select x-model="form.Type">
+                                <option value="">— Sélectionner —</option>
+                                <option value="operationnel">Opérationnel</option>
+                                <option value="information">Information</option>
+                                <option value="crise">Crise</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>room_id Matrix</label>
+                            <input type="text" x-model="form.room_id" maxlength="200" placeholder="!roomid:serveur">
+                        </div>
+                        <div class="form-group form-full">
+                            <label>Description</label>
+                            <textarea x-model="form.Description" maxlength="500" rows="3"></textarea>
+                        </div>
+                        <div class="form-group form-full" x-show="unites.length > 0">
+                            <label>
+                                Unités associées
+                                <span style="font-weight:400;color:var(--text-muted);margin-left:6px;" x-text="'(' + (form._uniteIds ? form._uniteIds.length : 0) + ' sélectionnée' + ((form._uniteIds && form._uniteIds.length > 1) ? 's' : '') + ')'"></span>
+                            </label>
+                            <input type="text" x-model="form._uniteSearch" placeholder="Filtrer les unités…"
+                                style="width:100%;margin-bottom:6px;font-size:12px;padding:5px 8px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);">
+                            <div class="multi-select" style="max-height:200px;overflow-y:auto;">
+                                <template x-for="u in unites.filter(u => !form._uniteSearch || u.Nom.toLowerCase().includes(form._uniteSearch.toLowerCase()))" :key="u.id">
+                                    <label class="multi-select-item">
+                                        <input type="checkbox"
+                                            :checked="form._uniteIds && form._uniteIds.includes(u.id)"
+                                            @change="toggleUnite(u.id, $event.target.checked)">
+                                        <span x-text="u.Nom"></span>
+                                        <span x-show="u.code" style="margin-left:auto;font-size:10px;color:var(--text-muted);" x-text="u.code"></span>
+                                    </label>
+                                </template>
+                                <div x-show="unites.filter(u => !form._uniteSearch || u.Nom.toLowerCase().includes(form._uniteSearch.toLowerCase())).length === 0"
+                                    style="font-size:11px;color:var(--text-muted);padding:10px 8px;">
+                                    Aucune unité correspondante
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            <div class="modal-footer" x-show="modalMode !== 'detail'">
+                <button class="btn-ghost" @click="closeModal()">Annuler</button>
+                <button class="btn-primary" :disabled="saving" @click="save()">
+                    <i x-show="saving" class="fa-solid fa-spinner fa-spin"></i>
+                    <span x-show="!saving" x-text="modalMode === 'create' ? 'Créer' : 'Enregistrer'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {# ── Import CSV ── #}
+    <div class="modal-overlay" x-show="importOpen" x-cloak @click.self="importOpen = false">
+        <div class="modal">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-file-import"></i> Importer des salons (CSV)</h3>
+                <button class="btn-icon" @click="importOpen = false"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size:12px;color:var(--text-secondary);margin-bottom:6px;">
+                    Format : <code style="font-family:monospace;color:var(--gold);">Nom,Type,Description,room_id,Unites</code>
+                </p>
+                <p style="font-size:11px;color:var(--text-muted);margin-bottom:12px;">
+                    La colonne <code style="font-family:monospace;">Unites</code> est optionnelle. Séparer les noms d'unités par <code style="font-family:monospace;">|</code> ou <code style="font-family:monospace;">;</code>. Les unités manquantes seront créées automatiquement.
+                </p>
+                <div class="form-group">
+                    <label>Fichier CSV</label>
+                    <input type="file" accept=".csv,text/csv" @change="loadCsv($event)" style="-webkit-appearance:auto;appearance:auto;color:var(--text-secondary);">
+                </div>
+                <div x-show="csvPreview.length > 0" style="margin-top:8px;">
+                    <p style="font-size:13px;color:var(--text-secondary);" x-text="csvPreview.length + ' salon(s) à importer'"></p>
+                </div>
+                <div x-show="importError" class="alert-error" x-text="importError" style="margin-top:12px;"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-ghost" @click="importOpen = false">Annuler</button>
+                <button class="btn-primary" :disabled="csvPreview.length === 0 || importing" @click="importCsv()">
+                    <i x-show="importing" class="fa-solid fa-spinner fa-spin"></i>
+                    <span x-show="!importing">Importer</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {# ── Confirmation suppression ── #}
+    <div class="modal-overlay" x-show="deleteTarget" x-cloak @click.self="deleteTarget = null">
+        <div class="modal modal-sm">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-triangle-exclamation" style="color:var(--red-light);"></i> Confirmer</h3>
+            </div>
+            <div class="modal-body">
+                <p>Supprimer le salon <strong x-text="deleteTarget ? deleteTarget.Nom : ''"></strong> ?</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-ghost" @click="deleteTarget = null">Annuler</button>
+                <button class="btn-danger" :disabled="saving" @click="deleteSalon()">
+                    <i x-show="saving" class="fa-solid fa-spinner fa-spin"></i>
+                    <span x-show="!saving">Supprimer</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

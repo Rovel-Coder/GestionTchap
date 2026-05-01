@@ -1,0 +1,409 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Unités — Gestion Tchap{% endblock %}
+
+{% block content %}
+<div class="view" x-data="uniteView()" x-init="load()">
+
+    {# ── Toolbar ── #}
+    <div class="view-toolbar">
+        <div class="toolbar-left">
+            <span class="view-title">UNITÉS</span>
+            <span class="badge" x-text="filtered.length + ' unité' + (filtered.length > 1 ? 's' : '')"></span>
+        </div>
+        <div class="toolbar-right">
+            <div class="search-box">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" :value="search" @input="search = $event.target.value" @focus="$el.removeAttribute('readonly')" readonly placeholder="Rechercher…" autocomplete="off" spellcheck="false">
+            </div>
+            {% if permissions.canManage %}
+            <label class="btn-ghost" style="cursor:pointer;display:flex;align-items:center;gap:7px;" title="Importer des unités depuis un CSV"
+                @click="importOpen = true">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Importer CSV
+            </label>
+            <button class="btn-primary" @click="openModal('create')">
+                <i class="fa-solid fa-plus"></i> Créer une unité
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    {# ── Spinner ── #}
+    <div x-show="loading" style="flex:1;display:flex;align-items:center;justify-content:center;">
+        <div class="spinner"></div>
+    </div>
+
+    {# ── Grille de cartes ── #}
+    <div class="cards-grid" x-show="!loading">
+        <div x-show="filtered.length === 0" class="empty-state" style="grid-column:1/-1;">
+            Aucune unité trouvée
+        </div>
+        <template x-for="unite in filtered" :key="unite.id">
+            <div class="card unite-card">
+                <div class="card-header">
+                    <span class="card-name" x-text="unite.Nom"></span>
+                    <span class="card-type-badge">Unité</span>
+                </div>
+                <div class="card-meta" x-show="unite.code" x-text="unite.code"></div>
+                <div class="card-salons-list">
+                    <template x-for="sid in (unite.Salons || [])" :key="sid">
+                        <span class="salon-tag" :class="'type-' + getSalonType(sid)" x-text="getSalonName(sid)"></span>
+                    </template>
+                    <span x-show="!unite.Salons || unite.Salons.length === 0"
+                        style="font-size:11px;color:var(--text-muted);">Aucun salon</span>
+                </div>
+                <div class="card-stats">
+                    <div class="card-stat">
+                        <span class="stat-value" x-text="getAgentCount(unite.id)"></span>
+                        <span class="stat-label">Agents</span>
+                    </div>
+                    <div class="card-stat">
+                        <span class="stat-value" x-text="(unite.Salons || []).length"></span>
+                        <span class="stat-label">Salons</span>
+                    </div>
+                </div>
+                <div class="card-actions">
+                    {% if permissions.canManage %}
+                    <button class="btn-icon" @click="openImportPersonnel(unite)" title="Importer du personnel">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    </button>
+                    <button class="btn-icon" @click="openModal('edit', unite)" title="Modifier">
+                        <i class="fa-solid fa-pen"></i>
+                    </button>
+                    {% endif %}
+                    {% if permissions.canAdmin %}
+                    <button class="btn-icon" @click="confirmDelete(unite)" title="Supprimer" style="color:var(--red-light);">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </template>
+    </div>
+
+    {# ── Modal Créer / Modifier ── #}
+    <div class="modal-overlay" x-show="modalOpen" x-cloak @click.self="closeModal()">
+        <div class="modal" style="max-width:860px;width:95vw;">
+            <div class="modal-header">
+                <h3 x-text="modalMode === 'create' ? 'Créer une unité' : 'Modifier une unité'"></h3>
+                <button class="btn-icon" @click="closeModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div x-show="modalError" class="alert-error" x-text="modalError"></div>
+                <div class="form-grid">
+                    <div class="form-group form-full">
+                        <label>Nom *</label>
+                        <input type="text" x-model="form.Nom" maxlength="200">
+                    </div>
+                    <div class="form-group">
+                        <label>Code</label>
+                        <input type="text" x-model="form.code" maxlength="50">
+                    </div>
+                    <div class="form-group form-full">
+                        <label>
+                            Salons assignés
+                            <span style="font-weight:400;color:var(--text-muted);margin-left:6px;" x-text="'(' + (form.Salons ? form.Salons.length : 0) + ' sélectionné' + ((form.Salons && form.Salons.length > 1) ? 's' : '') + ')'"></span>
+                        </label>
+                        <input type="text" x-model="form._salonSearch" placeholder="Filtrer les salons…"
+                            style="width:100%;margin-bottom:6px;font-size:12px;padding:5px 8px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);">
+                        <div class="multi-select" style="max-height:320px;overflow-y:auto;">
+                            <template x-for="s in salons.filter(s => !form._salonSearch || s.Nom.toLowerCase().includes(form._salonSearch.toLowerCase()))" :key="s.id">
+                                <label class="multi-select-item">
+                                    <input type="checkbox"
+                                        :checked="form.Salons && form.Salons.includes(s.id)"
+                                        @change="toggleSalon(s.id, $event.target.checked)">
+                                    <span x-text="s.Nom"></span>
+                                    <span x-show="s.Type" style="margin-left:auto;font-size:10px;color:var(--text-muted);text-transform:uppercase;" x-text="s.Type"></span>
+                                </label>
+                            </template>
+                            <div x-show="salons.filter(s => !form._salonSearch || s.Nom.toLowerCase().includes(form._salonSearch.toLowerCase())).length === 0"
+                                style="font-size:11px;color:var(--text-muted);padding:10px 8px;">
+                                Aucun salon correspondant
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-ghost" @click="closeModal()">Annuler</button>
+                <button class="btn-primary" :disabled="saving" @click="save()">
+                    <i x-show="saving" class="fa-solid fa-spinner fa-spin"></i>
+                    <span x-show="!saving" x-text="modalMode === 'create' ? 'Créer' : 'Enregistrer'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {# ── Modal Import Personnel dans Unité (hybride) ── #}
+    <div class="modal-overlay" x-show="importPersonnelOpen" x-cloak @click.self="importPersonnelOpen = false">
+        <div class="modal" style="max-width:680px;width:95vw;">
+            <div class="modal-header">
+                <h3>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px;vertical-align:middle;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    IMPORTER DU PERSONNEL —
+                    <span x-text="importTargetUnite ? importTargetUnite.Nom : ''"></span>
+                </h3>
+                <button class="btn-icon" @click="importPersonnelOpen = false"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            {# ── Onglets ── #}
+            <div style="display:flex;border-bottom:1px solid var(--border);background:var(--bg-elevated);">
+                <button class="import-tab-btn" :class="{ active: importTab === 'email' }"
+                    @click="importTab = 'email'; importAnalysed = false">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:5px;"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                    Email / Fichier
+                </button>
+                <button class="import-tab-btn" :class="{ active: importTab === 'registry' }"
+                    @click="importTab = 'registry'">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:5px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                    Registre du personnel
+                    <span x-show="importSelectedAgents.length > 0"
+                        style="margin-left:6px;background:var(--blue);border-radius:10px;padding:1px 7px;font-size:10px;"
+                        x-text="importSelectedAgents.length"></span>
+                </button>
+            </div>
+
+            <div class="modal-body" style="padding:0;">
+
+                {# ──── Onglet Email / Fichier ──── #}
+                <div x-show="importTab === 'email'" style="padding:20px;">
+
+                    {# Saisie initiale #}
+                    <div x-show="!importAnalysed">
+                        <p style="font-size:13px;color:var(--text-secondary);margin-bottom:6px;">
+                            Collez une liste d'adresses email (une par ligne) ou importez un fichier CSV.
+                        </p>
+                        <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">
+                            Les agents existants auront simplement l'unité
+                            <strong style="color:var(--text-primary);" x-text="importTargetUnite ? importTargetUnite.Nom : ''"></strong>
+                            ajoutée à leur profil.
+                        </p>
+                        <textarea
+                            :value="importEmailText"
+                            @input="importEmailText = $event.target.value"
+                            rows="8"
+                            style="width:100%;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);font-size:12px;font-family:monospace;padding:10px;resize:vertical;box-sizing:border-box;"
+                            placeholder="prenom.nom@gendarmerie.interieur.gouv.fr&#10;prenom.nom@gendarmerie.defense.gouv.fr&#10;…"></textarea>
+                        <div style="display:flex;align-items:center;gap:12px;margin-top:12px;">
+                            <label class="btn-ghost" style="cursor:pointer;display:flex;align-items:center;gap:7px;font-size:12px;">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                Importer un fichier
+                                <input type="file" accept=".csv,.txt,.tsv" @change="loadImportFile($event)" style="display:none;">
+                            </label>
+                            <span style="font-size:11px;color:var(--text-muted);">CSV, TXT — colonnes mail/email détectées automatiquement</span>
+                        </div>
+                    </div>
+
+                    {# Résultats de l'analyse #}
+                    <div x-show="importAnalysed">
+                        <div style="display:flex;gap:18px;margin-bottom:16px;flex-wrap:wrap;">
+                            <span style="font-size:12px;">
+                                <strong style="color:#6ec38a;" x-text="importFoundAgents.filter(r => !r.already).length"></strong>
+                                <span style="color:var(--text-muted);"> à affecter</span>
+                            </span>
+                            <span style="font-size:12px;" x-show="importFoundAgents.some(r => r.already)">
+                                <strong style="color:var(--text-muted);" x-text="importFoundAgents.filter(r => r.already).length"></strong>
+                                <span style="color:var(--text-muted);"> déjà dans l'unité</span>
+                            </span>
+                            <span style="font-size:12px;" x-show="importNewAgents.length">
+                                <strong style="color:var(--gold);" x-text="importNewAgents.length"></strong>
+                                <span style="color:var(--text-muted);"> nouveaux agents à créer</span>
+                            </span>
+                            <span style="font-size:12px;" x-show="importInvalidLines.length">
+                                <strong style="color:var(--red-light);" x-text="importInvalidLines.length"></strong>
+                                <span style="color:var(--text-muted);"> ligne(s) ignorée(s)</span>
+                            </span>
+                        </div>
+
+                        {# Agents trouvés dans le registre #}
+                        <div x-show="importFoundAgents.length > 0" style="margin-bottom:14px;">
+                            <div style="font-family:var(--font-display);font-size:10px;font-weight:700;letter-spacing:.1em;color:#6ec38a;margin-bottom:6px;">AGENTS TROUVÉS DANS LE REGISTRE</div>
+                            <div style="max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);">
+                                <template x-for="row in importFoundAgents" :key="row.agent.id">
+                                    <div style="display:flex;align-items:center;gap:10px;padding:6px 10px;border-bottom:1px solid var(--border);font-size:12px;"
+                                        :style="row.already ? 'opacity:.5;' : ''">
+                                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#6ec38a" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                                        <span x-text="row.agent.Prenom + ' ' + row.agent.Nom" style="font-weight:600;"></span>
+                                        <span style="color:var(--text-muted);font-size:11px;" x-text="row.agent.Mail"></span>
+                                        <span x-show="row.already" style="margin-left:auto;font-size:10px;color:var(--text-muted);font-style:italic;">déjà affecté</span>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+
+                        {# Nouveaux agents à créer #}
+                        <div x-show="importNewAgents.length > 0" style="margin-bottom:14px;">
+                            <div style="font-family:var(--font-display);font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--gold);margin-bottom:6px;">NOUVEAUX AGENTS À CRÉER</div>
+                            <div style="max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);">
+                                <template x-for="(row, i) in importNewAgents" :key="i">
+                                    <div style="display:flex;align-items:center;gap:8px;padding:5px 10px;border-bottom:1px solid var(--border);">
+                                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                        <input :value="row.prenom" @input="importNewAgents[i].prenom = $event.target.value"
+                                            placeholder="Prénom"
+                                            style="width:100px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);font-size:12px;padding:2px 6px;">
+                                        <input :value="row.nom" @input="importNewAgents[i].nom = $event.target.value"
+                                            placeholder="Nom"
+                                            style="width:120px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);font-size:12px;padding:2px 6px;">
+                                        <span style="color:var(--text-muted);font-size:11px;flex:1;" x-text="row.email"></span>
+                                        <button @click="importNewAgents.splice(i, 1)"
+                                            style="background:none;border:none;cursor:pointer;color:var(--text-muted);padding:2px 4px;">
+                                            <i class="fa-solid fa-xmark" style="font-size:10px;"></i>
+                                        </button>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+
+                        {# Lignes invalides #}
+                        <div x-show="importInvalidLines.length > 0">
+                            <div style="font-family:var(--font-display);font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--red-light);margin-bottom:4px;">IGNORÉES (pas d'email valide)</div>
+                            <template x-for="(line, i) in importInvalidLines" :key="i">
+                                <div style="font-size:11px;color:var(--text-muted);font-family:monospace;padding:2px 0;" x-text="line"></div>
+                            </template>
+                        </div>
+
+                        <div x-show="importFoundAgents.length === 0 && importNewAgents.length === 0"
+                            style="text-align:center;color:var(--text-muted);font-size:12px;padding:20px 0;">
+                            Aucune adresse email valide trouvée.
+                        </div>
+                    </div>
+                </div>
+
+                {# ──── Onglet Registre ──── #}
+                <div x-show="importTab === 'registry'">
+                    <div style="padding:10px 16px;background:var(--bg-elevated);border-bottom:1px solid var(--border);">
+                        <div class="search-box" style="max-width:100%;">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                            <input type="text"
+                                :value="importRegistrySearch"
+                                @input="importRegistrySearch = $event.target.value"
+                                placeholder="Filtrer par nom, prénom, email…"
+                                autocomplete="off" spellcheck="false">
+                        </div>
+                    </div>
+                    <div style="max-height:340px;overflow-y:auto;">
+                        <div x-show="filteredImportPersonnel.length === 0"
+                            style="padding:30px;text-align:center;color:var(--text-muted);font-size:12px;">
+                            Aucun agent correspondant
+                        </div>
+                        <template x-for="agent in filteredImportPersonnel" :key="agent.id">
+                            <label class="multi-select-item" style="padding:8px 16px;cursor:pointer;"
+                                :style="importSelectedAgents.includes(agent.id) ? 'background:rgba(45,108,223,.08);' : ''">
+                                <input type="checkbox"
+                                    :checked="importSelectedAgents.includes(agent.id)"
+                                    @change="toggleImportAgent(agent.id, $event.target.checked)">
+                                <div style="flex:1;overflow:hidden;">
+                                    <div style="font-size:13px;font-weight:600;" x-text="agent.Prenom + ' ' + agent.Nom"></div>
+                                    <div style="font-size:11px;color:var(--text-muted);font-family:monospace;" x-text="agent.Mail || '—'"></div>
+                                </div>
+                                <span x-show="importTargetUnite && (agent.Unite || []).map(Number).includes(Number(importTargetUnite.id))"
+                                    style="font-size:10px;color:var(--text-muted);font-style:italic;margin-left:8px;">déjà affecté</span>
+                            </label>
+                        </template>
+                    </div>
+                </div>
+
+            </div>
+
+            {# ── Footer ── #}
+            <div class="modal-footer">
+                <div x-show="importError" class="alert-error" x-text="importError" style="margin-right:auto;font-size:12px;"></div>
+                <button class="btn-ghost" @click="importPersonnelOpen = false">Annuler</button>
+
+                {# Email tab — saisie #}
+                <template x-if="importTab === 'email' && !importAnalysed">
+                    <button class="btn-primary"
+                        :disabled="!importEmailText.trim()"
+                        @click="analyseImport()">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px;"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                        Analyser
+                    </button>
+                </template>
+
+                {# Email tab — résultats #}
+                <template x-if="importTab === 'email' && importAnalysed">
+                    <div style="display:flex;gap:8px;">
+                        <button class="btn-ghost" @click="importAnalysed = false">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;"><polyline points="15 18 9 12 15 6"/></svg>
+                            Retour
+                        </button>
+                        <button class="btn-primary"
+                            :disabled="saving || (importFoundAgents.filter(r => !r.already).length === 0 && importNewAgents.length === 0)"
+                            @click="confirmEmailImport()">
+                            <i x-show="saving" class="fa-solid fa-spinner fa-spin" style="margin-right:6px;"></i>
+                            <span x-show="!saving">
+                                Confirmer
+                                (<span x-text="importFoundAgents.filter(r => !r.already).length + importNewAgents.length"></span>)
+                            </span>
+                        </button>
+                    </div>
+                </template>
+
+                {# Registre tab #}
+                <template x-if="importTab === 'registry'">
+                    <button class="btn-primary"
+                        :disabled="saving || importSelectedAgents.length === 0"
+                        @click="saveImportPersonnel()">
+                        <i x-show="saving" class="fa-solid fa-spinner fa-spin" style="margin-right:6px;"></i>
+                        <span x-show="!saving" x-text="'Affecter ' + importSelectedAgents.length + ' agent(s)'"></span>
+                    </button>
+                </template>
+            </div>
+        </div>
+    </div>
+
+    {# ── Import CSV ── #}
+    <div class="modal-overlay" x-show="importOpen" x-cloak @click.self="importOpen = false">
+        <div class="modal">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-file-import"></i> Importer des unités (CSV)</h3>
+                <button class="btn-icon" @click="importOpen = false"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size:12px;color:var(--text-secondary);margin-bottom:6px;">
+                    Format : <code style="font-family:monospace;color:var(--gold);">Nom,code,Salons</code>
+                </p>
+                <p style="font-size:11px;color:var(--text-muted);margin-bottom:12px;">
+                    La colonne <code style="font-family:monospace;">Salons</code> est optionnelle. Séparer les noms de salons par <code style="font-family:monospace;">|</code> ou <code style="font-family:monospace;">;</code>. Les salons manquants seront créés automatiquement avec leur room Tchap.
+                </p>
+                <div class="form-group">
+                    <label>Fichier CSV</label>
+                    <input type="file" accept=".csv,text/csv" @change="loadCsv($event)" style="-webkit-appearance:auto;appearance:auto;color:var(--text-secondary);">
+                </div>
+                <div x-show="csvPreview.length > 0" style="margin-top:8px;">
+                    <p style="font-size:13px;color:var(--text-secondary);" x-text="csvPreview.length + ' unité(s) à importer'"></p>
+                </div>
+                <div x-show="importError" class="alert-error" x-text="importError" style="margin-top:12px;"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-ghost" @click="importOpen = false">Annuler</button>
+                <button class="btn-primary" :disabled="csvPreview.length === 0 || importing" @click="importCsv()">
+                    <i x-show="importing" class="fa-solid fa-spinner fa-spin"></i>
+                    <span x-show="!importing">Importer</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {# ── Confirmation suppression ── #}
+    <div class="modal-overlay" x-show="deleteTarget" x-cloak @click.self="deleteTarget = null">
+        <div class="modal modal-sm">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-triangle-exclamation" style="color:var(--red-light);"></i> Confirmer</h3>
+            </div>
+            <div class="modal-body">
+                <p>Supprimer l'unité <strong x-text="deleteTarget ? deleteTarget.Nom : ''"></strong> ?</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-ghost" @click="deleteTarget = null">Annuler</button>
+                <button class="btn-danger" :disabled="saving" @click="deleteUnite()">
+                    <i x-show="saving" class="fa-solid fa-spinner fa-spin"></i>
+                    <span x-show="!saving">Supprimer</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

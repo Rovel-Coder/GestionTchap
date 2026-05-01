@@ -1,0 +1,30 @@
+[Unit]
+Description=Tchap Bridge — service Matrix E2EE persistant
+Documentation=file:/var/www/gestion-tchap/docs/DEPLOIEMENT.md
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/tchap-bridge
+ExecStart=/usr/bin/node src/index.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=10
+
+# Sécurité : le service n'écoute qu'en loopback (127.0.0.1), mais on restreint quand même
+EnvironmentFile=/opt/tchap-bridge/.env
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tchap-bridge
+
+# Restrictions syscall / filesystem
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/tchap-bridge/data
+
+[Install]
+WantedBy=multi-user.target

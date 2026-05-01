@@ -1,0 +1,9 @@
+vendor/
+var/
+.env
+.env.local
+.git/
+.claude/
+docker/
+tchap-service/
+*.md

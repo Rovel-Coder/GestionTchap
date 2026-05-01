@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Première connexion — Gestion Tchap</title>
+    <link rel="stylesheet" href="{{ asset('assets/app.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous">
+</head>
+<body class="auth-body">
+
+<div class="auth-container">
+    <div class="auth-card">
+        <div class="auth-logo">
+            <i class="fa-solid fa-shield-halved fa-3x"></i>
+            <h1>Première connexion</h1>
+            <p class="text-muted">Créez le premier compte administrateur</p>
+        </div>
+
+        {% if error %}
+        <div class="alert alert-error">
+            <i class="fa-solid fa-circle-xmark"></i>
+            {{ error }}
+        </div>
+        {% endif %}
+
+        <form method="post" class="auth-form">
+            <div class="form-group">
+                <label for="email"><i class="fa-solid fa-envelope"></i> Email</label>
+                <input type="email" id="email" name="email" class="form-control" autocomplete="email" autofocus required>
+            </div>
+            <div class="form-group">
+                <label for="nom"><i class="fa-solid fa-user"></i> Nom</label>
+                <input type="text" id="nom" name="nom" class="form-control" autocomplete="family-name">
+            </div>
+            <div class="form-group">
+                <label for="prenom">Prénom</label>
+                <input type="text" id="prenom" name="prenom" class="form-control" autocomplete="given-name">
+            </div>
+            <div class="form-group">
+                <label for="password"><i class="fa-solid fa-lock"></i> Mot de passe <small>(min. 8 caractères)</small></label>
+                <input type="password" id="password" name="password" class="form-control" autocomplete="new-password" required>
+            </div>
+            <button type="submit" class="btn-primary btn-full">
+                <i class="fa-solid fa-user-plus"></i> Créer le compte administrateur
+            </button>
+        </form>
+    </div>
+</div>
+
+</body>
+</html>

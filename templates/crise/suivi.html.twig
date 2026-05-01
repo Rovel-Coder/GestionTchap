@@ -1,0 +1,121 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Suivi de crise — Gestion Tchap{% endblock %}
+
+{% block content %}
+<div class="view" x-data="suiviCriseView()" x-init="load()">
+
+    {# ── Toolbar rouge ── #}
+    <div class="view-toolbar" style="background:var(--red-dim);border-bottom:1px solid rgba(192,57,43,.4);">
+        <div class="toolbar-left">
+            <a href="{{ path('app_crise') }}" class="btn-ghost"
+                style="border-color:rgba(192,57,43,.4);color:var(--red-light);padding:6px 12px;text-decoration:none;display:flex;align-items:center;gap:6px;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="15 18 9 12 15 6"/>
+                </svg>
+                Mode Crise
+            </a>
+            <span class="view-title" style="color:var(--red-light);">Suivi des salons de crise</span>
+            <span class="badge" style="border-color:rgba(192,57,43,.3);color:var(--red-light);background:var(--red-dim);"
+                x-text="salonsCrise.length + ' salon(s)'"></span>
+        </div>
+        <div class="toolbar-right">
+            <button class="btn-ghost" @click="load()"
+                style="border-color:rgba(192,57,43,.4);color:var(--red-light);">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;">
+                    <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                </svg>
+                Actualiser
+            </button>
+        </div>
+    </div>
+
+    {# ── Alerte bot non configuré ── #}
+    <div x-show="!hasTchap" style="padding:14px 18px;background:var(--red-dim);border:1px solid rgba(192,57,43,.3);border-radius:var(--radius);margin:16px 24px;font-size:12px;color:var(--red-light);">
+        ⚠ Bot Tchap non configuré — la liste des membres et la fermeture des salons nécessitent le bot. Configurez-le dans l'onglet Config.
+    </div>
+
+    {# ── Aucun salon de crise ── #}
+    <div x-show="hasTchap && salonsCrise.length === 0" class="empty-state" style="padding:60px 0;">
+        <div style="color:var(--text-muted);font-size:13px;margin-bottom:8px;">Aucun salon de crise dans la base</div>
+        <div style="font-size:11px;color:var(--text-muted);font-style:italic;">Créez un salon depuis la vue Mode Crise</div>
+    </div>
+
+    {# ── Grille de cartes ── #}
+    <div class="cards-grid" x-show="hasTchap && salonsCrise.length > 0">
+        <template x-for="salon in salonsCrise" :key="salon.id">
+            <div class="card" style="background:var(--bg-surface);">
+                <div class="card-header">
+                    <span class="card-name" style="color:var(--red-light);" x-text="salon.Nom"></span>
+                    <button class="btn-icon" @click="refreshSalon(salon)" :disabled="salon._loading" title="Actualiser">
+                        <i class="fa-solid fa-rotate" :class="{ 'fa-spin': salon._loading }"></i>
+                    </button>
+                </div>
+
+                {# Statut de fermeture #}
+                <div x-show="monitorState[salon.id] && monitorState[salon.id].status === 'closing'"
+                    style="padding:6px 10px;background:var(--red-dim);border:1px solid rgba(192,57,43,.3);border-radius:var(--radius-sm);font-size:11px;color:var(--red-light);margin-bottom:8px;">
+                    <i class="fa-solid fa-spinner fa-spin"></i> Expulsion des membres en cours…
+                </div>
+                <div x-show="monitorState[salon.id] && monitorState[salon.id].status === 'ready_delete'"
+                    style="padding:6px 10px;background:rgba(39,174,96,.08);border:1px solid rgba(39,174,96,.25);border-radius:var(--radius-sm);font-size:11px;color:#6ec38a;margin-bottom:8px;">
+                    ✓ Membres expulsés — prêt pour suppression
+                </div>
+                <div x-show="monitorState[salon.id] && monitorState[salon.id].status === 'deleting'"
+                    style="padding:6px 10px;background:var(--red-dim);border:1px solid rgba(192,57,43,.3);border-radius:var(--radius-sm);font-size:11px;color:var(--red-light);margin-bottom:8px;">
+                    <i class="fa-solid fa-spinner fa-spin"></i> Suppression en cours…
+                </div>
+                <div x-show="monitorState[salon.id] && monitorState[salon.id].status === 'deleted'"
+                    style="padding:6px 10px;background:rgba(39,174,96,.08);border:1px solid rgba(39,174,96,.25);border-radius:var(--radius-sm);font-size:11px;color:#6ec38a;margin-bottom:8px;">
+                    ✓ Supprimé
+                </div>
+
+                <div class="card-stats">
+                    <div class="card-stat">
+                        <span class="stat-value" x-text="(monitorState[salon.id] && monitorState[salon.id].members) ? monitorState[salon.id].members.length : '…'"></span>
+                        <span class="stat-label">Membres Tchap</span>
+                    </div>
+                    <div class="card-stat">
+                        <span class="stat-value" x-text="getExpectedCount(salon.id)"></span>
+                        <span class="stat-label">Attendus</span>
+                    </div>
+                </div>
+
+                {# Liste des membres #}
+                <div x-show="monitorState[salon.id] && monitorState[salon.id].members && monitorState[salon.id].members.length > 0"
+                    style="margin-top:8px;font-size:11px;">
+                    <template x-for="m in (monitorState[salon.id] && monitorState[salon.id].members ? monitorState[salon.id].members.slice(0, 8) : [])" :key="m.userId">
+                        <div style="padding:2px 0;color:var(--text-secondary);font-family:monospace;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
+                            x-text="m.userId"></div>
+                    </template>
+                    <div x-show="monitorState[salon.id] && monitorState[salon.id].members && monitorState[salon.id].members.length > 8"
+                        style="font-size:10px;color:var(--text-muted);font-style:italic;margin-top:2px;"
+                        x-text="(monitorState[salon.id] && monitorState[salon.id].members) ? ('… et ' + (monitorState[salon.id].members.length - 8) + ' autres') : ''"></div>
+                </div>
+
+                <div x-show="monitorState[salon.id] && monitorState[salon.id].error"
+                    style="font-size:11px;color:var(--red-light);margin-top:6px;"
+                    x-text="monitorState[salon.id] ? monitorState[salon.id].error : ''"></div>
+
+                <div class="card-actions" style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px;">
+                    {% if permissions.canAdmin %}
+                    <button class="btn-ghost" style="font-size:11px;padding:5px 10px;color:var(--red-light);border-color:rgba(192,57,43,.4);"
+                        @click="closeSalon(salon)"
+                        :disabled="!monitorState[salon.id] || !monitorState[salon.id].members || monitorState[salon.id].status === 'closing' || monitorState[salon.id].status === 'deleting'">
+                        <i class="fa-solid fa-door-closed"></i> Fermer le salon
+                    </button>
+                    <button class="btn-icon" style="color:var(--red-light);margin-left:auto;"
+                        @click="confirmDeleteSalon(salon)"
+                        :disabled="monitorState[salon.id] && monitorState[salon.id].status === 'deleting'"
+                        title="Supprimer définitivement">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </template>
+    </div>
+
+</div>
+{% endblock %}

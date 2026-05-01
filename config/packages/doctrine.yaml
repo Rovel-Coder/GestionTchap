@@ -1,0 +1,8 @@
+doctrine:
+    dbal:
+        url: '%env(resolve:DATABASE_URL)%'
+        types:
+            int_array: App\Doctrine\IntArrayType
+        mapping_types:
+            _int4: int_array
+            _int8: int_array

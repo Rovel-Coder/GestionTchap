@@ -1,0 +1,68 @@
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: gestion_tchap
+      POSTGRES_USER: tchap
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-tchap_dev_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tchap -d gestion_tchap"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  php:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/var/www/html
+      - vendor_cache:/var/www/html/vendor
+    environment:
+      APP_ENV: ${APP_ENV:-dev}
+      APP_SECRET: ${APP_SECRET:-dev-secret-change-for-prod-32chars}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://tchap:tchap_dev_password@postgres:5432/gestion_tchap}
+      TCHAP_SERVICE_URL: http://tchap-bridge:3000
+      TCHAP_SERVICE_KEY: ${TCHAP_SERVICE_KEY:-dev-api-key-shared}
+    command: >
+      sh -c "php bin/console app:seed-sysadmin && php-fpm"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "8088:80"
+    volumes:
+      - .:/var/www/html:ro
+      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - php
+    restart: unless-stopped
+
+  tchap-bridge:
+    build:
+      context: ./tchap-service
+      dockerfile: Dockerfile
+    volumes:
+      - tchap_data:/app/data
+      - ./tchap-service/src:/app/src:ro
+    environment:
+      PORT: 3000
+      HOST: "0.0.0.0"
+      API_KEY: ${TCHAP_SERVICE_KEY:-dev-api-key-shared}
+      TCHAP_HOMESERVER: https://matrix.agent.interieur.tchap.gouv.fr
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  vendor_cache:
+  tchap_data:

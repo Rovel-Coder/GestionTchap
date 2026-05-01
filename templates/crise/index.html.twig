@@ -1,0 +1,260 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Mode Crise — Gestion Tchap{% endblock %}
+
+{% block content %}
+<div class="view" x-data="criseView()" x-init="load()" style="display:flex;flex-direction:column;height:100%;overflow:hidden;">
+
+    {# ── Bannière rouge ── #}
+    <div class="crisis-top-banner">
+        <div style="display:flex;align-items:center;gap:10px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            <span>MODE CRISE — DÉPLOIEMENT D'URGENCE VERS LES SALONS</span>
+        </div>
+        <a href="{{ path('app_suivi_crise') }}" class="btn-suivi">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+            </svg>
+            Suivi des salons
+        </a>
+    </div>
+
+    {# ── Spinner ── #}
+    <div x-show="loading" style="flex:1;display:flex;align-items:center;justify-content:center;">
+        <div class="spinner"></div>
+    </div>
+
+    {# ── Layout 3 colonnes ── #}
+    <div class="crisis-cols-wrapper" x-show="!loading">
+
+        {# ── Colonne 1 : Salons cibles ── #}
+        <div class="crisis-col">
+            <div class="crisis-col-header">
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <span class="crisis-col-num">1.</span>
+                    <span class="crisis-col-title">Salons cibles</span>
+                    <span class="crisis-count" x-text="selectedSalons.length + ' sélectionné(s)'"></span>
+                </div>
+                {% if permissions.canManage %}
+                <button class="btn-crisis-create" @click="openCreateSalonModal()">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                    Créer
+                </button>
+                {% endif %}
+            </div>
+            <div class="crisis-col-body">
+                <div x-show="crisisSalons.length === 0" class="crisis-empty">
+                    <div>Aucun salon de crise existant</div>
+                    <div style="font-size:11px;margin-top:4px;font-style:italic;">Utilisez le bouton + Créer pour en créer un</div>
+                </div>
+                <template x-for="salon in crisisSalons" :key="salon.id">
+                    <div class="crisis-item crisis-item-salon" :class="{ selected: selectedSalonIds[salon.id] }"
+                        @click="toggleSalon(salon.id, !selectedSalonIds[salon.id])">
+                        <input type="checkbox" :checked="!!selectedSalonIds[salon.id]"
+                            @click.stop @change="toggleSalon(salon.id, $event.target.checked)">
+                        <div class="crisis-item-name crisis-item-name-salon" x-text="salon.Nom || ''"></div>
+                        <span x-show="salon.room_id" class="crisis-salon-badge crisis-salon-badge--ok">✓ Tchap</span>
+                        <span x-show="!salon.room_id" class="crisis-salon-badge crisis-salon-badge--warn">⚠ Manquant</span>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        {# ── Séparateur ── #}
+        <div style="width:1px;background:var(--border);flex-shrink:0;"></div>
+
+        {# ── Colonne 2 : Personnel ── #}
+        <div class="crisis-col">
+            <div class="crisis-col-header">
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <span class="crisis-col-num">2.</span>
+                    <span class="crisis-col-title">Personnel</span>
+                    <span class="crisis-count" x-text="selectedAgents.length + ' sélectionné(s)'"></span>
+                </div>
+            </div>
+
+            <div class="crisis-search-bar">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+                <input type="text" :value="search" @input="search = $event.target.value" @focus="$el.removeAttribute('readonly')" readonly placeholder="Nom, prénom…" autocomplete="off" spellcheck="false">
+            </div>
+
+            <div class="crisis-filter-row">
+                <span class="crisis-filter-label">STATUT</span>
+                <div class="crisis-filter-chips">
+                    <button class="crisis-chip" :class="{ active: filters.statut === '' }" @click="filters.statut = ''">Tous</button>
+                    <button class="crisis-chip" :class="{ active: filters.statut === 'actif' }" @click="filters.statut = 'actif'">Actifs</button>
+                    <button class="crisis-chip" :class="{ active: filters.statut === 'reserve' }" @click="filters.statut = 'reserve'">Réserve</button>
+                    <button class="crisis-chip" :class="{ active: filters.statut === 'admin_civil' }" @click="filters.statut = 'admin_civil'">Adm. Civil</button>
+                    <button class="crisis-chip" :class="{ active: filters.statut === 'admin_militaire' }" @click="filters.statut = 'admin_militaire'">Adm. Militaire</button>
+                </div>
+            </div>
+
+            <div class="crisis-filter-row">
+                <span class="crisis-filter-label">UNITÉ</span>
+                <div class="crisis-filter-chips">
+                    <button class="crisis-chip" :class="{ active: !filters.unite }" @click="filters.unite = ''">Toutes</button>
+                    <template x-for="unite in unites" :key="unite.id">
+                        <button class="crisis-chip" :class="{ active: filters.unite == unite.id }"
+                            @click="filters.unite = unite.id"
+                            x-text="unite.Nom || unite.code || '#' + unite.id"></button>
+                    </template>
+                </div>
+            </div>
+
+            <div class="crisis-select-all-row">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                    <input type="checkbox" :checked="allSelected" @change="toggleSelectAll($event.target.checked)"
+                        style="accent-color:var(--red-light);width:14px;height:14px;">
+                    <span style="font-family:var(--font-display);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;">Sélectionner tout</span>
+                </label>
+                <span style="font-size:11px;color:var(--text-muted);"
+                    x-text="filteredAgents.length + ' / ' + personnel.length + ' agent' + (personnel.length > 1 ? 's' : '')"></span>
+            </div>
+
+            <div class="crisis-col-body">
+                <div x-show="filteredAgents.length === 0" class="crisis-empty">Aucun agent correspondant</div>
+                <template x-for="agent in filteredAgents" :key="agent.id">
+                    <div class="crisis-item" :class="{ selected: selectedAgentIds[agent.id] }"
+                        @click="toggleAgent(agent.id, !selectedAgentIds[agent.id])">
+                        <input type="checkbox" :checked="!!selectedAgentIds[agent.id]"
+                            @click.stop @change="toggleAgent(agent.id, $event.target.checked)">
+                        <div style="overflow:hidden;">
+                            <div class="crisis-item-name" x-text="(agent.Prenom || '') + ' ' + (agent.Nom || '')"></div>
+                            <div class="crisis-item-meta">
+                                <span x-show="getAgentUnites(agent).length"
+                                    x-text="getAgentUnites(agent).map(u => u.Nom).join(', ')"></span>
+                                <span x-show="!getAgentUnites(agent).length" style="opacity:.5;">—</span>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        {# ── Séparateur ── #}
+        <div style="width:1px;background:var(--border);flex-shrink:0;"></div>
+
+        {# ── Colonne 3 : Confirmer ── #}
+        <div class="crisis-col" style="flex:1;min-width:180px;">
+            <div class="crisis-col-header">
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <span class="crisis-col-num">3.</span>
+                    <span class="crisis-col-title">Confirmer</span>
+                </div>
+            </div>
+            <div class="crisis-col-body" style="padding:12px;">
+                <div x-show="!selectedSalons.length && !selectedAgents.length" class="crisis-empty">
+                    Sélectionnez des salons et du personnel
+                </div>
+                <template x-if="selectedSalons.length > 0 || selectedAgents.length > 0">
+                    <div>
+                        <div x-show="selectedSalons.length > 0" class="summary-section">
+                            <div class="summary-section-title">Salons (<span x-text="selectedSalons.length"></span>)</div>
+                            <template x-for="sid in selectedSalons" :key="sid">
+                                <div style="margin-bottom:3px;">
+                                    <span class="summary-chip salon"
+                                        x-text="(salons.find(s => s.id === sid) || {}).Nom || '#' + sid"></span>
+                                </div>
+                            </template>
+                        </div>
+                        <div x-show="selectedAgents.length > 0" class="summary-section" style="margin-top:14px;">
+                            <div class="summary-section-title">Personnel (<span x-text="selectedAgents.length"></span>)</div>
+                            <template x-for="aid in selectedAgents" :key="aid">
+                                <div style="margin-bottom:3px;">
+                                    <span class="summary-chip agent">
+                                        <span x-text="(personnel.find(a => a.id === aid) || {}).Prenom"></span>
+                                        <span x-text="(personnel.find(a => a.id === aid) || {}).Nom"></span>
+                                    </span>
+                                </div>
+                            </template>
+                        </div>
+                        <div x-show="deployResult" class="deploy-result" :class="deployResultType" style="margin-top:14px;"
+                            x-html="deployResult"></div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+    </div>
+
+    {# ── Barre déployer (bas fixe) ── #}
+    <div class="crisis-deploy-bar" x-show="!loading">
+        <button class="btn-crisis-deploy-main" :disabled="!selectedSalons.length || !selectedAgents.length" @click="deploy()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px;">
+                <line x1="22" y1="2" x2="11" y2="13"/>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+            Déployer
+        </button>
+    </div>
+
+    {# ── Modale création salon de crise ── #}
+    <div class="modal-overlay" x-show="createSalonOpen" x-cloak @click.self="createSalonOpen = false">
+        <div class="modal modal-sm">
+            <div class="modal-header">
+                <h3 style="color:var(--red-light);">Créer un salon de crise</h3>
+                <button class="btn-icon" @click="createSalonOpen = false"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;">
+                <div style="padding:8px 12px;border-radius:var(--radius-sm);font-size:12px;"
+                    :style="tchapEnabled ? 'background:rgba(39,174,96,.08);border:1px solid rgba(39,174,96,.25);color:#6ec38a;' : 'background:var(--red-dim);border:1px solid rgba(192,57,43,.3);color:var(--red-light);'"
+                    x-text="tchapEnabled ? '✓ Intégration Tchap active — le salon sera créé automatiquement sur Tchap.' : '⚠ Bot Tchap non configuré — le salon sera créé sans room_id Tchap.'">
+                </div>
+                <div class="form-group">
+                    <label>Nom du salon *</label>
+                    <input type="text" x-model="newSalonNom" placeholder="ex: CRISE_EMGGDR_20260322" autofocus>
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea x-model="newSalonDesc" rows="2" placeholder="Objet de la crise…"></textarea>
+                </div>
+                <div x-show="createSalonMsg" style="font-size:12px;padding:8px 10px;border-radius:var(--radius-sm);line-height:1.5;"
+                    :style="{ color: createSalonMsgColor, background: createSalonMsgBg }"
+                    x-text="createSalonMsg"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-ghost" @click="createSalonOpen = false">Annuler</button>
+                <button class="btn-primary" style="background:var(--red);border-color:var(--red-light);"
+                    @click="submitCreateSalon()"
+                    :disabled="!newSalonNom.trim() || creatingsalon">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:5px;">
+                        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                    <span x-text="creatingsal ? 'Création…' : 'Créer le salon'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {# ── Import NiGend CSV (legacy) ── #}
+    <div class="modal-overlay" x-show="importCsvOpen" x-cloak @click.self="importCsvOpen = false">
+        <div class="modal modal-sm">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-file-import"></i> Import NiGend CSV</h3>
+                <button class="btn-icon" @click="importCsvOpen = false"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">
+                    Fichier CSV avec une colonne <code style="color:var(--gold);">NiGend</code> — les agents correspondants seront sélectionnés automatiquement.
+                </p>
+                <div class="form-group">
+                    <label>Fichier CSV</label>
+                    <input type="file" accept=".csv" @change="loadNigendCsv($event)" style="-webkit-appearance:auto;appearance:auto;color:var(--text-secondary);">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-ghost" @click="importCsvOpen = false">Fermer</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

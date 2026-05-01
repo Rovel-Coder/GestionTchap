@@ -1,0 +1,246 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Cartographie — Gestion Tchap{% endblock %}
+
+{% block head_extra %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>window.TCHAP_HOMESERVER = {{ tchapHomeserver|json_encode|raw }};</script>
+{% endblock %}
+
+{% block content %}
+<div class="view" x-data="cartoView()" x-init="init()">
+
+    {# ── Toolbar ── #}
+    <div class="view-toolbar">
+        <div class="toolbar-left">
+            <span class="view-title">CARTOGRAPHIE</span>
+            <span class="badge" x-text="filteredPersonnel.length + ' membre' + (filteredPersonnel.length > 1 ? 's' : '')"></span>
+            <span x-show="positionCount > 0" class="badge" style="border-color:rgba(110,195,138,.4);color:#6ec38a;background:rgba(110,195,138,.08);"
+                x-text="positionCount + ' géolocalisé' + (positionCount > 1 ? 's' : '')"></span>
+        </div>
+        <div class="toolbar-right">
+            <div class="search-box">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" :value="search" @input="search = $event.target.value"
+                    @focus="$el.removeAttribute('readonly')" readonly
+                    placeholder="Rechercher un membre…" autocomplete="off" spellcheck="false">
+            </div>
+
+            {# ── Filtre salons ── #}
+            <div style="position:relative;" @click.outside="salonFilterOpen = false">
+                <button class="carto-filter-btn" @click="salonFilterOpen = !salonFilterOpen"
+                    :class="{ active: selectedSalonIds.length > 0 || salonFilterOpen }">
+                    <i class="fa-solid fa-layer-group" style="font-size:12px;flex-shrink:0;"></i>
+                    <span x-show="selectedSalonIds.length === 0">Salons</span>
+                    <span x-show="selectedSalonIds.length > 0" class="carto-filter-badge" x-text="selectedSalonIds.length"></span>
+                    <i class="fa-solid fa-chevron-down" style="font-size:9px;transition:transform .2s;"
+                        :style="salonFilterOpen ? 'transform:rotate(180deg)' : ''"></i>
+                </button>
+
+                <div x-show="salonFilterOpen" class="carto-filter-panel" x-cloak>
+                    <div class="carto-filter-panel-hd">
+                        <span class="carto-filter-panel-title">Filtrer par salon</span>
+                        <button x-show="selectedSalonIds.length > 0" class="carto-filter-clear"
+                            @click.stop="selectedSalonIds = []">
+                            <i class="fa-solid fa-xmark" style="margin-right:4px;"></i>Tout afficher
+                        </button>
+                    </div>
+                    <div class="carto-filter-search">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input type="text" x-model="salonSearch" placeholder="Rechercher un salon…" @click.stop>
+                    </div>
+                    <div class="carto-filter-list">
+                        <div x-show="filteredSalonList.length === 0" class="carto-filter-empty">
+                            Aucun salon correspondant
+                        </div>
+                        <template x-for="s in filteredSalonList" :key="s.id">
+                            <label class="carto-filter-item" @click.stop>
+                                <input type="checkbox"
+                                    :checked="selectedSalonIds.length === 0 || selectedSalonIds.includes(s.id)"
+                                    @change="toggleSalonFilter(s.id, $event.target.checked)">
+                                <span class="carto-filter-item-name" x-text="s.Nom"></span>
+                                <span x-show="s.Type" class="carto-filter-type-badge" :class="'t-' + (s.Type || '')" x-text="s.Type"></span>
+                            </label>
+                        </template>
+                    </div>
+                    <div class="carto-filter-footer">
+                        <span class="carto-filter-footer-info"
+                            x-text="(salonSearch ? filteredSalonList.length + '/' : '') + salons.length + ' salon' + (salons.length > 1 ? 's' : '')"></span>
+                        <div class="carto-filter-footer-actions">
+                            <button @click.stop="selectedSalonIds = []">Tout cocher</button>
+                            <button @click.stop="selectedSalonIds = salons.map(s => s.id)">Tout décocher</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── Layout : carte (gauche) + liste membres (droite) ── #}
+    <div class="carto-layout">
+
+        {# ── Carte Leaflet ── #}
+        <div id="map" class="carto-map"></div>
+
+        {# ── Panneau membres ── #}
+        <div class="carto-sidebar">
+            <div class="carto-sidebar-header" style="display:flex;align-items:center;justify-content:space-between;">
+                <span class="carto-sidebar-title">MEMBRES</span>
+                <span x-show="selectedSalonIds.length > 0"
+                    style="font-size:10px;color:var(--blue-light);">Filtrés</span>
+            </div>
+
+            <div class="carto-sidebar-list">
+                <div x-show="filteredPersonnel.length === 0" class="empty-state" style="padding:30px 14px;font-size:12px;">
+                    Aucun membre
+                </div>
+                <template x-for="p in filteredPersonnel" :key="p.id">
+                    <div class="carto-member-item" @click="openMember(p)">
+                        <div class="carto-pos-dot" :class="hasPosition(p) ? 'pos-known' : 'pos-unknown'"></div>
+                        <div class="carto-member-body">
+                            <div class="carto-member-name"
+                                x-text="(p.Prenom || '') + ' ' + (p.Nom || '').toUpperCase()"></div>
+                            <div class="carto-member-meta">
+                                <span x-show="p.Grade" x-text="p.Grade + ' · '"></span>
+                                <span x-text="getUniteLabel(p)"></span>
+                            </div>
+                        </div>
+                        <i class="fa-solid fa-chevron-right carto-member-chevron"></i>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+
+    {# ── Modal détail membre ── #}
+    <div class="modal-overlay" x-show="memberModalOpen" x-cloak @click.self="closeMember()">
+        <div class="modal modal-large">
+            <div class="modal-header" style="gap:14px;">
+                <div class="carto-detail-avatar">
+                    <img x-show="memberAvatarUrl" :src="memberAvatarUrl" @error="memberAvatarUrl = null" alt="">
+                    <span x-show="!memberAvatarUrl"
+                        x-text="selectedMember ? (selectedMember.Prenom || '?')[0].toUpperCase() : '?'"></span>
+                </div>
+                <div style="flex:1;min-width:0;">
+                    <h3 style="font-size:16px;margin:0;"
+                        x-text="selectedMember ? (selectedMember.Prenom || '') + ' ' + (selectedMember.Nom || '').toUpperCase() : ''"></h3>
+                    <div style="font-size:12px;color:var(--text-muted);margin-top:3px;" x-show="selectedMember?.Grade"
+                        x-text="selectedMember?.Grade"></div>
+                </div>
+                <button class="btn-icon" @click="closeMember()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+
+                {# Colonne gauche — données internes #}
+                <div>
+                    <div class="carto-detail-section">
+                        <div class="carto-detail-section-title">Informations</div>
+                        <div class="carto-detail-row">
+                            <span class="carto-detail-label">Email</span>
+                            <span class="carto-detail-value" x-text="selectedMember?.Mail || '—'"></span>
+                        </div>
+                        <div class="carto-detail-row">
+                            <span class="carto-detail-label">Matrix ID</span>
+                            <span class="carto-detail-value" style="font-family:monospace;font-size:11px;"
+                                x-text="selectedMember?.user_id || '—'"></span>
+                        </div>
+                        <div class="carto-detail-row">
+                            <span class="carto-detail-label">Unités</span>
+                            <span class="carto-detail-value" x-text="getUniteLabel(selectedMember) || '—'"></span>
+                        </div>
+                        <div class="carto-detail-row" x-show="selectedMember && (selectedMember.Salons_Extra || []).length > 0">
+                            <span class="carto-detail-label">Salons+</span>
+                            <span class="carto-detail-value"
+                                x-text="(selectedMember?.Salons_Extra || []).map(sid => { const s = salons.find(s => s.id === Number(sid)); return s ? s.Nom : '#' + sid; }).join(', ')"></span>
+                        </div>
+                    </div>
+
+                    {# Géolocalisation #}
+                    <div class="carto-detail-section">
+                        <div class="carto-detail-section-title">Géolocalisation</div>
+                        <div class="carto-pos-card" x-show="hasPosition(selectedMember)">
+                            <div class="carto-pos-dot pos-known"></div>
+                            <div style="flex:1;">
+                                <div style="font-size:11px;color:var(--text-secondary);"
+                                    x-text="'Lat : ' + (selectedMember?.latitude || '') + ' · Lon : ' + (selectedMember?.longitude || '')"></div>
+                                <div x-show="selectedMember?.position_at"
+                                    style="font-size:10px;color:var(--text-muted);margin-top:2px;"
+                                    x-text="'Mise à jour : ' + (selectedMember?.position_at || '')"></div>
+                            </div>
+                        </div>
+                        <div class="carto-pos-card" x-show="!hasPosition(selectedMember)">
+                            <div class="carto-pos-dot pos-unknown"></div>
+                            <span style="font-size:12px;color:var(--text-muted);">Position non disponible</span>
+                        </div>
+                    </div>
+                </div>
+
+                {# Colonne droite — profil Tchap #}
+                <div>
+                    <div class="carto-detail-section">
+                        <div class="carto-detail-section-title">
+                            Profil Tchap
+                            <span x-show="memberProfileLoading"
+                                style="margin-left:8px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--text-muted);">
+                                <i class="fa-solid fa-spinner fa-spin" style="font-size:10px;"></i> chargement…
+                            </span>
+                        </div>
+
+                        <div x-show="memberProfileError" class="alert-error" style="font-size:11px;margin-bottom:10px;"
+                            x-text="memberProfileError"></div>
+
+                        <div x-show="!memberProfileLoading && !memberProfileError && !memberProfile && selectedMember?.user_id"
+                            style="font-size:11px;color:var(--text-muted);">Aucune donnée Tchap</div>
+
+                        <div x-show="!selectedMember?.user_id"
+                            style="font-size:11px;color:var(--text-muted);">
+                            <i class="fa-solid fa-circle-info" style="margin-right:5px;"></i>
+                            Aucun identifiant Matrix configuré pour cet agent.
+                        </div>
+
+                        <div x-show="memberProfile" class="carto-tchap-card" style="margin-bottom:12px;">
+                            <div class="carto-tchap-avatar">
+                                <img x-show="memberAvatarUrl" :src="memberAvatarUrl" @error="$el.style.display='none'" alt="">
+                                <span x-show="!memberAvatarUrl"
+                                    x-text="(memberProfile?.displayname || selectedMember?.Prenom || '?')[0].toUpperCase()"></span>
+                            </div>
+                            <div style="flex:1;min-width:0;">
+                                <div style="font-size:13px;font-weight:600;color:var(--text-primary);"
+                                    x-text="memberProfile?.displayname || '—'"></div>
+                                <div style="font-size:10px;color:var(--text-muted);font-family:monospace;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+                                    x-text="selectedMember?.user_id || ''"></div>
+                            </div>
+                        </div>
+
+                        <div x-show="memberProfile">
+                            <div class="carto-detail-row" x-show="memberProfile?.currently_active !== undefined">
+                                <span class="carto-detail-label">Présence</span>
+                                <span class="carto-detail-value">
+                                    <span :style="{ color: memberProfile?.currently_active ? '#6ec38a' : 'var(--text-muted)' }"
+                                        x-text="memberProfile?.currently_active ? '● En ligne' : '● Hors ligne'"></span>
+                                </span>
+                            </div>
+                            <div class="carto-detail-row" x-show="memberProfile?.last_active_ago">
+                                <span class="carto-detail-label">Vu il y a</span>
+                                <span class="carto-detail-value"
+                                    x-text="formatLastActive(memberProfile?.last_active_ago)"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer" style="justify-content:flex-start;gap:8px;">
+                <span x-show="hasPosition(selectedMember)" style="font-size:12px;color:var(--text-muted);">
+                    <i class="fa-solid fa-location-dot" style="color:#6ec38a;margin-right:4px;"></i>
+                    Marqueur visible sur la carte
+                </span>
+                <button class="btn-ghost" @click="closeMember()" style="margin-left:auto;">Fermer</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,21 @@
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+        public: false
+
+    App\:
+        resource: '../src/'
+        exclude:
+            - '../src/DependencyInjection/'
+            - '../src/Entity/'
+            - '../src/Kernel.php'
+
+    App\Doctrine\IntArrayType:
+        tags:
+            - { name: doctrine.dbal.type, alias: int_array }
+
+    App\Service\TchapService:
+        arguments:
+            $bridgeUrl: '%env(default::TCHAP_SERVICE_URL)%'
+            $bridgeKey: '%env(default::TCHAP_SERVICE_KEY)%'

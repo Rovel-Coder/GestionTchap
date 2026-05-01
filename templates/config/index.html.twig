@@ -1,0 +1,515 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Configuration — Gestion Tchap{% endblock %}
+
+{% block content %}
+<div class="view" x-data="configView()" x-init="load()">
+
+    {# ── Toolbar ── #}
+    <div class="view-toolbar">
+        <div class="toolbar-left">
+            <span class="view-title">CONFIGURATION</span>
+        </div>
+    </div>
+
+    {# ── Contenu ── #}
+    <div id="config-content">
+        <div class="config-grid">
+
+            {# ── Bot Tchap / Matrix ── #}
+            <div class="config-section">
+                <div class="config-section-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.49 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.4 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 9.4a16 16 0 0 0 6.69 6.69l1.48-1.74a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+                    </svg>
+                    Bot Tchap / Matrix
+                </div>
+                <div class="config-form">
+
+                    <div class="form-group">
+                        <label>Homeserver URL</label>
+                        <input type="url" x-model="tchapConfig.homeserver"
+                            placeholder="https://matrix.agent.interieur.tchap.gouv.fr">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Bot user_id</label>
+                        <input type="text" x-model="tchapConfig.botUserId"
+                            placeholder="@bot-gestion:agent.interieur.tchap.gouv.fr"
+                            :style="{ opacity: tchapConfig.enabled ? 0.6 : 1 }">
+                    </div>
+
+                    {# Statut token #}
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+                        <span style="font-size:12px;color:var(--text-muted);">Token :</span>
+                        <span style="font-size:12px;font-weight:600;"
+                            :style="{ color: tchapConfig.enabled ? '#6ec38a' : 'var(--red-light)' }"
+                            x-text="tchapConfig.enabled ? '✓ Configuré' : '✗ Non configuré'"></span>
+                        <button x-show="tchapConfig.enabled" class="btn-ghost"
+                            style="font-size:11px;padding:3px 10px;color:var(--red-light);border-color:var(--red-light);"
+                            @click="revokeToken()">
+                            Révoquer
+                        </button>
+                        <button class="btn-ghost" style="font-size:11px;padding:3px 10px;"
+                            @click="showLoginForm = !showLoginForm"
+                            x-text="showLoginForm ? 'Masquer' : (tchapConfig.enabled ? 'Changer' : 'Se connecter')"></button>
+                    </div>
+
+                    {# Formulaire connexion (collapsible) #}
+                    <div x-show="showLoginForm"
+                        style="background:rgba(45,108,223,.06);border:1px solid rgba(45,108,223,.2);border-radius:var(--radius-sm);padding:14px;margin-bottom:12px;">
+                        <div style="font-size:12px;color:var(--blue-light);font-weight:600;margin-bottom:10px;">
+                            🔐 Connexion Matrix du bot
+                        </div>
+                        <div class="form-group" style="margin-bottom:8px;">
+                            <label style="font-size:11px;">Identifiant Matrix</label>
+                            <input type="text" x-model="botLogin.username"
+                                placeholder="@bot-xxx:agent.interieur.tchap.gouv.fr" autocomplete="off">
+                        </div>
+                        <div class="form-group" style="margin-bottom:12px;">
+                            <label style="font-size:11px;">Mot de passe</label>
+                            <div style="display:flex;gap:8px;">
+                                <input :type="showLoginPassword ? 'text' : 'password'" x-model="botLogin.password"
+                                    placeholder="••••••••" style="flex:1;" autocomplete="new-password"
+                                    @keyup.enter="loginBot()">
+                                <button class="btn-ghost" @click="showLoginPassword = !showLoginPassword"
+                                    style="padding:8px 12px;flex-shrink:0;" type="button">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                        <circle cx="12" cy="12" r="3"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;line-height:1.5;">
+                            ⚠ Le mot de passe n'est jamais stocké. Seul le token obtenu est sauvegardé.
+                        </div>
+                        <div x-show="loginError" class="alert-error" x-text="loginError" style="margin-bottom:8px;font-size:12px;"></div>
+                        <div x-show="loginSuccess" style="font-size:12px;color:#6ec38a;margin-bottom:8px;" x-text="loginSuccess"></div>
+                        <div style="display:flex;gap:8px;">
+                            <button class="btn-primary" @click="loginBot()" :disabled="loggingIn || !botLogin.username || !botLogin.password"
+                                style="display:flex;align-items:center;gap:6px;">
+                                <i x-show="loggingIn" class="fa-solid fa-spinner fa-spin"></i>
+                                <span x-text="loggingIn ? 'Connexion…' : 'Se connecter'"></span>
+                            </button>
+                            <button class="btn-ghost" @click="showLoginForm = false">Annuler</button>
+                        </div>
+                    </div>
+
+                    {# Intégration active #}
+                    <div class="form-group" style="flex-direction:row;align-items:center;gap:10px;">
+                        <label style="margin:0;">Intégration active</label>
+                        <input type="checkbox" x-model="tchapConfig.enabled"
+                            style="width:16px;height:16px;accent-color:var(--blue-light);">
+                    </div>
+
+                    {# Résultat test #}
+                    <div style="font-size:12px;padding:6px 0;min-height:18px;"
+                        :style="{ color: cfgTestColor }" x-text="cfgTestResult"></div>
+
+                    <div style="display:flex;gap:10px;margin-top:4px;">
+                        <button class="btn-ghost" @click="testConnection()">Tester la connexion</button>
+                        <button class="btn-primary" @click="saveTchapConfig()">
+                            <i class="fa-solid fa-floppy-disk"></i> Enregistrer
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {# ── Réconciliation Tchap ── #}
+            <div class="config-section">
+                <div class="config-section-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                        <circle cx="9" cy="7" r="4"/>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                    </svg>
+                    Réconciliation user_id Tchap
+                </div>
+                <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;line-height:1.6;">
+                    <p>Analyse les membres présents dans les salons Tchap et les relie automatiquement aux agents en comparant les adresses email.</p>
+                    <p style="margin-top:6px;color:var(--text-muted);font-size:11px;">Domaines email acceptés (séparés par virgule) :</p>
+                    <div style="display:flex;gap:8px;margin-top:4px;">
+                        <input type="text" x-model="tchapConfig.emailDomains"
+                            placeholder="gendarmerie.interieur.gouv.fr, police.interieur.gouv.fr"
+                            style="flex:1;font-size:11px;">
+                        <button class="btn-ghost" style="font-size:11px;padding:6px 12px;flex-shrink:0;"
+                            @click="saveEmailDomains()">Sauver</button>
+                    </div>
+                </div>
+                <button class="btn-primary" @click="runReconciliation()" :disabled="reconRunning" style="margin-bottom:14px;">
+                    <i x-show="reconRunning" class="fa-solid fa-spinner fa-spin" style="margin-right:6px;"></i>
+                    <span x-text="reconRunning ? 'Analyse en cours…' : (reconDone ? 'Relancer l\'analyse' : 'Lancer l\'analyse')"></span>
+                </button>
+                <div x-show="reconResults" style="font-size:12px;" x-html="reconResults"></div>
+            </div>
+
+            {# ── Chiffrement E2EE (mode bridge) ── #}
+            <div class="config-section">
+                <div class="config-section-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                        <circle cx="12" cy="16" r="1" fill="currentColor"/>
+                    </svg>
+                    Chiffrement E2EE
+                </div>
+
+                {# Statut bridge #}
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+                    <div style="display:flex;align-items:center;gap:8px;flex:1;">
+                        <i x-show="e2eePhase === 'starting'" class="fa-solid fa-spinner fa-spin" style="font-size:12px;flex-shrink:0;"></i>
+                        <span style="font-size:12px;font-weight:600;"
+                            :style="{ color: e2eePhase === 'ready' ? '#6ec38a' : e2eePhase === 'error' ? 'var(--red-light)' : 'var(--text-muted)' }">
+                            <span x-show="e2eePhase === 'idle'">⬤ Bridge non connecté — configurez le bot via <em>Se connecter</em></span>
+                            <span x-show="e2eePhase === 'starting'" x-text="e2eeMessage || 'Vérification…'"></span>
+                            <span x-show="e2eePhase === 'ready'">✓ E2EE actif — géré automatiquement par le bridge</span>
+                            <span x-show="e2eePhase === 'error'">✗ <span x-text="e2eeError"></span></span>
+                        </span>
+                    </div>
+                    <button class="btn-ghost" style="font-size:11px;padding:4px 12px;flex-shrink:0;"
+                        :disabled="e2eePhase === 'starting'"
+                        @click="startE2EE()">
+                        <i x-show="e2eePhase === 'starting'" class="fa-solid fa-spinner fa-spin" style="margin-right:4px;"></i>
+                        <span x-text="e2eePhase === 'starting' ? 'Vérification…' : 'Vérifier l\'état'"></span>
+                    </button>
+                </div>
+
+                {# Explication mode bridge #}
+                <div style="padding:10px 14px;background:rgba(45,108,223,.05);border:1px solid rgba(45,108,223,.2);border-radius:var(--radius-sm);font-size:12px;color:var(--text-secondary);line-height:1.7;">
+                    <p><strong style="color:var(--blue-light);">Mode bridge actif</strong> — le chiffrement E2EE est pris en charge par le service <code>tchap-bridge</code> (RustSdkCryptoStorageProvider).</p>
+                    <p style="margin-top:6px;">Les clés sont stockées dans le volume Docker <code>tchap_data</code> et persistent entre les redémarrages.</p>
+                </div>
+
+                {# Reset clés (dernier recours) #}
+                <details style="margin-top:14px;">
+                    <summary style="font-size:11px;color:var(--text-muted);cursor:pointer;user-select:none;">
+                        Réinitialiser les clés E2EE (dernier recours)
+                    </summary>
+                    <div style="margin-top:10px;padding:10px 14px;background:rgba(192,57,43,.07);border:1px solid rgba(192,57,43,.25);border-radius:var(--radius-sm);">
+                        <p style="font-size:11px;color:var(--red-light);font-weight:600;margin-bottom:6px;">⚠ Action irréversible</p>
+                        <p style="font-size:11px;color:var(--text-secondary);line-height:1.6;margin-bottom:10px;">
+                            Supprime le volume crypto du bridge et régénère les clés Rust SDK.
+                            Le device ne sera <strong>plus reconnu</strong> par les pairs Tchap.<br>
+                            Exécutez sur le serveur :
+                        </p>
+                        <code style="display:block;font-size:11px;padding:8px 10px;background:var(--bg-base);border-radius:var(--radius-sm);color:var(--gold);line-height:1.8;user-select:all;">
+                            docker compose stop tchap-bridge<br>
+                            docker volume rm $(docker compose config --volumes | grep tchap_data)<br>
+                            docker compose up -d tchap-bridge
+                        </code>
+                    </div>
+                </details>
+
+                {# Vérification SAS — intégrée ici puisque liée au même service #}
+                <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border);">
+                    <div style="font-size:12px;font-weight:700;color:var(--text-primary);margin-bottom:8px;">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:5px;">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        </svg>
+                        Vérification SAS
+                    </div>
+                    <div style="font-size:12px;color:var(--text-secondary);line-height:1.6;">
+                        <p>Lancez la vérification depuis Tchap (<strong>Paramètres → Sécurité → Appareils → Bot → Vérifier l'appareil</strong>).</p>
+                        <p style="margin-top:4px;color:var(--text-muted);font-size:11px;">La vérification SAS est gérée côté bridge — elle se produit automatiquement lors de la reconnexion du bot si le device est reconnu par Tchap.</p>
+                    </div>
+                </div>
+            </div>
+
+            {# ── Visibilité des fonctionnalités ── #}
+            <div class="config-section config-section-full">
+                <div class="config-section-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                        <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                    Visibilité des fonctionnalités
+                </div>
+                <div style="font-size:12px;color:var(--text-secondary);margin-bottom:14px;line-height:1.6;">
+                    Définissez quelles fonctionnalités sont accessibles à chaque profil.
+                </div>
+                <div style="overflow:auto;">
+                    <table class="data-table" style="width:100%;">
+                        <thead>
+                            <tr>
+                                <th>Rôle</th>
+                                <th style="text-align:center;">Cartographie</th>
+                                <th style="text-align:center;">Mode Crise</th>
+                                <th style="text-align:center;">Suivi Crise</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="role in ['lecteur','gestionnaire','superviseur_crise','admin']" :key="role">
+                                <tr>
+                                    <td>
+                                        <span class="user-role-badge" :class="'role-' + role" x-text="roleLabel(role)"></span>
+                                    </td>
+                                    <template x-for="feat in ['carto','crise','suivi_crise']" :key="feat">
+                                        <td style="text-align:center;">
+                                            <input type="checkbox"
+                                                :checked="uiConfig.roleFeatures && uiConfig.roleFeatures[role] && uiConfig.roleFeatures[role][feat]"
+                                                @change="toggleRoleFeature(role, feat, $event.target.checked)"
+                                                :disabled="role === 'admin'"
+                                                style="width:15px;height:15px;accent-color:var(--gold);cursor:pointer;">
+                                        </td>
+                                    </template>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+                <div style="margin-top:12px;display:flex;gap:10px;align-items:center;">
+                    <button class="btn-primary" @click="saveUiConfig()">
+                        <i class="fa-solid fa-floppy-disk"></i> Enregistrer
+                    </button>
+                    <span x-show="featureSaved" style="font-size:12px;color:#6ec38a;">✓ Sauvegardé</span>
+                </div>
+            </div>
+
+            {# ── Rôles personnalisés ── #}
+            <div class="config-section config-section-full">
+                <div class="config-section-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                        <circle cx="9" cy="7" r="4"/>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                    </svg>
+                    Profils utilisateurs personnalisés
+                </div>
+                <div style="font-size:12px;color:var(--text-secondary);margin-bottom:14px;line-height:1.6;">
+                    Créez des profils basés sur les rôles existants avec des permissions spécifiques.
+                </div>
+
+                {# Liste existante #}
+                <template x-for="(role, idx) in uiConfig.customRoles" :key="role.id">
+                    <div style="display:flex;align-items:flex-start;gap:12px;padding:12px 14px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:8px;">
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-size:13px;font-weight:600;margin-bottom:4px;" x-text="role.name"></div>
+                            <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;">
+                                Basé sur <span class="user-role-badge" :class="'role-' + role.baseRole"
+                                    x-text="roleLabel(role.baseRole)"
+                                    style="font-size:10px;padding:2px 6px;"></span>
+                                &nbsp;·&nbsp; ID : <code style="font-family:monospace;" x-text="role.baseRole + ':' + role.id"></code>
+                            </div>
+                            <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px;">
+                                <template x-for="f in allFeatures" :key="f.id">
+                                    <span style="font-size:10px;padding:2px 7px;border-radius:3px;"
+                                        :style="role.features && role.features[f.id] ? 'background:rgba(201,168,76,.15);color:var(--gold);border:1px solid rgba(201,168,76,.3)' : 'background:var(--bg-base);color:var(--text-muted);border:1px solid var(--border)'">
+                                        <span x-text="role.features && role.features[f.id] ? '✓' : '✗'"></span>
+                                        <span x-text="f.label"></span>
+                                    </span>
+                                </template>
+                            </div>
+                            <div style="display:flex;flex-wrap:wrap;gap:4px;">
+                                <template x-for="g in actionGroups" :key="g.name">
+                                    <template x-for="a in g.actions" :key="a.id">
+                                        <span x-show="role.actions && role.actions.includes(a.id)"
+                                            style="font-size:10px;padding:2px 7px;border-radius:3px;background:rgba(107,163,247,.12);color:#6ba3f7;border:1px solid rgba(107,163,247,.25);"
+                                            x-text="a.label"></span>
+                                    </template>
+                                </template>
+                            </div>
+                        </div>
+                        <div style="display:flex;gap:6px;flex-shrink:0;">
+                            <button class="btn-ghost" style="font-size:11px;padding:4px 10px;" @click="editCustomRole(role)">Modifier</button>
+                            <button class="btn-ghost" style="font-size:11px;padding:4px 10px;color:var(--red-light);border-color:var(--red-light);"
+                                @click="removeCustomRole(idx)">Suppr.</button>
+                        </div>
+                    </div>
+                </template>
+
+                {# Formulaire création/édition #}
+                <div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;background:var(--bg-elevated);margin-top:12px;">
+                    <div style="font-size:12px;font-weight:700;color:var(--text-primary);margin-bottom:12px;"
+                        x-text="editingRole ? 'Modifier le profil' : 'Créer un nouveau profil'"></div>
+                    <div class="form-grid" style="margin-bottom:14px;">
+                        <div class="form-group" style="margin:0;">
+                            <label>Nom du profil *</label>
+                            <input type="text" x-model="customRoleForm.name" placeholder="Ex: Chef de section">
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label>Rôle de base *</label>
+                            <select x-model="customRoleForm.baseRole">
+                                <option value="lecteur">Lecteur</option>
+                                <option value="gestionnaire">Gestionnaire</option>
+                                <option value="superviseur_crise">Superviseur Crise</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="margin-bottom:14px;">
+                        <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px;">Fonctionnalités visibles</div>
+                        <div style="display:flex;gap:16px;flex-wrap:wrap;">
+                            <template x-for="f in allFeatures" :key="f.id">
+                                <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
+                                    <input type="checkbox"
+                                        :checked="!!(customRoleForm.features && customRoleForm.features[f.id])"
+                                        @change="customRoleForm.features = {...(customRoleForm.features||{}), [f.id]: $event.target.checked}"
+                                        style="accent-color:var(--gold);width:14px;height:14px;">
+                                    <span x-text="f.label"></span>
+                                </label>
+                            </template>
+                        </div>
+                    </div>
+                    <div style="margin-bottom:16px;">
+                        <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px;">Actions autorisées</div>
+                        <template x-for="group in actionGroups" :key="group.name">
+                            <div style="margin-bottom:10px;">
+                                <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;" x-text="group.name"></div>
+                                <div style="display:flex;gap:16px;flex-wrap:wrap;">
+                                    <template x-for="a in group.actions" :key="a.id">
+                                        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
+                                            <input type="checkbox"
+                                                :checked="customRoleForm.actions && customRoleForm.actions.includes(a.id)"
+                                                @change="customRoleForm.actions = $event.target.checked ? [...(customRoleForm.actions||[]), a.id] : (customRoleForm.actions||[]).filter(x => x !== a.id)"
+                                                style="accent-color:var(--gold);width:14px;height:14px;">
+                                            <span x-text="a.label"></span>
+                                        </label>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                    <div x-show="customRoleError" class="alert-error" x-text="customRoleError" style="margin-bottom:8px;"></div>
+                    <div style="display:flex;gap:8px;">
+                        <button class="btn-primary" @click="saveCustomRole()">
+                            <span x-text="editingRole ? 'Mettre à jour' : 'Créer le profil'"></span>
+                        </button>
+                        <button x-show="editingRole" class="btn-ghost" @click="cancelEditRole()">Annuler</button>
+                    </div>
+                </div>
+            </div>
+
+            {# ── Administrateurs système ── #}
+            {% if permissions.isSysAdmin %}
+            <div class="config-section config-section-full">
+                <div class="config-section-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    </svg>
+                    Administrateurs système
+                </div>
+                <div style="font-size:12px;color:var(--text-secondary);margin-bottom:14px;line-height:1.6;">
+                    Comptes réservés à l'administration technique de l'application.
+                </div>
+
+                {# Liste admins #}
+                <div style="margin-bottom:18px;overflow:auto;">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Identifiant</th>
+                                <th>Créé le</th>
+                                <th class="th-actions">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr x-show="sysAdmins.length === 0">
+                                <td colspan="3" class="empty-state">Aucun admin système</td>
+                            </tr>
+                            <template x-for="admin in sysAdmins" :key="admin.id">
+                                <tr>
+                                    <td style="font-family:var(--font-display);font-weight:700;">
+                                        <span x-text="admin.username"></span>
+                                        <span x-show="admin.username === 'Sic'"
+                                            style="margin-left:8px;font-size:10px;padding:2px 6px;border-radius:3px;background:rgba(201,168,76,.15);color:var(--gold);border:1px solid rgba(201,168,76,.3);">Compte initial</span>
+                                    </td>
+                                    <td style="color:var(--text-muted);font-size:12px;"
+                                        x-text="new Date(admin.created_at).toLocaleDateString('fr-FR')"></td>
+                                    <td class="td-actions">
+                                        <button class="btn-ghost" style="font-size:11px;padding:4px 10px;"
+                                            @click="openResetPassword(admin)">Réinit. MDP</button>
+                                        <button class="btn-icon" style="color:var(--red-light);"
+                                            x-show="admin.username !== 'Sic'"
+                                            @click="deleteSysAdmin(admin)">
+                                            <i class="fa-solid fa-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+
+                {# Formulaire création / réinit MDP #}
+                <div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;background:var(--bg-elevated);">
+                    <div style="font-size:12px;font-weight:700;color:var(--text-primary);margin-bottom:12px;"
+                        x-text="resetTarget ? 'Réinitialiser le mot de passe de ' + resetTarget.username : 'Créer un nouvel administrateur système'"></div>
+                    <div class="form-grid">
+                        <div class="form-group" x-show="!resetTarget">
+                            <label>Identifiant *</label>
+                            <input type="text" x-model="newAdmin.username" placeholder="Ex: AdminTech" autocomplete="off">
+                        </div>
+                        <div class="form-group">
+                            <label x-text="resetTarget ? 'Nouveau mot de passe * (8 car. min.)' : 'Mot de passe * (8 car. min.)'"></label>
+                            <input type="password" x-model="newAdmin.password" placeholder="••••••••" autocomplete="new-password">
+                        </div>
+                    </div>
+                    <div x-show="adminError" class="alert-error" x-text="adminError" style="margin-bottom:8px;"></div>
+                    <div style="display:flex;gap:8px;">
+                        <button class="btn-primary"
+                            :disabled="!newAdmin.password || newAdmin.password.length < 8 || (!resetTarget && !newAdmin.username)"
+                            @click="createSysAdmin()">
+                            <span x-text="resetTarget ? 'Réinitialiser' : 'Créer'"></span>
+                        </button>
+                        <button x-show="resetTarget" class="btn-ghost" @click="cancelResetPassword()">Annuler</button>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            {# ── Informations ── #}
+            <div class="config-section">
+                <div class="config-section-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="12" y1="8" x2="12" y2="12"/>
+                        <line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </svg>
+                    Informations
+                </div>
+                <div style="font-size:12px;color:var(--text-secondary);line-height:1.8;">
+                    <p>• La configuration est stockée en base de données sécurisée.</p>
+                    <p>• Elle est <strong>partagée automatiquement</strong> avec tous les utilisateurs dès la sauvegarde.</p>
+                    <p>• Seul un <strong>administrateur</strong> peut modifier la configuration.</p>
+                    <p>• Le bot doit être <strong>administrateur</strong> des salons pour inviter/expulser des membres.</p>
+                    <p style="color:var(--text-muted);margin-top:8px;">
+                        Token actuel :
+                        <span :style="{ color: tchapConfig.enabled ? '#6ec38a' : 'var(--red-light)' }"
+                            x-text="tchapConfig.enabled ? '✓ Configuré' : '✗ Non configuré'"></span>
+                    </p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    {# ── Modal reset password admin système ── #}
+    <div class="modal-overlay" x-show="resetPasswordModal" x-cloak @click.self="resetPasswordModal = false">
+        <div class="modal modal-sm">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-key"></i> Réinitialiser le mot de passe</h3>
+                <button class="btn-icon" @click="resetPasswordModal = false"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
+                    Admin : <strong style="color:var(--text-primary);" x-text="resetTarget ? resetTarget.username : ''"></strong>
+                </p>
+                <div class="form-group">
+                    <label>Nouveau mot de passe</label>
+                    <input type="password" x-model="newAdmin.password">
+                </div>
+                <div x-show="adminError" class="alert-error" x-text="adminError" style="margin-top:10px;"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-ghost" @click="cancelResetPassword()">Annuler</button>
+                <button class="btn-primary" :disabled="!newAdmin.password || newAdmin.password.length < 8" @click="createSysAdmin()">
+                    Modifier
+                </button>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

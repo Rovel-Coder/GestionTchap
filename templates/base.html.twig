@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Gestion Personnel Tchap{% endblock %}</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c9a84c' stroke-width='2'><path d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/></svg>">
+    <link rel="stylesheet" href="{{ asset('assets/app.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous">
+    {% block head_extra %}{% endblock %}
+</head>
+<body>
+
+{% block body %}
+<div id="app" x-data="appRoot()" x-init="init()">
+
+    {# ── Header ── #}
+    <header class="app-header">
+
+        <div class="header-left">
+            {# Hexagon logo #}
+            <svg width="32" height="36" viewBox="0 0 32 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M16 1L30 8.5V25.5L16 33L2 25.5V8.5L16 1Z" fill="#C9A84C" fill-opacity="0.15" stroke="#C9A84C" stroke-width="1.5"/>
+                <path d="M16 7L26 12.5V22.5L16 28L6 22.5V12.5L16 7Z" fill="#C9A84C" fill-opacity="0.1"/>
+                <text x="16" y="21" text-anchor="middle" font-family="Orbitron,sans-serif" font-size="10" font-weight="700" fill="#C9A84C">TC</text>
+            </svg>
+            <div class="header-title">
+                <span class="title-main">GESTION TCHAP</span>
+                <span class="title-sub">Gendarmerie nationale</span>
+            </div>
+        </div>
+
+        <nav class="header-nav">
+            <a href="{{ path('app_personnel') }}" class="nav-btn {% if app.request.attributes.get('_route') starts with 'app_personnel' %}active{% endif %}">
+                <i class="fa-solid fa-users"></i>
+                <span class="nav-label">Personnel</span>
+            </a>
+            <a href="{{ path('app_salons') }}" class="nav-btn {% if app.request.attributes.get('_route') starts with 'app_salons' %}active{% endif %}">
+                <i class="fa-solid fa-comments"></i>
+                <span class="nav-label">Salons</span>
+            </a>
+            <a href="{{ path('app_unites') }}" class="nav-btn {% if app.request.attributes.get('_route') starts with 'app_unites' %}active{% endif %}">
+                <i class="fa-solid fa-sitemap"></i>
+                <span class="nav-label">Unités</span>
+            </a>
+            {% if permissions.canCrise %}
+            <a href="{{ path('app_crise') }}" class="nav-btn crisis {% if app.request.attributes.get('_route') starts with 'app_crise' %}active{% endif %}">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <span class="nav-label">Crise</span>
+            </a>
+            {% endif %}
+            {% if (uiConfig.roleFeatures[user.role].carto ?? false) or permissions.isSysAdmin %}
+            <a href="{{ path('app_carto') }}" class="nav-btn {% if app.request.attributes.get('_route') starts with 'app_carto' %}active{% endif %}">
+                <i class="fa-solid fa-map-location-dot"></i>
+                <span class="nav-label">Carto</span>
+            </a>
+            {% endif %}
+            {% if permissions.isSysAdmin %}
+            <a href="{{ path('app_config') }}" class="nav-btn {% if app.request.attributes.get('_route') starts with 'app_config' %}active{% endif %}">
+                <i class="fa-solid fa-gear"></i>
+                <span class="nav-label">Config</span>
+            </a>
+            {% endif %}
+        </nav>
+
+        {# ── Profil utilisateur ── #}
+        <div class="user-profile-wrapper" x-data="{ open: false }">
+            <div class="header-user" @click="open = !open" :class="{ 'header-user-open': open }">
+                <div class="user-avatar">{{ user.displayName|slice(0,1)|upper }}</div>
+                <div class="user-info">
+                    <div class="user-info-top">
+                        <span class="user-name">{{ user.displayName }}</span>
+                        <span class="user-role-badge role-{{ user.role }}">{{ user.role }}</span>
+                    </div>
+                    <span class="user-mail">{{ user.identifier }}</span>
+                </div>
+            </div>
+
+            <div class="user-profile-panel" x-show="open" @click.outside="open = false" x-cloak>
+                <div class="profile-header">
+                    <div class="profile-avatar">{{ user.displayName|slice(0,1)|upper }}</div>
+                    <div class="profile-info">
+                        <div class="profile-name">{{ user.displayName }}</div>
+                        <div class="profile-mail">{{ user.identifier }}</div>
+                    </div>
+                </div>
+                <div class="profile-actions">
+                    <button class="btn-ghost profile-btn" style="font-size:11px;padding:6px 12px;"
+                        @click="$dispatch('open-modal', { modal: 'change-password' }); open = false">
+                        <i class="fa-solid fa-key"></i> Changer le mot de passe
+                    </button>
+                    <a href="{{ path('app_logout') }}" class="btn-ghost profile-btn profile-btn-logout" style="margin-top:8px;font-size:11px;padding:6px 12px;text-decoration:none;color:var(--red-light);">
+                        <i class="fa-solid fa-right-from-bracket"></i> Déconnexion
+                    </a>
+                </div>
+            </div>
+        </div>
+
+    </header>
+
+    {# ── Contenu principal ── #}
+    <main class="app-main">
+        {% block content %}{% endblock %}
+    </main>
+
+    {# ── Barre mobile ── #}
+    <nav class="mobile-tab-bar">
+        <a href="{{ path('app_personnel') }}" class="nav-btn {% if app.request.attributes.get('_route') starts with 'app_personnel' %}active{% endif %}">
+            <i class="fa-solid fa-users"></i><span>Personnel</span>
+        </a>
+        <a href="{{ path('app_salons') }}" class="nav-btn {% if app.request.attributes.get('_route') starts with 'app_salons' %}active{% endif %}">
+            <i class="fa-solid fa-comments"></i><span>Salons</span>
+        </a>
+        <a href="{{ path('app_unites') }}" class="nav-btn {% if app.request.attributes.get('_route') starts with 'app_unites' %}active{% endif %}">
+            <i class="fa-solid fa-sitemap"></i><span>Unités</span>
+        </a>
+        {% if permissions.canCrise %}
+        <a href="{{ path('app_crise') }}" class="nav-btn crisis {% if app.request.attributes.get('_route') starts with 'app_crise' %}active{% endif %}">
+            <i class="fa-solid fa-triangle-exclamation"></i><span>Crise</span>
+        </a>
+        {% endif %}
+        {% if permissions.isSysAdmin %}
+        <a href="{{ path('app_config') }}" class="nav-btn {% if app.request.attributes.get('_route') starts with 'app_config' %}active{% endif %}">
+            <i class="fa-solid fa-gear"></i><span>Config</span>
+        </a>
+        {% endif %}
+    </nav>
+
+    {# ── Toasts ── #}
+    <div id="toast-container" x-data="toastManager()" @toast.window="show($event.detail)">
+        <template x-for="t in toasts" :key="t.id">
+            <div class="toast" :class="'toast-' + t.type" x-show="t.visible" x-transition>
+                <i class="fa-solid" :class="{ 'fa-circle-check': t.type==='success', 'fa-circle-xmark': t.type==='error', 'fa-circle-info': t.type==='info' }"></i>
+                <span x-text="t.message"></span>
+                <button class="toast-close" @click="dismiss(t.id)"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+        </template>
+    </div>
+
+    {# ── Modal : changement de mot de passe ── #}
+    <div class="modal-overlay"
+         x-data="{ open: false, form: { currentPassword: '', newPassword: '', confirm: '' }, error: null, loading: false }"
+         @open-modal.window="if ($event.detail.modal === 'change-password') open = true"
+         x-show="open" x-cloak @click.self="open = false">
+        <div class="modal modal-sm">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-key"></i> Changer le mot de passe</h3>
+                <button class="btn-icon" @click="open = false"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div x-show="error" class="alert-error" x-text="error"></div>
+                <div class="form-group">
+                    <label>Mot de passe actuel</label>
+                    <input type="password" x-model="form.currentPassword" autocomplete="current-password">
+                </div>
+                <div class="form-group" style="margin-top:12px;">
+                    <label>Nouveau mot de passe</label>
+                    <input type="password" x-model="form.newPassword" autocomplete="new-password">
+                </div>
+                <div class="form-group" style="margin-top:12px;">
+                    <label>Confirmer</label>
+                    <input type="password" x-model="form.confirm">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-ghost" @click="open = false">Annuler</button>
+                <button class="btn-primary" :disabled="loading" @click="
+                    error = null;
+                    if (form.newPassword !== form.confirm) { error = 'Les mots de passe ne correspondent pas'; return; }
+                    if (form.newPassword.length < 8) { error = 'Minimum 8 caractères'; return; }
+                    loading = true;
+                    fetch('/api/auth/change-password', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                        body: JSON.stringify({ currentPassword: form.currentPassword, newPassword: form.newPassword })
+                    }).then(r => r.json()).then(d => {
+                        loading = false;
+                        if (d.error) { error = d.error; } else { open = false; $dispatch('toast', { message: 'Mot de passe modifié', type: 'success' }); form = { currentPassword: '', newPassword: '', confirm: '' }; }
+                    }).catch(() => { error = 'Erreur réseau'; loading = false; });
+                ">
+                    <i x-show="loading" class="fa-solid fa-spinner fa-spin"></i>
+                    <span x-show="!loading">Modifier</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{# ── Données initiales transmises par le serveur ── #}
+<script>
+window.CURRENT_USER = {{ user|json_encode|raw }};
+window.PERMISSIONS  = {{ permissions|json_encode|raw }};
+window.UI_CONFIG    = {{ uiConfig|json_encode|raw }};
+</script>
+
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js"></script>
+<script src="{{ asset('assets/app.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>
