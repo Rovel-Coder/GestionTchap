@@ -12,11 +12,11 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 WORKDIR /var/www/html
 
 COPY composer.json composer.lock* ./
-RUN composer install --no-dev --prefer-dist --no-interaction
+RUN composer install --prefer-dist --no-interaction
 
 COPY . .
 
-RUN composer dump-autoload --optimize --no-dev \
+RUN composer dump-autoload --optimize \
     && mkdir -p var/cache var/log \
     && chown -R www-data:www-data var/
 
