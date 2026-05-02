@@ -1,14 +1,23 @@
-FROM node:20-slim
+FROM php:8.3-fpm
 
-WORKDIR /app
+RUN apt-get update && apt-get install -y \
+        libpq-dev \
+        unzip \
+        git \
+    && docker-php-ext-install pdo pdo_pgsql \
+    && rm -rf /var/lib/apt/lists/*
 
-# Outils de compilation nécessaires pour better-sqlite3 (module natif requis par NodeCryptoStorageProvider)
-RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-COPY package.json ./
-RUN npm install --omit=dev
+WORKDIR /var/www/html
+
+COPY composer.json composer.lock* ./
+RUN composer install --no-dev --prefer-dist --no-interaction
 
 COPY . .
 
-EXPOSE 3000
-CMD ["node", "src/index.js"]
+RUN composer dump-autoload --optimize --no-dev \
+    && mkdir -p var/cache var/log \
+    && chown -R www-data:www-data var/
+
+EXPOSE 9000
