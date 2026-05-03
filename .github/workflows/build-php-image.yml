@@ -31,5 +31,5 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/gestiontchap-php:latest
-            ghcr.io/${{ github.repository_owner }}/gestiontchap-php:${{ github.sha }}
+            ghcr.io/rovel-coder/gestiontchap-php:latest
+            ghcr.io/rovel-coder/gestiontchap-php:${{ github.sha }}
