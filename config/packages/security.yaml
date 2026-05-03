@@ -27,7 +27,7 @@ security:
                 check_path: app_login
                 username_parameter: identifier
                 password_parameter: password
-                default_target_path: app_personnel
+                default_target_path: app_home
                 always_use_default_target_path: false
                 enable_csrf: true
             logout:

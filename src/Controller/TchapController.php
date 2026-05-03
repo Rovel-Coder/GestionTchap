@@ -48,8 +48,8 @@ class TchapController extends AbstractController
     {
         /** @var AppUser $user */
         $user = $this->getUser();
-        if (!$this->roles->canAdmin($user)) {
-            return $this->json(['error' => 'Accès réservé aux administrateurs'], 403);
+        if (!$user?->isSysAdmin()) {
+            return $this->json(['error' => 'Accès réservé aux administrateurs système'], 403);
         }
 
         $data       = json_decode($request->getContent(), true) ?? [];
@@ -73,7 +73,7 @@ class TchapController extends AbstractController
             $this->config->set('tchap_config', $cfg);
 
             return $this->json([
-                'token'    => $result['access_token'],
+                'ok'       => true,
                 'userId'   => $result['user_id'],
                 'deviceId' => $result['device_id'] ?? null,
             ]);

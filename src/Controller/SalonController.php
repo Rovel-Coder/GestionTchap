@@ -31,6 +31,9 @@ class SalonController extends AbstractController
     {
         /** @var AppUser $user */
         $user = $this->getUser();
+        if (!$this->roles->canManage($user)) {
+            throw $this->createAccessDeniedException('Accès réservé aux gestionnaires');
+        }
 
         return $this->render('salon/index.html.twig', [
             'user'        => $user->toArray(),
@@ -42,6 +45,12 @@ class SalonController extends AbstractController
     #[Route('/api/salons', name: 'api_salons_list', methods: ['GET'])]
     public function list(): JsonResponse
     {
+        /** @var AppUser $user */
+        $user = $this->getUser();
+        if (!$this->roles->canManage($user)) {
+            return $this->json(['error' => 'Accès réservé aux gestionnaires'], 403);
+        }
+
         $rows = $this->db->fetchAllAssociative('SELECT * FROM salons ORDER BY "Nom"');
         return $this->json($rows);
     }

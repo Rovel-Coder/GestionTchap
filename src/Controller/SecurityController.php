@@ -26,7 +26,7 @@ class SecurityController extends AbstractController
     public function login(AuthenticationUtils $authUtils): Response
     {
         if ($this->getUser()) {
-            return $this->redirectToRoute('app_personnel');
+            return $this->redirectToRoute('app_home');
         }
 
         return $this->render('security/login.html.twig', [
@@ -39,7 +39,7 @@ class SecurityController extends AbstractController
     public function register(Request $request): Response
     {
         if ($this->getUser()) {
-            return $this->redirectToRoute('app_personnel');
+            return $this->redirectToRoute('app_home');
         }
 
         // Seulement autorisé si aucun personnel en base

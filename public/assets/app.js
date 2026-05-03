@@ -1163,7 +1163,7 @@ function configView() {
             password:   this.botLogin.password,
           }),
         });
-        this.tchapConfig.token    = r.token;
+        this.tchapConfig = await apiFetch('/api/config/tchap_config');
         this.tchapConfig.botUserId = r.userId;
         this.tchapConfig.enabled  = true;
         this.botLogin.password    = '';

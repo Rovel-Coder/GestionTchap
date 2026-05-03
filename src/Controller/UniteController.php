@@ -29,6 +29,9 @@ class UniteController extends AbstractController
     {
         /** @var AppUser $user */
         $user = $this->getUser();
+        if (!$this->roles->canManage($user)) {
+            throw $this->createAccessDeniedException('Accès réservé aux gestionnaires');
+        }
 
         return $this->render('unite/index.html.twig', [
             'user'        => $user->toArray(),
@@ -40,6 +43,12 @@ class UniteController extends AbstractController
     #[Route('/api/unites', name: 'api_unites_list', methods: ['GET'])]
     public function list(): JsonResponse
     {
+        /** @var AppUser $user */
+        $user = $this->getUser();
+        if (!$this->roles->canManage($user)) {
+            return $this->json(['error' => 'Accès réservé aux gestionnaires'], 403);
+        }
+
         $rows = $this->db->fetchAllAssociative('SELECT * FROM unites ORDER BY "Nom"');
         return $this->json(array_map($this->formatRow(...), $rows));
     }

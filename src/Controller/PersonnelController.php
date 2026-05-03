@@ -40,7 +40,27 @@ class PersonnelController extends AbstractController
     #[Route('/', name: 'app_home')]
     public function home(): Response
     {
-        return $this->redirectToRoute('app_personnel');
+        /** @var AppUser $user */
+        $user = $this->getUser();
+
+        if ($this->roles->canManage($user)) {
+            return $this->redirectToRoute('app_personnel');
+        }
+
+        if ($this->roles->canCrise($user)) {
+            return $this->redirectToRoute('app_crise');
+        }
+
+        $uiConfig = $this->config->getUiConfig();
+        $baseRole = $this->roles->extractBaseRole($user->getAppRole());
+        $hasCarto = $user->isSysAdmin()
+            || ($uiConfig['roleFeatures'][$baseRole]['carto'] ?? false);
+
+        if ($hasCarto) {
+            return $this->redirectToRoute('app_carto');
+        }
+
+        throw $this->createAccessDeniedException('Aucune vue n’est accessible pour ce compte.');
     }
 
     #[Route('/personnel', name: 'app_personnel', methods: ['GET'])]
@@ -48,6 +68,9 @@ class PersonnelController extends AbstractController
     {
         /** @var AppUser $user */
         $user = $this->getUser();
+        if (!$this->roles->canManage($user)) {
+            throw $this->createAccessDeniedException('Accès réservé aux gestionnaires');
+        }
 
         return $this->render('personnel/index.html.twig', [
             'user'        => $user->toArray(),
@@ -60,6 +83,12 @@ class PersonnelController extends AbstractController
     #[Route('/api/personnel', name: 'api_personnel_list', methods: ['GET'])]
     public function list(): JsonResponse
     {
+        /** @var AppUser $user */
+        $user = $this->getUser();
+        if (!$this->roles->canManage($user)) {
+            return $this->json(['error' => 'Accès réservé aux gestionnaires'], 403);
+        }
+
         $rows = $this->db->fetchAllAssociative(
             'SELECT * FROM personnel ORDER BY "Nom", "Prenom"'
         );
