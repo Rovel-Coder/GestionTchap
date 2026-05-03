@@ -1,23 +1,12 @@
-FROM php:8.3-fpm
+FROM node:20-alpine
 
-RUN apt-get update && apt-get install -y \
-        libpq-dev \
-        unzip \
-        git \
-    && docker-php-ext-install pdo pdo_pgsql \
-    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
 
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+COPY package.json ./
+RUN npm install --omit=dev
 
-WORKDIR /var/www/html
+COPY src ./src
 
-COPY composer.json composer.lock* ./
-RUN composer install --no-dev --prefer-dist --no-interaction
+EXPOSE 3000
 
-COPY . .
-
-RUN composer dump-autoload --optimize --no-dev \
-    && mkdir -p var/cache var/log \
-    && chown -R www-data:www-data var/
-
-EXPOSE 9000
+CMD ["npm", "start"]

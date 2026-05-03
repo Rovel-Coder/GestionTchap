@@ -1,6 +1,7 @@
 vendor/
 var/
 .env
+.env.*
 .env.local
 .git/
 .claude/
