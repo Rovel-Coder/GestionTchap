@@ -16,7 +16,8 @@ RUN composer install --no-dev --prefer-dist --no-interaction --no-scripts
 
 COPY . .
 
-RUN composer dump-autoload --optimize --no-dev \
+RUN printf "APP_ENV=prod\n" > .env \
+    && composer dump-autoload --optimize --no-dev \
     && mkdir -p var/cache var/log \
     && chown -R www-data:www-data var/
 

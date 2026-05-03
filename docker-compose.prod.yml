@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_DB: gestion_tchap
       POSTGRES_USER: tchap
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env before starting the production stack}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
@@ -24,12 +24,18 @@ services:
     # Pas de volume source en prod — le code est dans l'image (COPY . .)
     environment:
       APP_ENV: prod
-      APP_SECRET: ${APP_SECRET}
-      DATABASE_URL: postgresql://tchap:${DB_PASSWORD}@postgres:5432/gestion_tchap
+      APP_SECRET: ${APP_SECRET:?Set APP_SECRET in .env before starting the production stack}
+      DATABASE_URL: postgresql://tchap:${DB_PASSWORD:?Set DB_PASSWORD in .env before starting the production stack}@postgres:5432/gestion_tchap
       TCHAP_SERVICE_URL: http://tchap-bridge:3000
-      TCHAP_SERVICE_KEY: ${TCHAP_SERVICE_KEY}
+      TCHAP_SERVICE_KEY: ${TCHAP_SERVICE_KEY:?Set TCHAP_SERVICE_KEY in .env before starting the production stack}
+      DEFAULT_URI: ${DEFAULT_URI:?Set DEFAULT_URI in .env before starting the production stack}
     command: >
-      sh -c "php bin/console app:seed-sysadmin && php-fpm"
+      sh -c "php bin/console app:seed-sysadmin && chown -R www-data:www-data var && php-fpm"
+    healthcheck:
+      test: ["CMD-SHELL", "php -r '$$s = @fsockopen(\"127.0.0.1\", 9000); exit($$s ? 0 : 1);'"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
     depends_on:
       postgres:
         condition: service_healthy
@@ -44,7 +50,8 @@ services:
     volumes:
       - ./public:/var/www/html/public:ro
     depends_on:
-      - php
+      php:
+        condition: service_healthy
     restart: unless-stopped
 
   tchap-bridge:
@@ -57,7 +64,7 @@ services:
     environment:
       PORT: 3000
       HOST: "0.0.0.0"
-      API_KEY: ${TCHAP_SERVICE_KEY}
+      API_KEY: ${TCHAP_SERVICE_KEY:?Set TCHAP_SERVICE_KEY in .env before starting the production stack}
       TCHAP_HOMESERVER: https://matrix.agent.interieur.tchap.gouv.fr
     restart: unless-stopped
 
