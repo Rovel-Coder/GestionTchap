@@ -1,2 +1,10 @@
-FROM nginx:alpine
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Utilise une image Nginx officielle (multi-arch par défaut)
+FROM nginx:stable
+
+# Copie la configuration Nginx
+COPY docker/nginx/conf.d/default.conf /etc/nginx/conf.d/default.conf
+
+# Copie les fichiers statiques
+COPY public /var/www/html/public
+
+EXPOSE 80
