@@ -1,8 +1,36 @@
+# Dependencies
 vendor/
+node_modules/
+
+# Symfony
 var/
+public/build/
+*.log
+
+# Environment files
 .env
 .env.*
 .env.local
+!.env.dist  # Garde le fichier .env.dist (utile pour les templates)
+
+# Git and IDE
 .git/
+.gitignore
 .claude/
+.idea/
+.vscode/
+
+# Documentation
 *.md
+LICENSE
+README.md
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+docker-compose.dev.yml
+
+# OS and temporary files
+.DS_Store
+Thumbs.db
+*.swp
