@@ -13,7 +13,15 @@
       "Bash(curl -s -c /tmp/tc_cookies.txt -b /tmp/tc_cookies.txt http://localhost:8088/config)",
       "Bash(node --check \"D:\\\\Users\\\\romain\\\\developpement\\\\gestion-personnel-tchap-PHP\\\\public\\\\assets\\\\app.js\")",
       "Bash(php -l templates/config/index.html.twig)",
-      "Bash(echo \"exit:$?\")"
+      "Bash(echo \"exit:$?\")",
+      "Bash(node C:/tmp/fiche.js)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8088/login)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8088/carto)",
+      "mcp__Claude_in_Chrome__computer",
+      "mcp__Claude_in_Chrome__read_console_messages",
+      "mcp__Claude_in_Chrome__read_network_requests",
+      "mcp__Claude_in_Chrome__browser_batch",
+      "Bash(xargs grep *)"
     ]
   }
 }

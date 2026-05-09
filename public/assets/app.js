@@ -135,7 +135,10 @@ function personnelView() {
     modalMode: 'create',
     modalError: null,
     saving:    false,
-    deleteTarget: null,
+    deleteTarget:      null,
+    deleteBulkIds:     [],
+    selectMode:        false,
+    selectedPersonnel: [],
     importOpen: false,
     csvPreview: [],
     csvData:    [],
@@ -366,15 +369,37 @@ function personnelView() {
       this.saving = false;
     },
 
-    confirmDelete(agent) { this.deleteTarget = agent; },
+    toggleSelectMode() {
+      this.selectMode = !this.selectMode;
+      if (!this.selectMode) this.selectedPersonnel = [];
+    },
+    toggleSelectAgent(id) {
+      if (this.selectedPersonnel.includes(id)) this.selectedPersonnel = this.selectedPersonnel.filter(i => i !== id);
+      else                                      this.selectedPersonnel = [...this.selectedPersonnel, id];
+    },
+    selectAll()      { this.selectedPersonnel = this.filtered.map(a => a.id); },
+    clearSelection() { this.selectedPersonnel = []; },
+
+    confirmDelete(agent) { this.deleteTarget = agent; this.deleteBulkIds = []; },
+    confirmBulkDelete()  { this.deleteTarget = null;  this.deleteBulkIds = [...this.selectedPersonnel]; },
+    cancelDelete()       { this.deleteTarget = null;  this.deleteBulkIds = []; },
 
     async deleteAgent() {
-      if (!this.deleteTarget) return;
       this.saving = true;
       try {
-        await apiFetch(`/api/personnel/${this.deleteTarget.id}`, { method: 'DELETE' });
-        toast('Agent supprimé', 'success');
-        this.deleteTarget = null;
+        if (this.deleteTarget) {
+          await apiFetch(`/api/personnel/${this.deleteTarget.id}`, { method: 'DELETE' });
+          toast('Agent supprimé', 'success');
+        } else {
+          const r = await apiFetch('/api/personnel', {
+            method: 'DELETE',
+            body: JSON.stringify({ ids: this.deleteBulkIds }),
+          });
+          toast(`${r.deleted} agent(s) supprimé(s)`, 'success');
+          this.selectedPersonnel = [];
+          this.selectMode        = false;
+        }
+        this.cancelDelete();
         await this.load();
       } catch (e) {
         toast(e.message, 'error');
@@ -528,7 +553,25 @@ function salonView() {
     modalMode:  'create',
     modalError: null,
     saving:     false,
-    deleteTarget: null,
+    syncing:          false,
+    // Suppression multi-étapes (single ou bulk)
+    deleteStep:       0,      // 0=fermé 1=confirm 2=kicking 3=confirm bot 4=confirm app delete
+    deleteTarget:     null,   // salon unique
+    deleteBulkIds:    [],     // ids pour suppression en masse
+    deleteKickResult: null,   // message résumé du kick
+    // Sélection multiple
+    selectMode:       false,
+    selectedSalons:   [],
+    // Ajout de membres
+    addMembersTarget:   null,
+    addMembersTab:      'personnel', // 'personnel' | 'manual' | 'csv'
+    addMembersInput:    '',
+    addMembersSearch:   '',
+    addMembersSelected: [],          // IDs personnel sélectionnés
+    addMembersCsvRows:  [],          // lignes parsées depuis CSV
+    addMembersCsvError: null,
+    addMembersError:    null,
+    addMembersResult:   null,
     importOpen: false,
     csvPreview: [],
     csvData:    [],
@@ -583,12 +626,15 @@ function salonView() {
       salon._loading = true;
       salon._error   = null;
       try {
-        const members       = await apiFetch(`/api/tchap/members/${encodeURIComponent(salon.room_id)}`);
-        salon._memberCount  = Array.isArray(members) ? members.length : 0;
-        const cfg           = await apiFetch('/api/config/tchap_config').catch(() => null);
-        const botId         = cfg?.botUserId || '';
-        salon._botPresent   = botId && Array.isArray(members)
-          ? members.some(m => (m.state_key || m.userId || m.user_id || '').toLowerCase() === botId.toLowerCase())
+        const data     = await apiFetch(`/api/tchap/members/${encodeURIComponent(salon.room_id)}`);
+        // L'API retourne { members: [...], botUserId: '...' } (bot effectif selon l'unité)
+        const members  = Array.isArray(data) ? data : (data.members || []);
+        const botId    = (Array.isArray(data) ? '' : data.botUserId) || '';
+        salon._memberCount = members.length;
+        salon._botUserId   = botId || null;
+        salon._memberIds   = members.map(m => (m.state_key || m.userId || m.user_id || '').toLowerCase()).filter(Boolean);
+        salon._botPresent  = botId
+          ? salon._memberIds.includes(botId.toLowerCase())
           : undefined;
       } catch (e) {
         salon._error = e.message;
@@ -679,19 +725,258 @@ function salonView() {
       this.saving = false;
     },
 
-    confirmDelete(salon) { this.deleteTarget = salon; },
+    // ── Sélection multiple ──────────────────────────────────
+    toggleSelectMode() {
+      this.selectMode = !this.selectMode;
+      if (!this.selectMode) this.selectedSalons = [];
+    },
+    toggleSelectSalon(id) {
+      if (this.selectedSalons.includes(id)) this.selectedSalons = this.selectedSalons.filter(i => i !== id);
+      else                                   this.selectedSalons = [...this.selectedSalons, id];
+    },
+    selectAll()      { this.selectedSalons = this.filtered.map(s => s.id); },
+    clearSelection() { this.selectedSalons = []; },
 
-    async deleteSalon() {
+    // ── Suppression multi-étapes ────────────────────────────
+    startDeleteFlow(salon) {
+      this.deleteTarget  = salon;
+      this.deleteBulkIds = [];
+      this.deleteStep    = 1;
+    },
+    confirmBulkDelete() {
+      this.deleteTarget  = null;
+      this.deleteBulkIds = [...this.selectedSalons];
+      this.deleteStep    = 1;
+    },
+    cancelDelete() {
+      this.deleteStep       = 0;
+      this.deleteTarget     = null;
+      this.deleteBulkIds    = [];
+      this.deleteKickResult = null;
+      this.saving           = false;
+    },
+
+    async runKickUsers() {
+      const roomIds = this.deleteTarget
+        ? (this.deleteTarget.room_id ? [this.deleteTarget.room_id] : [])
+        : this.salons.filter(s => this.deleteBulkIds.includes(s.id) && s.room_id).map(s => s.room_id);
+
+      if (roomIds.length === 0) {
+        this.deleteStep = 4;
+        return;
+      }
+
+      this.deleteStep = 2;
+      this.saving     = true;
+      let totalKicked = 0;
+      const errors    = [];
+
+      for (const roomId of roomIds) {
+        try {
+          const r = await apiFetch('/api/tchap/kick-all', {
+            method: 'POST',
+            body: JSON.stringify({ roomId, kickBot: false }),
+          });
+          totalKicked += r.kicked || 0;
+          if (r.errors?.length) errors.push(...r.errors);
+        } catch (e) {
+          errors.push({ error: e.message });
+        }
+      }
+
+      this.deleteKickResult = `${totalKicked} membre(s) expulsé(s) du salon Tchap` +
+        (errors.length ? ` (${errors.length} erreur(s))` : '');
+      this.saving     = false;
+      this.deleteStep = 3;
+    },
+
+    async runBotLeave() {
+      const roomIds = this.deleteTarget
+        ? (this.deleteTarget.room_id ? [this.deleteTarget.room_id] : [])
+        : this.salons.filter(s => this.deleteBulkIds.includes(s.id) && s.room_id).map(s => s.room_id);
+
+      this.saving = true;
+      for (const roomId of roomIds) {
+        try {
+          await apiFetch('/api/tchap/bot-leave', { method: 'POST', body: JSON.stringify({ roomId }) });
+        } catch (e) {
+          toast(`Bot-leave (${roomId}) : ${e.message}`, 'error');
+        }
+      }
+      this.saving     = false;
+      this.deleteStep = 4;
+    },
+
+    skipBotLeave() { this.deleteStep = 4; },
+
+    async finishDelete() {
       this.saving = true;
       try {
-        await apiFetch(`/api/salons/${this.deleteTarget.id}`, { method: 'DELETE' });
-        toast('Salon supprimé', 'success');
-        this.deleteTarget = null;
+        if (this.deleteTarget) {
+          await apiFetch(`/api/salons/${this.deleteTarget.id}`, { method: 'DELETE' });
+          toast('Salon supprimé', 'success');
+        } else {
+          await apiFetch('/api/salons', {
+            method: 'DELETE',
+            body: JSON.stringify({ ids: this.deleteBulkIds }),
+          });
+          toast(`${this.deleteBulkIds.length} salon(s) supprimé(s)`, 'success');
+          this.selectedSalons = [];
+          this.selectMode     = false;
+        }
+        this.cancelDelete();
         await this.load();
       } catch (e) {
         toast(e.message, 'error');
+        this.saving = false;
       }
+    },
+
+    // ── Ajout de membres ────────────────────────────────────
+    openAddMembers(salon) {
+      this.addMembersTarget   = salon;
+      this.addMembersTab      = 'personnel';
+      this.addMembersInput    = '';
+      this.addMembersSearch   = '';
+      this.addMembersSelected = [];
+      this.addMembersCsvRows  = [];
+      this.addMembersCsvError = null;
+      this.addMembersError    = null;
+      this.addMembersResult   = null;
+      // Charger les membres actuels si pas encore fait
+      if (!salon._memberIds) this.fetchMembers(salon);
+    },
+
+    closeAddMembers() {
+      this.addMembersTarget   = null;
+      this.addMembersInput    = '';
+      this.addMembersSearch   = '';
+      this.addMembersSelected = [];
+      this.addMembersCsvRows  = [];
+      this.addMembersCsvError = null;
+      this.addMembersError    = null;
+      this.addMembersResult   = null;
+    },
+
+    // Personnel filtré pour l'onglet "Personnel"
+    get addMembersPersonnel() {
+      const q = (this.addMembersSearch || '').toLowerCase();
+      return this.personnel.filter(p => {
+        if (!q) return true;
+        return `${p.Nom} ${p.Prenom} ${p.Grade || ''} ${p.Mail || ''}`.toLowerCase().includes(q);
+      });
+    },
+
+    toggleAddMembersPerson(id) {
+      if (this.addMembersSelected.includes(id))
+        this.addMembersSelected = this.addMembersSelected.filter(x => x !== id);
+      else
+        this.addMembersSelected = [...this.addMembersSelected, id];
+    },
+
+    isAlreadyInRoom(person) {
+      if (!this.addMembersTarget?._memberIds) return false;
+      return this.addMembersTarget._memberIds.includes((person.user_id || '').toLowerCase());
+    },
+
+    // Parse un fichier CSV pour l'onglet "CSV"
+    async parseCsvForMembers(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      this.addMembersCsvError = null;
+      this.addMembersCsvRows  = [];
+      try {
+        const text = await file.text();
+        const seen = new Set();
+        const rows = [];
+        for (const rawLine of text.split(/\r?\n/)) {
+          const line = rawLine.trim();
+          if (!line) continue;
+          // Découper par virgule ou point-virgule, nettoyer les guillemets
+          const cells = line.split(/[,;]/).map(c => c.trim().replace(/^["']|["']$/g, ''));
+          for (const cell of cells) {
+            if (!cell) continue;
+            // Matrix ID direct
+            if (cell.startsWith('@') && cell.includes(':')) {
+              if (!seen.has(cell.toLowerCase())) {
+                seen.add(cell.toLowerCase());
+                rows.push({ raw: cell, userId: cell, email: null, matched: true, name: cell });
+              }
+              break;
+            }
+            // Email → chercher dans le personnel
+            const at = cell.indexOf('@');
+            if (at > 0 && cell.includes('.', at)) {
+              const email = cell.toLowerCase();
+              if (!seen.has(email)) {
+                seen.add(email);
+                const person = this.personnel.find(p => (p.Mail || '').toLowerCase() === email);
+                rows.push({
+                  raw:     cell,
+                  email,
+                  userId:  person?.user_id || null,
+                  matched: !!(person?.user_id),
+                  name:    person ? `${person.Prenom} ${person.Nom}` : email,
+                });
+              }
+              break;
+            }
+          }
+        }
+        if (!rows.length) { this.addMembersCsvError = 'Aucun email ou identifiant Matrix trouvé dans le fichier.'; return; }
+        this.addMembersCsvRows = rows;
+      } catch (e) {
+        this.addMembersCsvError = 'Erreur de lecture : ' + e.message;
+      }
+    },
+
+    async addMembers() {
+      this.addMembersError  = null;
+      this.addMembersResult = null;
+      let userIds = [];
+
+      if (this.addMembersTab === 'personnel') {
+        userIds = this.addMembersSelected
+          .map(id => this.personnel.find(p => p.id === id)?.user_id)
+          .filter(uid => uid && uid.startsWith('@') && uid.includes(':'));
+      } else if (this.addMembersTab === 'manual') {
+        userIds = this.addMembersInput.split('\n')
+          .map(l => l.trim())
+          .filter(l => l.startsWith('@') && l.includes(':'));
+      } else if (this.addMembersTab === 'csv') {
+        userIds = this.addMembersCsvRows
+          .filter(r => r.matched && r.userId?.startsWith('@'))
+          .map(r => r.userId);
+      }
+
+      if (!userIds.length) {
+        this.addMembersError = 'Aucun identifiant Matrix valide à inviter.';
+        return;
+      }
+
+      this.saving = true;
+      let ok = 0;
+      const errors = [];
+      for (const userId of userIds) {
+        try {
+          await apiFetch('/api/tchap/invite', {
+            method: 'POST',
+            body: JSON.stringify({ roomId: this.addMembersTarget.room_id, userId }),
+          });
+          ok++;
+        } catch (e) {
+          errors.push(`${userId} : ${e.message}`);
+        }
+      }
+      this.addMembersResult = `${ok} membre(s) invité(s)` + (errors.length ? ` — ${errors.length} erreur(s)` : '');
+      if (errors.length) this.addMembersError = errors.join('\n');
       this.saving = false;
+      if (ok > 0) {
+        if (this.addMembersTab === 'personnel') this.addMembersSelected = [];
+        if (this.addMembersTab === 'manual')    this.addMembersInput = '';
+        if (this.addMembersTab === 'csv')       this.addMembersCsvRows = [];
+        await this.fetchMembers(this.addMembersTarget);
+      }
     },
 
     loadCsv(event) {
@@ -748,6 +1033,23 @@ function salonView() {
       await this.load();
     },
 
+    async syncAllToTchap() {
+      this.syncing = true;
+      try {
+        const salonIds = this.salons.filter(s => s.room_id).map(s => s.id);
+        if (!salonIds.length) { toast('Aucun salon avec room_id configuré', 'error'); this.syncing = false; return; }
+        const r = await apiFetch('/api/tchap/apply', {
+          method: 'POST',
+          body: JSON.stringify({ salonIds }),
+        });
+        toast(`Sync terminée — ${r.invited ?? 0} invité(s), ${r.kicked ?? 0} expulsé(s)`, r.errors?.length ? 'error' : 'success');
+        if (r.errors?.length) r.errors.forEach(e => toast(`${e.user ?? ''}: ${e.error}`, 'error'));
+      } catch (e) {
+        toast(e.message, 'error');
+      }
+      this.syncing = false;
+    },
+
     async createTchapRoom(salon) {
       salon._loading = true;
       try {
@@ -776,7 +1078,22 @@ function uniteView() {
     modalMode:  'create',
     modalError: null,
     saving:     false,
-    deleteTarget: null,
+    deleteTarget:   null,
+    deleteBulkIds:  [],
+    selectMode:     false,
+    selectedUnites: [],
+    syncingAll:     false,
+    // Modal détail (onglets)
+    detailOpen:    false,
+    detailUnite:   null,
+    detailTab:     'fiche',
+    detailSaving:  false,
+    detailError:   null,
+    detailForm:    {},
+    quickSalon:    { Nom: '', Type: 'operationnel', Description: '' },
+    addingSalon:   false,
+    salonSearch:   '',
+    bots:          [],
     importOpen: false,
     csvPreview: [],
     csvData:    [],
@@ -797,14 +1114,27 @@ function uniteView() {
     async load() {
       this.loading = true;
       try {
-        const [u, s, p] = await Promise.all([apiFetch('/api/unites'), apiFetch('/api/salons'), apiFetch('/api/personnel')]);
-        this.unites    = u || [];
+        const [u, s, p, b] = await Promise.all([apiFetch('/api/unites'), apiFetch('/api/salons'), apiFetch('/api/personnel'), apiFetch('/api/bots').catch(() => [])]);
+        this.unites    = (u || []).map(unite => ({ ...unite, _syncing: false }));
         this.salons    = s || [];
         this.personnel = p || [];
+        this.bots      = b || [];
       } catch (e) {
         toast(e.message, 'error');
       }
       this.loading = false;
+    },
+
+    get detailPersonnelList() {
+      if (!this.detailUnite) return [];
+      return this.personnel.filter(a => (a.Unite || []).map(Number).includes(Number(this.detailUnite.id)));
+    },
+
+    get detailSalonsList() {
+      if (!this.detailUnite || !this.detailForm.Salons) return [];
+      return this.detailForm.Salons
+        .map(sid => this.salons.find(s => s.id === Number(sid)))
+        .filter(Boolean);
     },
 
     get filtered() {
@@ -979,14 +1309,181 @@ function uniteView() {
       this.saving = false;
     },
 
-    confirmDelete(unite) { this.deleteTarget = unite; },
+    toggleSelectMode() {
+      this.selectMode = !this.selectMode;
+      if (!this.selectMode) this.selectedUnites = [];
+    },
+    toggleSelectUnite(id) {
+      if (this.selectedUnites.includes(id)) this.selectedUnites = this.selectedUnites.filter(i => i !== id);
+      else                                   this.selectedUnites = [...this.selectedUnites, id];
+    },
+    selectAll()      { this.selectedUnites = this.filtered.map(u => u.id); },
+    clearSelection() { this.selectedUnites = []; },
+
+    confirmDelete(unite) { this.deleteTarget = unite; this.deleteBulkIds = []; },
+    confirmBulkDelete()  { this.deleteTarget = null;  this.deleteBulkIds = [...this.selectedUnites]; },
+    cancelDelete()       { this.deleteTarget = null;  this.deleteBulkIds = []; },
+
+    async syncUnite(unite) {
+      if (!unite.Salons || unite.Salons.length === 0) {
+        toast('Aucun salon associé à cette unité', 'error');
+        return;
+      }
+      unite._syncing = true;
+      try {
+        const r = await apiFetch('/api/tchap/apply', {
+          method: 'POST',
+          body: JSON.stringify({ salonIds: unite.Salons.map(Number) }),
+        });
+        const msg = `${r.invited ?? 0} invité(s), ${r.kicked ?? 0} expulsé(s)`;
+        toast(`Sync ${unite.Nom} — ${msg}`, (r.errors?.length) ? 'error' : 'success');
+        if (r.errors?.length) r.errors.forEach(e => toast(`${e.user ?? ''}: ${e.error}`, 'error'));
+      } catch (e) {
+        toast(e.message, 'error');
+      }
+      unite._syncing = false;
+    },
+
+    async syncAllUnites() {
+      this.syncingAll = true;
+      try {
+        const allSalonIds = [...new Set(this.unites.flatMap(u => (u.Salons || []).map(Number)))];
+        if (allSalonIds.length === 0) { toast('Aucun salon configuré', 'error'); this.syncingAll = false; return; }
+        const r = await apiFetch('/api/tchap/apply', {
+          method: 'POST',
+          body: JSON.stringify({ salonIds: allSalonIds }),
+        });
+        const msg = `${r.invited ?? 0} invité(s), ${r.kicked ?? 0} expulsé(s)`;
+        toast(`Sync globale — ${msg}`, (r.errors?.length) ? 'error' : 'success');
+        if (r.errors?.length) r.errors.forEach(e => toast(`${e.user ?? ''}: ${e.error}`, 'error'));
+      } catch (e) {
+        toast(e.message, 'error');
+      }
+      this.syncingAll = false;
+    },
+
+    // ── Modal détail onglets ──────────────────────────────────
+    openDetail(unite) {
+      this.detailUnite = unite;
+      this.detailTab   = 'fiche';
+      this.detailError = null;
+      this.salonSearch = '';
+      this.quickSalon  = { Nom: '', Type: 'operationnel', Description: '' };
+      this.detailForm  = {
+        Nom:     unite.Nom     || '',
+        code:    unite.code    || '',
+        numero:  unite.numero  || '',
+        adresse: unite.adresse || '',
+        bot_id:  unite.bot_id  ?? null,
+        Salons:  [...(unite.Salons || [])],
+      };
+      this.detailOpen = true;
+    },
+
+    closeDetail() { this.detailOpen = false; this.detailUnite = null; },
+
+    async saveDetail() {
+      this.detailSaving = true;
+      this.detailError  = null;
+      try {
+        const updated = await apiFetch(`/api/unites/${this.detailUnite.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            Nom:         this.detailForm.Nom,
+            code:        this.detailForm.code,
+            numero:      this.detailForm.numero,
+            adresse:     this.detailForm.adresse,
+            bot_user_id: this.detailForm.bot_user_id,
+          }),
+        });
+        const idx = this.unites.findIndex(u => u.id === this.detailUnite.id);
+        if (idx >= 0) { this.unites[idx] = { ...this.unites[idx], ...updated }; this.detailUnite = this.unites[idx]; }
+        toast('Unité mise à jour', 'success');
+      } catch (e) {
+        this.detailError = e.message;
+      }
+      this.detailSaving = false;
+    },
+
+    toggleDetailSalon(salonId, checked) {
+      if (!this.detailForm.Salons) this.detailForm.Salons = [];
+      const id = Number(salonId);
+      if (checked) this.detailForm.Salons = [...new Set([...this.detailForm.Salons, id])];
+      else         this.detailForm.Salons = this.detailForm.Salons.filter(i => i !== id);
+    },
+
+    async saveDetailSalons() {
+      this.detailSaving = true;
+      try {
+        const updated = await apiFetch(`/api/unites/${this.detailUnite.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ Salons: this.detailForm.Salons }),
+        });
+        const idx = this.unites.findIndex(u => u.id === this.detailUnite.id);
+        if (idx >= 0) { this.unites[idx] = { ...this.unites[idx], ...updated }; this.detailUnite = this.unites[idx]; }
+        toast('Associations mises à jour', 'success');
+      } catch (e) {
+        toast(e.message, 'error');
+      }
+      this.detailSaving = false;
+    },
+
+    async quickAddSalon() {
+      if (!this.quickSalon.Nom.trim()) return;
+      this.addingSalon = true;
+      try {
+        const salon = await apiFetch('/api/salons', { method: 'POST', body: JSON.stringify(this.quickSalon) });
+        if (salon?.id && !salon?.room_id) {
+          try {
+            await apiFetch(`/api/salons/${salon.id}/create-room`, {
+              method: 'POST',
+              body: JSON.stringify({ uniteId: this.detailUnite.id }),
+            });
+          } catch (e) {
+            toast(`Salon créé dans l'app mais room Tchap échouée : ${e.message}`, 'error');
+          }
+        }
+        const newSalons = [...new Set([...(this.detailForm.Salons || []), Number(salon.id)])];
+        const updated   = await apiFetch(`/api/unites/${this.detailUnite.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ Salons: newSalons }),
+        });
+        const idx = this.unites.findIndex(u => u.id === this.detailUnite.id);
+        if (idx >= 0) { this.unites[idx] = { ...this.unites[idx], ...updated }; this.detailUnite = this.unites[idx]; }
+        this.detailForm.Salons = updated.Salons || newSalons;
+        this.salons = [...this.salons, { ...salon, _memberCount: undefined, _loading: false }];
+        this.quickSalon = { Nom: '', Type: 'operationnel', Description: '' };
+        toast(`Salon "${salon.Nom}" créé et associé`, 'success');
+        // Inviter automatiquement les membres de l'unité dans le nouveau salon
+        apiFetch('/api/tchap/apply', {
+          method: 'POST',
+          body: JSON.stringify({ salonIds: [Number(salon.id)] }),
+        }).then(r => {
+          if (r?.invited > 0) toast(`${r.invited} membre(s) invité(s) dans le salon Tchap`, 'success');
+          if (r?.errors?.length) r.errors.forEach(e => toast(`Tchap: ${e.error}`, 'error'));
+        }).catch(() => {});
+      } catch (e) {
+        toast(e.message, 'error');
+      }
+      this.addingSalon = false;
+    },
 
     async deleteUnite() {
       this.saving = true;
       try {
-        await apiFetch(`/api/unites/${this.deleteTarget.id}`, { method: 'DELETE' });
-        toast('Unité supprimée', 'success');
-        this.deleteTarget = null;
+        if (this.deleteTarget) {
+          await apiFetch(`/api/unites/${this.deleteTarget.id}`, { method: 'DELETE' });
+          toast('Unité supprimée', 'success');
+        } else {
+          const r = await apiFetch('/api/unites', {
+            method: 'DELETE',
+            body: JSON.stringify({ ids: this.deleteBulkIds }),
+          });
+          toast(`${r.deleted} unité(s) supprimée(s)`, 'success');
+          this.selectedUnites = [];
+          this.selectMode     = false;
+        }
+        this.cancelDelete();
         await this.load();
       } catch (e) {
         toast(e.message, 'error');
@@ -1050,21 +1547,24 @@ function configView() {
       token: '', botUserId: '', enabled: false, emailDomains: 'gendarmerie.interieur.gouv.fr',
     },
     uiConfig:   { roleFeatures: {}, customRoles: [] },
-    sysAdmins:  [],
-    botLogin:   { username: '', password: '' },
+    sysAdmins:   [],
+    lockedUsers: [],
+    bots:        [],
+    botForm:     { id: null, name: '', userId: '', isPrincipal: false, homeserver: '' },
+    botFormOpen:  false,
+    botFormError: null,
+    loginBotId:       null,
+    loginBotPassword: '',
+    loginBotLoading:  false,
+    loginBotError:    null,
     newAdmin:   { username: '', password: '' },
     loading:    false,
     testing:    false,
-    loggingIn:  false,
-    loginError: null,
-    loginSuccess: null,
     adminError: null,
     resetTarget:     null,
     resetPassword:   '',
     resetError:      null,
     resetPasswordModal: false,
-    showLoginForm:   false,
-    showLoginPassword: false,
     cfgTestResult:   '',
     cfgTestColor:    '',
     featureSaved:    false,
@@ -1113,14 +1613,20 @@ function configView() {
     async load() {
       this.loading = true;
       try {
-        const [t, u, a] = await Promise.all([
+        const [t, u, a, b] = await Promise.all([
           apiFetch('/api/config/tchap_config'),
           apiFetch('/api/config/ui_config'),
           window.PERMISSIONS?.isSysAdmin ? apiFetch('/api/auth/sysadmins') : Promise.resolve([]),
+          window.PERMISSIONS?.canAdmin   ? apiFetch('/api/bots').catch(() => []) : Promise.resolve([]),
         ]);
         if (t) this.tchapConfig = { ...this.tchapConfig, ...t };
         if (u) this.uiConfig    = u;
         this.sysAdmins = a || [];
+        this.bots      = b || [];
+
+        if (window.PERMISSIONS?.canAdmin) {
+          this.loadLockedUsers();
+        }
 
         // Vérifier l'état E2EE du bridge au chargement (silencieux)
         if (this.tchapConfig.enabled) {
@@ -1132,6 +1638,99 @@ function configView() {
         toast(e.message, 'error');
       }
       this.loading = false;
+    },
+
+    async loadLockedUsers() {
+      try {
+        this.lockedUsers = await apiFetch('/api/auth/locked-users') || [];
+      } catch (e) {
+        this.lockedUsers = [];
+      }
+    },
+
+    async unlockUser(identifier) {
+      try {
+        await apiFetch(`/api/auth/locked-users/${encodeURIComponent(identifier)}/unlock`, { method: 'POST' });
+        this.lockedUsers = this.lockedUsers.filter(u => u.identifier !== identifier);
+        toast('Compte débloqué', 'success');
+      } catch (e) {
+        toast(e.message, 'error');
+      }
+    },
+
+    openBotForm(bot = null) {
+      this.botFormError = null;
+      if (bot) {
+        this.botForm = { id: bot.id, name: bot.name, userId: bot.userId, isPrincipal: bot.isPrincipal, homeserver: bot.homeserver || '' };
+      } else {
+        this.botForm = { id: null, name: '', userId: '', isPrincipal: false, homeserver: '' };
+      }
+      this.botFormOpen = true;
+    },
+
+    closeBotForm() { this.botFormOpen = false; this.botFormError = null; },
+
+    async saveBotForm() {
+      this.botFormError = null;
+      if (!this.botForm.name.trim() || !this.botForm.userId.trim()) {
+        this.botFormError = 'Nom et userId requis'; return;
+      }
+      try {
+        if (this.botForm.id) {
+          const updated = await apiFetch(`/api/bots/${this.botForm.id}`, { method: 'PUT', body: JSON.stringify(this.botForm) });
+          this.bots = this.bots.map(b => b.id === this.botForm.id ? updated : b);
+        } else {
+          const created = await apiFetch('/api/bots', { method: 'POST', body: JSON.stringify(this.botForm) });
+          this.bots = [...this.bots, created];
+        }
+        this.closeBotForm();
+        toast('Bot enregistré', 'success');
+      } catch (e) {
+        this.botFormError = e.message;
+      }
+    },
+
+    async deleteBot(bot) {
+      if (!confirm(`Supprimer le bot "${bot.name}" ?`)) return;
+      try {
+        await apiFetch(`/api/bots/${bot.id}`, { method: 'DELETE' });
+        this.bots = this.bots.filter(b => b.id !== bot.id);
+        toast('Bot supprimé', 'success');
+      } catch (e) {
+        toast(e.message, 'error');
+      }
+    },
+
+    openBotLogin(botId) {
+      this.loginBotId = botId; this.loginBotPassword = ''; this.loginBotError = null;
+    },
+
+    closeBotLogin() { this.loginBotId = null; this.loginBotPassword = ''; this.loginBotError = null; },
+
+    async doLoginBot(bot) {
+      if (!this.loginBotPassword.trim()) return;
+      this.loginBotLoading = true; this.loginBotError = null;
+      try {
+        await apiFetch(`/api/bots/${bot.id}/login`, { method: 'POST', body: JSON.stringify({ password: this.loginBotPassword }) });
+        this.bots = this.bots.map(b => b.id === bot.id ? { ...b, connected: true } : b);
+        if (bot.isPrincipal) this.tchapConfig.enabled = true;
+        this.closeBotLogin();
+        toast(`Bot "${bot.name}" connecté`, 'success');
+      } catch (e) {
+        this.loginBotError = e.message;
+      }
+      this.loginBotLoading = false;
+    },
+
+    async doLogoutBot(bot) {
+      try {
+        await apiFetch(`/api/bots/${bot.id}/logout`, { method: 'POST' });
+        this.bots = this.bots.map(b => b.id === bot.id ? { ...b, connected: false } : b);
+        if (bot.isPrincipal) this.tchapConfig.enabled = false;
+        toast(`Bot "${bot.name}" déconnecté`, 'info');
+      } catch (e) {
+        toast(e.message, 'error');
+      }
     },
 
     async testConnection() {
@@ -1149,29 +1748,6 @@ function configView() {
         toast(e.message, 'error');
       }
       this.testing = false;
-    },
-
-    async loginBot() {
-      this.loggingIn  = true;
-      this.loginError = null;
-      try {
-        const r = await apiFetch('/api/tchap/login', {
-          method: 'POST',
-          body: JSON.stringify({
-            homeserver: this.tchapConfig.homeserver,
-            username:   this.botLogin.username,
-            password:   this.botLogin.password,
-          }),
-        });
-        this.tchapConfig = await apiFetch('/api/config/tchap_config');
-        this.tchapConfig.botUserId = r.userId;
-        this.tchapConfig.enabled  = true;
-        this.botLogin.password    = '';
-        toast('Bot connecté avec succès', 'success');
-      } catch (e) {
-        this.loginError = e.message;
-      }
-      this.loggingIn = false;
     },
 
     async saveTchapConfig() {

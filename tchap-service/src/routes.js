@@ -2,6 +2,7 @@
 
 const express = require('express');
 const bot     = require('./client');
+const verif   = require('./verif');
 
 const router = express.Router();
 
@@ -231,6 +232,54 @@ router.post('/rooms/:roomId/send', async (req, res) => {
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
+});
+
+// ── Vérification SAS ──────────────────────────────────────────────────────
+
+// GET /verif — poll les événements to-device puis retourne l'état
+router.get('/verif', async (_req, res) => {
+  try {
+    const cfg = bot.getBotConfig();
+    await verif.pollSync(cfg);
+  } catch (e) {
+    console.warn('[SAS] pollSync error:', e.message);
+  }
+  res.json(verif.getStatus());
+});
+
+// POST /verif/accept — accepter la demande de vérification entrante
+router.post('/verif/accept', async (_req, res) => {
+  try {
+    const cfg = bot.getBotConfig();
+    // S'assurer qu'on a les derniers événements avant d'accepter
+    await verif.pollSync(cfg);
+    await verif.acceptVerif(cfg);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// POST /verif/confirm — confirmer que les emojis correspondent
+router.post('/verif/confirm', async (_req, res) => {
+  try {
+    const cfg = bot.getBotConfig();
+    await verif.confirmSas(cfg);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// POST /verif/cancel — annuler la vérification
+router.post('/verif/cancel', async (_req, res) => {
+  try {
+    const cfg = bot.getBotConfig();
+    await verif.cancelVerif(cfg);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
 });
 
 module.exports = router;

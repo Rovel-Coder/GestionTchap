@@ -16,84 +16,19 @@
     <div id="config-content">
         <div class="config-grid">
 
-            {# ── Bot Tchap / Matrix ── #}
+            {# ── Connexion Tchap (paramètres globaux) ── #}
             <div class="config-section">
                 <div class="config-section-title">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
                         <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.49 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.4 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 9.4a16 16 0 0 0 6.69 6.69l1.48-1.74a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
                     </svg>
-                    Bot Tchap / Matrix
+                    Connexion Tchap / Matrix
                 </div>
                 <div class="config-form">
-
                     <div class="form-group">
-                        <label>Homeserver URL</label>
-                        <input type="url" x-model="tchapConfig.homeserver"
+                        <label>Homeserver URL <small style="color:var(--text-muted);font-weight:400;">(utilisé par défaut pour tous les bots)</small></label>
+                        <input type="text" x-model="tchapConfig.homeserver"
                             placeholder="https://matrix.agent.interieur.tchap.gouv.fr">
-                    </div>
-
-                    <div class="form-group">
-                        <label>Bot user_id</label>
-                        <input type="text" x-model="tchapConfig.botUserId"
-                            placeholder="@bot-gestion:agent.interieur.tchap.gouv.fr"
-                            :style="{ opacity: tchapConfig.enabled ? 0.6 : 1 }">
-                    </div>
-
-                    {# Statut token #}
-                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-                        <span style="font-size:12px;color:var(--text-muted);">Token :</span>
-                        <span style="font-size:12px;font-weight:600;"
-                            :style="{ color: tchapConfig.enabled ? '#6ec38a' : 'var(--red-light)' }"
-                            x-text="tchapConfig.enabled ? '✓ Configuré' : '✗ Non configuré'"></span>
-                        <button x-show="tchapConfig.enabled" class="btn-ghost"
-                            style="font-size:11px;padding:3px 10px;color:var(--red-light);border-color:var(--red-light);"
-                            @click="revokeToken()">
-                            Révoquer
-                        </button>
-                        <button class="btn-ghost" style="font-size:11px;padding:3px 10px;"
-                            @click="showLoginForm = !showLoginForm"
-                            x-text="showLoginForm ? 'Masquer' : (tchapConfig.enabled ? 'Changer' : 'Se connecter')"></button>
-                    </div>
-
-                    {# Formulaire connexion (collapsible) #}
-                    <div x-show="showLoginForm"
-                        style="background:rgba(45,108,223,.06);border:1px solid rgba(45,108,223,.2);border-radius:var(--radius-sm);padding:14px;margin-bottom:12px;">
-                        <div style="font-size:12px;color:var(--blue-light);font-weight:600;margin-bottom:10px;">
-                            🔐 Connexion Matrix du bot
-                        </div>
-                        <div class="form-group" style="margin-bottom:8px;">
-                            <label style="font-size:11px;">Identifiant Matrix</label>
-                            <input type="text" x-model="botLogin.username"
-                                placeholder="@bot-xxx:agent.interieur.tchap.gouv.fr" autocomplete="off">
-                        </div>
-                        <div class="form-group" style="margin-bottom:12px;">
-                            <label style="font-size:11px;">Mot de passe</label>
-                            <div style="display:flex;gap:8px;">
-                                <input :type="showLoginPassword ? 'text' : 'password'" x-model="botLogin.password"
-                                    placeholder="••••••••" style="flex:1;" autocomplete="new-password"
-                                    @keyup.enter="loginBot()">
-                                <button class="btn-ghost" @click="showLoginPassword = !showLoginPassword"
-                                    style="padding:8px 12px;flex-shrink:0;" type="button">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                                        <circle cx="12" cy="12" r="3"/>
-                                    </svg>
-                                </button>
-                            </div>
-                        </div>
-                        <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;line-height:1.5;">
-                            ⚠ Le mot de passe n'est jamais stocké. Seul le token obtenu est sauvegardé.
-                        </div>
-                        <div x-show="loginError" class="alert-error" x-text="loginError" style="margin-bottom:8px;font-size:12px;"></div>
-                        <div x-show="loginSuccess" style="font-size:12px;color:#6ec38a;margin-bottom:8px;" x-text="loginSuccess"></div>
-                        <div style="display:flex;gap:8px;">
-                            <button class="btn-primary" @click="loginBot()" :disabled="loggingIn || !botLogin.username || !botLogin.password"
-                                style="display:flex;align-items:center;gap:6px;">
-                                <i x-show="loggingIn" class="fa-solid fa-spinner fa-spin"></i>
-                                <span x-text="loggingIn ? 'Connexion…' : 'Se connecter'"></span>
-                            </button>
-                            <button class="btn-ghost" @click="showLoginForm = false">Annuler</button>
-                        </div>
                     </div>
 
                     {# Intégration active #}
@@ -115,6 +50,137 @@
                     </div>
                 </div>
             </div>
+
+            {# ── Gestion des bots ── #}
+            {% if permissions.canAdmin %}
+            <div class="config-section">
+                <div class="config-section-title">
+                    <i class="fa-solid fa-robot" style="font-size:14px;"></i>
+                    Bots Matrix
+                </div>
+
+                {# Liste des bots #}
+                <div style="margin-bottom:12px;">
+                    <template x-if="bots.length === 0">
+                        <div style="font-size:12px;color:var(--text-muted);padding:8px 0;">Aucun bot configuré. Ajoutez-en un ci-dessous.</div>
+                    </template>
+                    <template x-for="bot in bots" :key="bot.id">
+                        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-sm);">
+                            {# Statut connexion #}
+                            <div style="flex-shrink:0;">
+                                <span :style="{ color: bot.connected ? '#6ec38a' : 'var(--red-light)' }" style="font-size:18px;">
+                                    <i :class="bot.connected ? 'fa-solid fa-circle-check' : 'fa-solid fa-circle-xmark'"></i>
+                                </span>
+                            </div>
+                            {# Infos #}
+                            <div style="flex:1;min-width:0;">
+                                <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">
+                                    <span style="font-size:13px;font-weight:700;" x-text="bot.name"></span>
+                                    <span style="font-size:10px;padding:1px 7px;border-radius:3px;font-weight:600;"
+                                        :style="bot.isPrincipal ? 'background:rgba(201,168,76,.15);color:var(--gold);border:1px solid rgba(201,168,76,.3)' : 'background:rgba(45,108,223,.1);color:var(--blue-light);border:1px solid rgba(45,108,223,.25)'"
+                                        x-text="bot.isPrincipal ? 'Principal' : 'Secondaire'"></span>
+                                </div>
+                                <div style="font-size:11px;color:var(--text-muted);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" x-text="bot.userId"></div>
+                                <div x-show="bot.homeserver" style="font-size:10px;color:var(--text-muted);margin-top:2px;" x-text="bot.homeserver"></div>
+                            </div>
+                            {# Actions #}
+                            <div style="display:flex;gap:6px;flex-shrink:0;align-items:center;">
+                                <template x-if="bot.connected">
+                                    <button class="btn-ghost" style="font-size:11px;padding:4px 10px;color:var(--red-light);border-color:var(--red-light);" @click="doLogoutBot(bot)">
+                                        <i class="fa-solid fa-plug-circle-xmark"></i> Déconnecter
+                                    </button>
+                                </template>
+                                <template x-if="!bot.connected">
+                                    <button class="btn-ghost" style="font-size:11px;padding:4px 10px;color:#6ec38a;border-color:#6ec38a;"
+                                        @click="openBotLogin(bot.id)">
+                                        <i class="fa-solid fa-plug"></i> Connecter
+                                    </button>
+                                </template>
+                                <button class="btn-ghost" style="font-size:11px;padding:4px 10px;" @click="openBotForm(bot)">
+                                    <i class="fa-solid fa-pen"></i>
+                                </button>
+                                <button class="btn-icon" style="color:var(--red-light);" @click="deleteBot(bot)">
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                {# Formulaire connexion d'un bot #}
+                <template x-if="loginBotId !== null">
+                    <div style="background:rgba(110,195,138,.06);border:1px solid rgba(110,195,138,.25);border-radius:var(--radius-sm);padding:14px;margin-bottom:12px;">
+                        <div style="font-size:12px;font-weight:700;color:#6ec38a;margin-bottom:10px;">
+                            <i class="fa-solid fa-plug"></i>
+                            Connexion — <span x-text="bots.find(b => b.id === loginBotId)?.name"></span>
+                        </div>
+                        <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">
+                            Le mot de passe n'est jamais stocké. Seul le token de session est conservé.
+                        </div>
+                        <div style="display:flex;gap:8px;align-items:flex-end;">
+                            <div style="flex:1;">
+                                <input type="password" x-model="loginBotPassword"
+                                    placeholder="Mot de passe du bot"
+                                    @keyup.enter="doLoginBot(bots.find(b => b.id === loginBotId))"
+                                    style="width:100%;" autocomplete="new-password">
+                            </div>
+                            <button class="btn-primary" style="flex-shrink:0;"
+                                :disabled="loginBotLoading || !loginBotPassword.trim()"
+                                @click="doLoginBot(bots.find(b => b.id === loginBotId))">
+                                <i x-show="loginBotLoading" class="fa-solid fa-spinner fa-spin"></i>
+                                <span x-show="!loginBotLoading"><i class="fa-solid fa-right-to-bracket"></i> Se connecter</span>
+                            </button>
+                            <button class="btn-ghost" @click="closeBotLogin()">Annuler</button>
+                        </div>
+                        <div x-show="loginBotError" class="alert-error" x-text="loginBotError" style="margin-top:8px;font-size:12px;"></div>
+                    </div>
+                </template>
+
+                {# Formulaire ajout/édition d'un bot #}
+                <template x-if="botFormOpen">
+                    <div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;background:var(--bg-elevated);margin-bottom:12px;">
+                        <div style="font-size:12px;font-weight:700;color:var(--text-primary);margin-bottom:12px;"
+                            x-text="botForm.id ? 'Modifier le bot' : 'Ajouter un bot'"></div>
+                        <div class="form-grid">
+                            <div class="form-group" style="margin:0;">
+                                <label>Nom *</label>
+                                <input type="text" x-model="botForm.name" placeholder="Ex: Bot Principal" autocomplete="off">
+                            </div>
+                            <div class="form-group" style="margin:0;">
+                                <label>User ID Matrix *</label>
+                                <input type="text" x-model="botForm.userId"
+                                    placeholder="@bot-gestion:agent.interieur.tchap.gouv.fr" autocomplete="off">
+                            </div>
+                            <div class="form-group" style="margin:0;">
+                                <label>Homeserver <small style="color:var(--text-muted);">(optionnel, utilise le global par défaut)</small></label>
+                                <input type="text" x-model="botForm.homeserver"
+                                    placeholder="https://matrix.agent.interieur.tchap.gouv.fr" autocomplete="off">
+                            </div>
+                            <div class="form-group" style="margin:0;flex-direction:row;align-items:center;gap:10px;padding-top:20px;">
+                                <label style="margin:0;">Bot principal</label>
+                                <input type="checkbox" x-model="botForm.isPrincipal"
+                                    style="width:16px;height:16px;accent-color:var(--gold);">
+                                <small style="color:var(--text-muted);">(gère E2EE via le bridge)</small>
+                            </div>
+                        </div>
+                        <div x-show="botFormError" class="alert-error" x-text="botFormError" style="margin-top:10px;margin-bottom:4px;"></div>
+                        <div style="display:flex;gap:8px;margin-top:12px;">
+                            <button class="btn-primary" @click="saveBotForm()">
+                                <i class="fa-solid fa-floppy-disk"></i>
+                                <span x-text="botForm.id ? 'Mettre à jour' : 'Ajouter'"></span>
+                            </button>
+                            <button class="btn-ghost" @click="closeBotForm()">Annuler</button>
+                        </div>
+                    </div>
+                </template>
+
+                {# Bouton ajouter #}
+                <button class="btn-ghost" style="font-size:12px;width:100%;justify-content:center;border-style:dashed;"
+                    @click="openBotForm()" x-show="!botFormOpen">
+                    <i class="fa-solid fa-plus"></i> Ajouter un bot
+                </button>
+            </div>
+            {% endif %}
 
             {# ── Réconciliation Tchap ── #}
             <div class="config-section">
@@ -202,19 +268,88 @@
                     </div>
                 </details>
 
-                {# Vérification SAS — intégrée ici puisque liée au même service #}
+                {# ── Vérification SAS ── #}
+                {% if permissions.isSysAdmin %}
                 <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border);">
-                    <div style="font-size:12px;font-weight:700;color:var(--text-primary);margin-bottom:8px;">
+                    <div style="font-size:12px;font-weight:700;color:var(--text-primary);margin-bottom:10px;">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:5px;">
                             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
                         </svg>
-                        Vérification SAS
+                        Vérification SAS de l'appareil bot
                     </div>
-                    <div style="font-size:12px;color:var(--text-secondary);line-height:1.6;">
-                        <p>Lancez la vérification depuis Tchap (<strong>Paramètres → Sécurité → Appareils → Bot → Vérifier l'appareil</strong>).</p>
-                        <p style="margin-top:4px;color:var(--text-muted);font-size:11px;">La vérification SAS est gérée côté bridge — elle se produit automatiquement lors de la reconnexion du bot si le device est reconnu par Tchap.</p>
+
+                    {# État idle — aucune demande #}
+                    <div x-show="verifState === null || verifState === 'idle'">
+                        <p style="font-size:12px;color:var(--text-secondary);line-height:1.6;margin-bottom:10px;">
+                            Dans Tchap : <strong>Paramètres → Sécurité → Appareils → Bot → Vérifier l'appareil</strong>, puis revenez ici.
+                        </p>
+                        <button class="btn-ghost" style="font-size:11px;padding:5px 12px;" @click="pollVerif()">
+                            <i class="fa-solid fa-rotate" style="margin-right:5px;"></i>Vérifier si une demande est en attente
+                        </button>
+                    </div>
+
+                    {# Demande reçue — attente d'acceptation #}
+                    <div x-show="verifState === 'requested'" style="padding:12px 14px;background:rgba(45,108,223,.07);border:1px solid rgba(45,108,223,.25);border-radius:var(--radius-sm);">
+                        <p style="font-size:12px;font-weight:600;color:var(--blue-light);margin-bottom:6px;">
+                            <i class="fa-solid fa-bell" style="margin-right:6px;"></i>Demande de vérification reçue de <span x-text="verifUserId"></span>
+                        </p>
+                        <p style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;">Acceptez pour démarrer l'échange SAS.</p>
+                        <div style="display:flex;gap:8px;">
+                            <button class="btn-primary" style="font-size:12px;" @click="verifAccept()">
+                                <i x-show="verifState === 'accepting'" class="fa-solid fa-spinner fa-spin"></i>
+                                Accepter
+                            </button>
+                            <button class="btn-ghost" style="font-size:12px;color:var(--red-light);border-color:var(--red-light);" @click="verifCancel()">Refuser</button>
+                        </div>
+                    </div>
+
+                    {# Intermédiaire — en attente des clés #}
+                    <div x-show="['accepted','accepting','started','key-sent'].includes(verifState)"
+                         style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:8px;">
+                        <i class="fa-solid fa-spinner fa-spin"></i> Échange de clés en cours…
+                    </div>
+
+                    {# Emojis à comparer #}
+                    <div x-show="verifState === 'sas'">
+                        <p style="font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:10px;">
+                            Comparez ces emojis avec ceux affichés dans Tchap :
+                        </p>
+                        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
+                            <template x-for="e in verifEmoji" :key="e.label">
+                                <div style="text-align:center;min-width:48px;">
+                                    <div style="font-size:28px;" x-text="e.emoji"></div>
+                                    <div style="font-size:10px;color:var(--text-muted);margin-top:3px;" x-text="e.label"></div>
+                                </div>
+                            </template>
+                        </div>
+                        <p style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">Ils correspondent exactement dans Tchap ?</p>
+                        <div style="display:flex;gap:8px;">
+                            <button class="btn-primary" style="font-size:12px;background:var(--green,#27ae60);border-color:#27ae60;" @click="verifConfirm()">
+                                <i class="fa-solid fa-check"></i> Oui, ils correspondent
+                            </button>
+                            <button class="btn-ghost" style="font-size:12px;color:var(--red-light);border-color:var(--red-light);" @click="verifMismatch()">
+                                <i class="fa-solid fa-xmark"></i> Non, annuler
+                            </button>
+                        </div>
+                    </div>
+
+                    {# Succès #}
+                    <div x-show="['mac-sent','done'].includes(verifState)"
+                         style="font-size:12px;color:#6ec38a;display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(110,195,138,.08);border:1px solid rgba(110,195,138,.25);border-radius:var(--radius-sm);">
+                        <i class="fa-solid fa-circle-check"></i>
+                        Vérification SAS terminée — l'appareil bot est maintenant authentifié.
+                        <button class="btn-ghost" style="margin-left:auto;font-size:11px;" @click="verifState = null">OK</button>
+                    </div>
+
+                    {# Erreur ou annulation #}
+                    <div x-show="verifState === 'error' || verifState === 'cancelled'"
+                         style="font-size:12px;color:var(--red-light);padding:10px 12px;background:rgba(192,57,43,.07);border:1px solid rgba(192,57,43,.25);border-radius:var(--radius-sm);">
+                        <span x-show="verifState === 'cancelled'">Vérification annulée.</span>
+                        <span x-show="verifState === 'error'" x-text="'Erreur : ' + verifError"></span>
+                        <button class="btn-ghost" style="margin-left:8px;font-size:11px;" @click="verifState = null">Réessayer</button>
                     </div>
                 </div>
+                {% endif %}
             </div>
 
             {# ── Visibilité des fonctionnalités ── #}
@@ -456,6 +591,59 @@
                         <button x-show="resetTarget" class="btn-ghost" @click="cancelResetPassword()">Annuler</button>
                     </div>
                 </div>
+            </div>
+            {% endif %}
+
+            {# ── Comptes verrouillés ── #}
+            {% if permissions.canAdmin %}
+            <div class="config-section config-section-full">
+                <div class="config-section-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                    </svg>
+                    Comptes verrouillés
+                </div>
+                <div style="font-size:12px;color:var(--text-secondary);margin-bottom:14px;line-height:1.6;">
+                    Comptes bloqués après 3 tentatives de connexion incorrectes. Le déblocage est manuel.
+                </div>
+                <div style="overflow:auto;">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Identifiant</th>
+                                <th>Tentatives</th>
+                                <th>Verrouillé le</th>
+                                <th class="th-actions">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr x-show="lockedUsers.length === 0">
+                                <td colspan="4" class="empty-state">Aucun compte verrouillé</td>
+                            </tr>
+                            <template x-for="u in lockedUsers" :key="u.identifier">
+                                <tr>
+                                    <td style="font-family:var(--font-display);font-weight:700;" x-text="u.identifier"></td>
+                                    <td>
+                                        <span style="font-size:11px;padding:2px 7px;border-radius:3px;background:rgba(192,57,43,.12);color:var(--red-light);border:1px solid rgba(192,57,43,.25);"
+                                            x-text="u.attempts + ' tentative' + (u.attempts > 1 ? 's' : '')"></span>
+                                    </td>
+                                    <td style="color:var(--text-muted);font-size:12px;"
+                                        x-text="new Date(u.locked_at).toLocaleString('fr-FR')"></td>
+                                    <td class="td-actions">
+                                        <button class="btn-ghost" style="font-size:11px;padding:4px 10px;color:#6ec38a;border-color:#6ec38a;"
+                                            @click="unlockUser(u.identifier)">
+                                            <i class="fa-solid fa-lock-open"></i> Débloquer
+                                        </button>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+                <button class="btn-ghost" style="margin-top:10px;font-size:11px;" @click="loadLockedUsers()">
+                    <i class="fa-solid fa-rotate"></i> Actualiser
+                </button>
             </div>
             {% endif %}
 

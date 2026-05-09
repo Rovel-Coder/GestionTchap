@@ -131,8 +131,9 @@ class SalonController extends AbstractController
     }
 
     // POST /api/salons/{id}/create-room — crée le salon sur Tchap et sauvegarde le room_id
+    // Paramètre optionnel : uniteId — si fourni et que l'unité a un bot dédié connecté, l'utilise
     #[Route('/api/salons/{id}/create-room', name: 'api_salons_create_room', methods: ['POST'])]
-    public function createRoom(int $id): JsonResponse
+    public function createRoom(int $id, Request $request): JsonResponse
     {
         /** @var AppUser $user */
         $user = $this->getUser();
@@ -150,7 +151,22 @@ class SalonController extends AbstractController
         }
 
         try {
-            $cfg    = $this->config->getTchapConfig();
+            $data    = json_decode($request->getContent(), true) ?? [];
+            $cfg     = $this->config->getTchapConfig();
+            $uniteId = isset($data['uniteId']) ? (int) $data['uniteId'] : null;
+
+            // Utiliser le bot dédié de l'unité s'il est configuré et connecté
+            if ($uniteId) {
+                $unite = $this->db->fetchAssociative('SELECT * FROM unites WHERE id = :id', ['id' => $uniteId]);
+                if ($unite && !empty($unite['bot_access_token']) && !empty($unite['bot_user_id'])) {
+                    $cfg = array_merge($cfg, [
+                        'token'         => $unite['bot_access_token'],
+                        'botUserId'     => $unite['bot_user_id'],
+                        'bypass_bridge' => true, // bot dédié → appel direct Matrix, pas via le bridge global
+                    ]);
+                }
+            }
+
             $result = $this->tchap->createRoom(
                 name:   $salon['Nom'],
                 topic:  $salon['Description'] ?? '',
@@ -189,7 +205,57 @@ class SalonController extends AbstractController
             return $this->json(['error' => 'Salon introuvable'], 404);
         }
 
+        $this->cleanupSalonRefs([$id]);
+
         return new JsonResponse(null, 204);
+    }
+
+    // DELETE /api/salons — supprime plusieurs salons d'un coup (ids dans le body)
+    #[Route('/api/salons', name: 'api_salons_bulk_delete', methods: ['DELETE'])]
+    public function bulkDelete(Request $request): JsonResponse
+    {
+        /** @var AppUser $user */
+        $user = $this->getUser();
+        if (!$this->roles->canAdmin($user)) {
+            return $this->json(['error' => 'Accès réservé aux administrateurs'], 403);
+        }
+
+        $data = json_decode($request->getContent(), true) ?? [];
+        $ids  = array_values(array_filter(array_map('intval', $data['ids'] ?? []), fn($id) => $id > 0));
+
+        if (empty($ids)) {
+            return $this->json(['error' => 'Aucun id fourni'], 400);
+        }
+
+        $placeholders = implode(',', array_map(fn($i) => ":id$i", array_keys($ids)));
+        $params       = [];
+        foreach ($ids as $i => $id) {
+            $params["id$i"] = $id;
+        }
+
+        $deleted = $this->db->executeStatement(
+            "DELETE FROM salons WHERE id IN ($placeholders)",
+            $params
+        );
+
+        $this->cleanupSalonRefs($ids);
+
+        return $this->json(['deleted' => $deleted]);
+    }
+
+    // Retire les ids de salons supprimés des tableaux unites."Salons" et personnel."Salons_Extra"
+    private function cleanupSalonRefs(array $ids): void
+    {
+        foreach ($ids as $id) {
+            $this->db->executeStatement(
+                'UPDATE unites SET "Salons" = array_remove("Salons", :id) WHERE :id = ANY("Salons")',
+                ['id' => $id]
+            );
+            $this->db->executeStatement(
+                'UPDATE personnel SET "Salons_Extra" = array_remove("Salons_Extra", :id) WHERE :id = ANY("Salons_Extra")',
+                ['id' => $id]
+            );
+        }
     }
 
     private function extract(array $data): array

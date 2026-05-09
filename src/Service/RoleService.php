@@ -57,10 +57,11 @@ class RoleService
     public function getPermissionsArray(AppUser $user): array
     {
         return [
-            'canManage' => $this->canManage($user),
-            'canCrise'  => $this->canCrise($user),
-            'canAdmin'  => $this->canAdmin($user),
-            'isSysAdmin' => $user->isSysAdmin(),
+            'canManage'   => $this->canManage($user),
+            'canCrise'    => $this->canCrise($user),
+            'canAdmin'    => $this->canAdmin($user),
+            'isSysAdmin'  => $user->isSysAdmin(),
+            'personnelId' => $user->getPersonnelId(),
         ];
     }
 }

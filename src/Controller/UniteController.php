@@ -14,8 +14,8 @@ use Symfony\Component\Routing\Attribute\Route;
 
 class UniteController extends AbstractController
 {
-    private const WRITABLE = ['Nom', 'code', 'Salons'];
-    private const LIMITS   = ['Nom' => 200, 'code' => 50];
+    private const WRITABLE = ['Nom', 'code', 'Salons', 'numero', 'adresse', 'bot_id'];
+    private const LIMITS   = ['Nom' => 200, 'code' => 50, 'numero' => 50, 'adresse' => 500];
 
     public function __construct(
         private readonly Connection    $db,
@@ -146,6 +146,36 @@ class UniteController extends AbstractController
         return new JsonResponse(null, 204);
     }
 
+    #[Route('/api/unites', name: 'api_unites_bulk_delete', methods: ['DELETE'])]
+    public function bulkDelete(Request $request): JsonResponse
+    {
+        /** @var AppUser $user */
+        $user = $this->getUser();
+        if (!$this->roles->canAdmin($user)) {
+            return $this->json(['error' => 'Accès réservé aux administrateurs'], 403);
+        }
+
+        $data = json_decode($request->getContent(), true) ?? [];
+        $ids  = array_values(array_filter(array_map('intval', $data['ids'] ?? []), fn($id) => $id > 0));
+
+        if (empty($ids)) {
+            return $this->json(['error' => 'Aucun id fourni'], 400);
+        }
+
+        $placeholders = implode(',', array_map(fn($i) => ":id$i", array_keys($ids)));
+        $params       = [];
+        foreach ($ids as $i => $id) {
+            $params["id$i"] = $id;
+        }
+
+        $deleted = $this->db->executeStatement(
+            "DELETE FROM unites WHERE id IN ($placeholders)",
+            $params
+        );
+
+        return $this->json(['deleted' => $deleted]);
+    }
+
     private function extract(array $data): array
     {
         $fields = [];
@@ -213,6 +243,10 @@ class UniteController extends AbstractController
         } else {
             $row['Salons'] = array_map('intval', (array) $s);
         }
+        // Ne jamais exposer les tokens
+        unset($row['bot_access_token']);
+        // bot_id peut être null ou int
+        $row['bot_id'] = isset($row['bot_id']) && $row['bot_id'] !== null ? (int) $row['bot_id'] : null;
         return $row;
     }
 }

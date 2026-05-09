@@ -16,7 +16,21 @@
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                 <input type="text" :value="search" @input="search = $event.target.value" @focus="$el.removeAttribute('readonly')" readonly placeholder="Rechercher…" autocomplete="off" spellcheck="false">
             </div>
+            {% if permissions.canAdmin %}
+            <button class="btn-ghost" :class="{ 'btn-active': selectMode }" @click="toggleSelectMode()">
+                <i class="fa-solid fa-check-square"></i>
+                <span x-show="!selectMode">Sélectionner</span>
+                <span x-show="selectMode">Annuler</span>
+            </button>
+            <button x-show="selectMode && selectedUnites.length > 0" class="btn-danger"
+                @click="confirmBulkDelete()"
+                x-text="'Supprimer (' + selectedUnites.length + ')'">
+            </button>
+            {% endif %}
             {% if permissions.canManage %}
+            <button class="btn-icon" @click="syncAllUnites()" :disabled="syncingAll" title="Synchroniser toutes les unités vers Tchap">
+                <i class="fa-solid fa-rotate" :class="{ 'fa-spin': syncingAll }"></i>
+            </button>
             <label class="btn-ghost" style="cursor:pointer;display:flex;align-items:center;gap:7px;" title="Importer des unités depuis un CSV"
                 @click="importOpen = true">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -34,16 +48,39 @@
         <div class="spinner"></div>
     </div>
 
+    {# ── Barre de sélection ── #}
+    <div x-show="selectMode" style="display:flex;align-items:center;gap:12px;padding:6px 0;font-size:13px;color:var(--text-secondary);">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+            <input type="checkbox"
+                :checked="selectedUnites.length === filtered.length && filtered.length > 0"
+                :indeterminate="selectedUnites.length > 0 && selectedUnites.length < filtered.length"
+                @change="$event.target.checked ? selectAll() : clearSelection()">
+            Tout sélectionner (<span x-text="filtered.length"></span>)
+        </label>
+        <span x-show="selectedUnites.length > 0" style="color:var(--blue-light);">
+            <span x-text="selectedUnites.length"></span> sélectionnée<span x-show="selectedUnites.length > 1">s</span>
+        </span>
+    </div>
+
     {# ── Grille de cartes ── #}
     <div class="cards-grid" x-show="!loading">
         <div x-show="filtered.length === 0" class="empty-state" style="grid-column:1/-1;">
             Aucune unité trouvée
         </div>
         <template x-for="unite in filtered" :key="unite.id">
-            <div class="card unite-card">
+            <div class="card unite-card" :class="{ 'card-selected': selectedUnites.includes(unite.id) }"
+                style="cursor:pointer;"
+                @click="selectMode ? toggleSelectUnite(unite.id) : openDetail(unite)">
                 <div class="card-header">
-                    <span class="card-name" x-text="unite.Nom"></span>
-                    <span class="card-type-badge">Unité</span>
+                    <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+                        <input x-show="selectMode" type="checkbox"
+                            :checked="selectedUnites.includes(unite.id)"
+                            @click.stop
+                            @change="toggleSelectUnite(unite.id)"
+                            style="flex-shrink:0;cursor:pointer;">
+                        <span class="card-name" x-text="unite.Nom"></span>
+                    </div>
+                    <span class="card-type-badge" x-text="unite.numero ? ('#' + unite.numero) : 'Unité'"></span>
                 </div>
                 <div class="card-meta" x-show="unite.code" x-text="unite.code"></div>
                 <div class="card-salons-list">
@@ -63,12 +100,16 @@
                         <span class="stat-label">Salons</span>
                     </div>
                 </div>
-                <div class="card-actions">
+                <div class="card-actions" @click.stop>
                     {% if permissions.canManage %}
+                    <button class="btn-icon" @click="syncUnite(unite)" :disabled="unite._syncing"
+                        title="Synchroniser vers Tchap" style="color:var(--blue-light);">
+                        <i class="fa-solid fa-rotate" :class="{ 'fa-spin': unite._syncing }"></i>
+                    </button>
                     <button class="btn-icon" @click="openImportPersonnel(unite)" title="Importer du personnel">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                     </button>
-                    <button class="btn-icon" @click="openModal('edit', unite)" title="Modifier">
+                    <button class="btn-icon" @click="openDetail(unite)" title="Modifier">
                         <i class="fa-solid fa-pen"></i>
                     </button>
                     {% endif %}
@@ -386,17 +427,226 @@
         </div>
     </div>
 
+    {# ── Modal Détail Unité (3 onglets) ── #}
+    <div class="modal-overlay" x-show="detailOpen" x-cloak @click.self="closeDetail()">
+        <div class="modal" style="max-width:940px;width:95vw;max-height:88vh;display:flex;flex-direction:column;">
+
+            <div class="modal-header">
+                <h3>
+                    <i class="fa-solid fa-building" style="margin-right:8px;color:var(--blue-light);"></i>
+                    <span x-text="detailUnite ? detailUnite.Nom : ''"></span>
+                    <span x-show="detailUnite && detailUnite.numero" style="margin-left:8px;font-size:13px;color:var(--text-muted);font-weight:400;" x-text="detailUnite ? '— ' + detailUnite.numero : ''"></span>
+                </h3>
+                <button class="btn-icon" @click="closeDetail()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            {# ── Onglets ── #}
+            <div style="display:flex;border-bottom:1px solid var(--border);background:var(--bg-elevated);flex-shrink:0;">
+                <button class="import-tab-btn" :class="{ active: detailTab === 'fiche' }" @click="detailTab = 'fiche'">
+                    <i class="fa-solid fa-id-card" style="margin-right:5px;"></i> Fiche
+                </button>
+                <button class="import-tab-btn" :class="{ active: detailTab === 'personnel' }" @click="detailTab = 'personnel'">
+                    <i class="fa-solid fa-users" style="margin-right:5px;"></i> Personnel
+                    <span style="margin-left:5px;background:var(--bg-hover);border-radius:10px;padding:1px 7px;font-size:10px;" x-text="detailPersonnelList.length"></span>
+                </button>
+                <button class="import-tab-btn" :class="{ active: detailTab === 'salons' }" @click="detailTab = 'salons'">
+                    <i class="fa-solid fa-comments" style="margin-right:5px;"></i> Salons
+                    <span style="margin-left:5px;background:var(--bg-hover);border-radius:10px;padding:1px 7px;font-size:10px;" x-text="detailSalonsList.length"></span>
+                </button>
+            </div>
+
+            {# ── Onglet Fiche ── #}
+            <div x-show="detailTab === 'fiche'" class="modal-body" style="flex:1;overflow-y:auto;">
+                <div x-show="detailError" class="alert-error" x-text="detailError" style="margin-bottom:12px;"></div>
+                <div class="form-grid">
+                    <div class="form-group form-full">
+                        <label>Nom *</label>
+                        <input type="text" x-model="detailForm.Nom" maxlength="200">
+                    </div>
+                    <div class="form-group">
+                        <label>Code</label>
+                        <input type="text" x-model="detailForm.code" maxlength="50" placeholder="ex: RG-G7">
+                    </div>
+                    <div class="form-group">
+                        <label>Numéro d'unité</label>
+                        <input type="text" x-model="detailForm.numero" maxlength="50" placeholder="ex: 98138">
+                    </div>
+                    <div class="form-group form-full">
+                        <label>Adresse postale</label>
+                        <textarea x-model="detailForm.adresse" rows="3" maxlength="500" placeholder="Rue, code postal, ville…"></textarea>
+                    </div>
+                    <div class="form-group form-full">
+                        <label>
+                            <i class="fa-solid fa-robot" style="font-size:12px;margin-right:5px;color:var(--gold);"></i>
+                            Bot Tchap dédié
+                            <small style="font-weight:400;color:var(--text-muted);margin-left:6px;text-transform:none;">si non défini, le bot principal est utilisé</small>
+                        </label>
+                        <select x-model="detailForm.bot_id" style="font-size:13px;">
+                            <option :value="null">— Bot principal (par défaut) —</option>
+                            <template x-for="bot in bots.filter(b => !b.isPrincipal)" :key="bot.id">
+                                <option :value="bot.id"
+                                    x-text="bot.name + ' (' + bot.userId + ')' + (!bot.connected ? ' ✗ non connecté' : ' ✓')">
+                                </option>
+                            </template>
+                        </select>
+                        {# Avertissement bot non connecté #}
+                        <template x-if="detailForm.bot_id">
+                            <div x-show="!bots.find(b => b.id == detailForm.bot_id)?.connected"
+                                style="margin-top:5px;font-size:11px;color:var(--gold);display:flex;align-items:center;gap:5px;">
+                                <i class="fa-solid fa-triangle-exclamation"></i>
+                                Ce bot n'est pas connecté — connectez-le depuis la page <strong>Configuration</strong>.
+                            </div>
+                        </template>
+                        <template x-if="bots.filter(b => !b.isPrincipal).length === 0">
+                            <div style="margin-top:5px;font-size:11px;color:var(--text-muted);">
+                                Aucun bot secondaire configuré. Ajoutez-en depuis la page <strong>Configuration → Bots Matrix</strong>.
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            {# ── Onglet Personnel ── #}
+            <div x-show="detailTab === 'personnel'" style="flex:1;overflow-y:auto;padding:20px 24px;">
+                <div x-show="detailPersonnelList.length === 0" class="empty-state" style="margin:0;">
+                    Aucun agent affecté à cette unité
+                </div>
+                <table class="data-table" x-show="detailPersonnelList.length > 0">
+                    <thead>
+                        <tr>
+                            <th>Nom</th>
+                            <th>Prénom</th>
+                            <th>Grade</th>
+                            <th>Statut</th>
+                            <th>user_id Tchap</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="agent in detailPersonnelList" :key="agent.id">
+                            <tr>
+                                <td class="td-nom" x-text="agent.Nom"></td>
+                                <td x-text="agent.Prenom"></td>
+                                <td x-text="agent.Grade || '—'"></td>
+                                <td x-text="agent.Statut || 'actif'"></td>
+                                <td style="font-family:monospace;font-size:11px;color:var(--text-muted);" x-text="agent.user_id || '—'"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+
+            {# ── Onglet Salons ── #}
+            <div x-show="detailTab === 'salons'" style="flex:1;overflow-y:auto;padding:20px 24px;">
+
+                {# Salons actuellement associés #}
+                <div style="margin-bottom:24px;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                        <div style="font-family:var(--font-display);font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--text-muted);">SALONS ASSOCIÉS</div>
+                        <button x-show="detailSalonsList.length > 0"
+                            class="btn-ghost" style="padding:4px 12px;font-size:11px;"
+                            :disabled="detailUnite && detailUnite._syncing"
+                            @click="syncUnite(detailUnite)">
+                            <i class="fa-solid fa-rotate" :class="{ 'fa-spin': detailUnite && detailUnite._syncing }"></i>
+                            Synchroniser vers Tchap
+                        </button>
+                    </div>
+                    <div x-show="detailSalonsList.length === 0" style="font-size:12px;color:var(--text-muted);">Aucun salon associé à cette unité.</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                        <template x-for="salon in detailSalonsList" :key="salon.id">
+                            <span class="salon-tag" :class="'type-' + salon.Type">
+                                <span x-text="salon.Nom"></span>
+                                <span x-show="!salon.room_id" style="margin-left:4px;color:var(--red-light);font-size:9px;">⚠ sans room</span>
+                            </span>
+                        </template>
+                    </div>
+                </div>
+
+                {% if permissions.canManage %}
+                {# Créer un nouveau salon #}
+                <div style="border-top:1px solid var(--border);padding-top:20px;margin-bottom:24px;">
+                    <div style="font-family:var(--font-display);font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--text-muted);margin-bottom:12px;">CRÉER UN SALON POUR CETTE UNITÉ</div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Nom du salon *</label>
+                            <input type="text" x-model="quickSalon.Nom" maxlength="200" placeholder="Nom du salon">
+                        </div>
+                        <div class="form-group">
+                            <label>Type</label>
+                            <select x-model="quickSalon.Type">
+                                <option value="operationnel">Opérationnel</option>
+                                <option value="information">Information</option>
+                                <option value="crise">Crise</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </div>
+                        <div class="form-group form-full">
+                            <label>Description</label>
+                            <input type="text" x-model="quickSalon.Description" maxlength="500" placeholder="Description optionnelle">
+                        </div>
+                    </div>
+                    <button class="btn-primary" :disabled="addingSalon || !quickSalon.Nom.trim()" @click="quickAddSalon()">
+                        <i x-show="addingSalon" class="fa-solid fa-spinner fa-spin"></i>
+                        <i x-show="!addingSalon" class="fa-solid fa-plus"></i>
+                        <span x-show="!addingSalon">Créer et associer</span>
+                        <span x-show="addingSalon">Création en cours…</span>
+                    </button>
+                </div>
+
+                {# Associer des salons existants #}
+                <div style="border-top:1px solid var(--border);padding-top:20px;">
+                    <div style="font-family:var(--font-display);font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--text-muted);margin-bottom:12px;">ASSOCIER / DISSOCIER DES SALONS EXISTANTS</div>
+                    <input type="text" x-model="salonSearch" placeholder="Filtrer les salons…"
+                        style="width:100%;margin-bottom:8px;font-size:12px;padding:5px 8px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);">
+                    <div class="multi-select" style="max-height:220px;overflow-y:auto;">
+                        <template x-for="s in salons.filter(s => !salonSearch || s.Nom.toLowerCase().includes(salonSearch.toLowerCase()))" :key="s.id">
+                            <label class="multi-select-item">
+                                <input type="checkbox"
+                                    :checked="detailForm.Salons && detailForm.Salons.includes(s.id)"
+                                    @change="toggleDetailSalon(s.id, $event.target.checked)">
+                                <span x-text="s.Nom"></span>
+                                <span x-show="s.Type" style="margin-left:auto;font-size:10px;color:var(--text-muted);text-transform:uppercase;" x-text="s.Type"></span>
+                            </label>
+                        </template>
+                    </div>
+                    <button class="btn-primary" style="margin-top:10px;" :disabled="detailSaving" @click="saveDetailSalons()">
+                        <i x-show="detailSaving" class="fa-solid fa-spinner fa-spin"></i>
+                        <span x-show="!detailSaving">Enregistrer les associations</span>
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+
+            {# ── Pied de modal ── #}
+            <div class="modal-footer" style="flex-shrink:0;">
+                <button class="btn-ghost" @click="closeDetail()">Fermer</button>
+                {% if permissions.canManage %}
+                <button x-show="detailTab === 'fiche'" class="btn-primary" :disabled="detailSaving" @click="saveDetail()">
+                    <i x-show="detailSaving" class="fa-solid fa-spinner fa-spin"></i>
+                    <span x-show="!detailSaving">Enregistrer</span>
+                </button>
+                {% endif %}
+            </div>
+
+        </div>
+    </div>
+
     {# ── Confirmation suppression ── #}
-    <div class="modal-overlay" x-show="deleteTarget" x-cloak @click.self="deleteTarget = null">
+    <div class="modal-overlay" x-show="deleteTarget || deleteBulkIds.length > 0" x-cloak @click.self="cancelDelete()">
         <div class="modal modal-sm">
             <div class="modal-header">
                 <h3><i class="fa-solid fa-triangle-exclamation" style="color:var(--red-light);"></i> Confirmer</h3>
             </div>
             <div class="modal-body">
-                <p>Supprimer l'unité <strong x-text="deleteTarget ? deleteTarget.Nom : ''"></strong> ?</p>
+                <template x-if="deleteTarget">
+                    <p>Supprimer l'unité <strong x-text="deleteTarget.Nom"></strong> ?</p>
+                </template>
+                <template x-if="!deleteTarget && deleteBulkIds.length > 0">
+                    <p>Supprimer <strong x-text="deleteBulkIds.length + ' unité' + (deleteBulkIds.length > 1 ? 's' : '')"></strong> ?</p>
+                </template>
+                <p style="font-size:12px;color:var(--text-muted);margin-top:6px;">Cette action est irréversible.</p>
             </div>
             <div class="modal-footer">
-                <button class="btn-ghost" @click="deleteTarget = null">Annuler</button>
+                <button class="btn-ghost" @click="cancelDelete()">Annuler</button>
                 <button class="btn-danger" :disabled="saving" @click="deleteUnite()">
                     <i x-show="saving" class="fa-solid fa-spinner fa-spin"></i>
                     <span x-show="!saving">Supprimer</span>

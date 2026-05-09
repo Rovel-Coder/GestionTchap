@@ -43,8 +43,8 @@ services:
 
   nginx:
     build:
-      context: ./docker
-      dockerfile: Dockerfile.nginx
+      context: .
+      dockerfile: docker/Dockerfile.nginx
     ports:
       - "${APP_PORT:-8088}:80"
     volumes:

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Première connexion — Gestion Tchap</title>
+    <title>{% if mode == 'bootstrap' %}Première connexion{% else %}Créer votre compte{% endif %} — Gestion Tchap</title>
     <link rel="stylesheet" href="{{ asset('assets/app.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous">
 </head>
@@ -12,39 +12,109 @@
 <div class="auth-container">
     <div class="auth-card">
         <div class="auth-logo">
-            <i class="fa-solid fa-shield-halved fa-3x"></i>
-            <h1>Première connexion</h1>
-            <p class="text-muted">Créez le premier compte administrateur</p>
+            <svg width="56" height="64" viewBox="0 0 32 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M16 1L30 8.5V25.5L16 33L2 25.5V8.5L16 1Z" fill="#C9A84C" fill-opacity="0.15" stroke="#C9A84C" stroke-width="1.5"/>
+                <path d="M16 7L26 12.5V22.5L16 28L6 22.5V12.5L16 7Z" fill="#C9A84C" fill-opacity="0.1"/>
+                <text x="16" y="21" text-anchor="middle" font-family="Orbitron,sans-serif" font-size="10" font-weight="700" fill="#C9A84C">TC</text>
+            </svg>
+            {% if mode == 'bootstrap' %}
+            <h1>PREMIÈRE CONNEXION</h1>
+            <p>Créez le compte administrateur initial</p>
+            {% else %}
+            <h1>CRÉER VOTRE COMPTE</h1>
+            <p>Activez votre accès à l'application</p>
+            {% endif %}
         </div>
 
+        {% if mode == 'register' %}
+        <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;background:rgba(45,108,223,.07);border:1px solid rgba(45,108,223,.25);border-radius:var(--radius-sm);margin-bottom:16px;font-size:12px;color:var(--text-secondary);line-height:1.5;">
+            <i class="fa-solid fa-circle-info" style="color:var(--blue-light);margin-top:2px;flex-shrink:0;"></i>
+            <span>Votre adresse email professionnelle doit être enregistrée dans le personnel par un administrateur. Si ce n'est pas le cas, contactez votre responsable.</span>
+        </div>
+        {% endif %}
+
         {% if error %}
-        <div class="alert alert-error">
+        <div class="alert-error">
             <i class="fa-solid fa-circle-xmark"></i>
             {{ error }}
         </div>
         {% endif %}
 
+        {% for flash_type, messages in app.flashes %}
+            {% for message in messages %}
+            <div class="alert-{{ flash_type == 'error' ? 'error' : 'success' }}">{{ message }}</div>
+            {% endfor %}
+        {% endfor %}
+
         <form method="post" class="auth-form">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token('register') }}">
+
             <div class="form-group">
-                <label for="email"><i class="fa-solid fa-envelope"></i> Email</label>
-                <input type="email" id="email" name="email" class="form-control" autocomplete="email" autofocus required>
+                <label for="email">
+                    <i class="fa-solid fa-envelope"></i> Adresse email professionnelle
+                </label>
+                <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    autocomplete="email"
+                    autofocus
+                    required
+                    placeholder="prenom.nom@gendarmerie.interieur.gouv.fr"
+                >
             </div>
+
+            {% if mode == 'bootstrap' %}
             <div class="form-group">
                 <label for="nom"><i class="fa-solid fa-user"></i> Nom</label>
-                <input type="text" id="nom" name="nom" class="form-control" autocomplete="family-name">
+                <input type="text" id="nom" name="nom" autocomplete="family-name" placeholder="DUPONT">
             </div>
             <div class="form-group">
                 <label for="prenom">Prénom</label>
-                <input type="text" id="prenom" name="prenom" class="form-control" autocomplete="given-name">
+                <input type="text" id="prenom" name="prenom" autocomplete="given-name" placeholder="Jean">
             </div>
+            {% endif %}
+
             <div class="form-group">
-                <label for="password"><i class="fa-solid fa-lock"></i> Mot de passe <small>(min. 8 caractères)</small></label>
-                <input type="password" id="password" name="password" class="form-control" autocomplete="new-password" required>
+                <label for="password">
+                    <i class="fa-solid fa-lock"></i> Mot de passe <small style="color:var(--text-muted);">(8 caractères min.)</small>
+                </label>
+                <input
+                    type="password"
+                    id="password"
+                    name="password"
+                    autocomplete="new-password"
+                    required
+                >
             </div>
+
+            <div class="form-group">
+                <label for="confirm">
+                    <i class="fa-solid fa-lock"></i> Confirmer le mot de passe
+                </label>
+                <input
+                    type="password"
+                    id="confirm"
+                    name="confirm"
+                    autocomplete="new-password"
+                    required
+                >
+            </div>
+
             <button type="submit" class="btn-primary btn-full">
-                <i class="fa-solid fa-user-plus"></i> Créer le compte administrateur
+                <i class="fa-solid fa-user-plus"></i>
+                {% if mode == 'bootstrap' %}Créer le compte administrateur{% else %}Créer mon compte{% endif %}
             </button>
         </form>
+
+        {% if mode == 'register' %}
+        <div style="text-align:center;margin-top:18px;padding-top:16px;border-top:1px solid var(--border);">
+            <span style="font-size:12px;color:var(--text-muted);">Déjà un compte ?</span>
+            <a href="{{ path('app_login') }}" style="font-size:12px;color:var(--gold);margin-left:6px;text-decoration:none;font-weight:600;">
+                <i class="fa-solid fa-right-to-bracket" style="font-size:11px;"></i> Se connecter
+            </a>
+        </div>
+        {% endif %}
     </div>
 </div>
 

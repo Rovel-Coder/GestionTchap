@@ -177,9 +177,12 @@ class TchapController extends AbstractController
         }
 
         try {
-            $cfg     = $this->config->getTchapConfig();
+            $cfg     = $this->getCfgForRoom($roomId);
             $members = $this->tchap->getMembers($roomId, $cfg);
-            return $this->json($members);
+            return $this->json([
+                'members'   => $members,
+                'botUserId' => $cfg['botUserId'] ?? '',
+            ]);
         } catch (\Throwable $e) {
             return $this->json(['error' => $e->getMessage()], 500);
         }
@@ -245,6 +248,7 @@ class TchapController extends AbstractController
     }
 
     // POST /api/tchap/kick-all  — expulse tous les membres non-bot d'un salon
+    // Paramètre optionnel : kickBot (bool, défaut true) — si false, le bot ne quitte pas le salon
     #[Route('/kick-all', name: 'kick_all', methods: ['POST'])]
     public function kickAll(Request $request): JsonResponse
     {
@@ -254,16 +258,17 @@ class TchapController extends AbstractController
             return $this->json(['error' => 'Accès refusé'], 403);
         }
 
-        $data   = json_decode($request->getContent(), true) ?? [];
-        $roomId = trim($data['roomId'] ?? '');
+        $data    = json_decode($request->getContent(), true) ?? [];
+        $roomId  = trim($data['roomId'] ?? '');
+        $kickBot = $data['kickBot'] ?? true;
 
         if (!$roomId) {
             return $this->json(['error' => 'roomId requis'], 400);
         }
 
         try {
-            $cfg    = $this->config->getTchapConfig();
-            $botId  = strtolower($cfg['botUserId'] ?? '');
+            $cfg   = $this->getCfgForRoom($roomId);
+            $botId = strtolower($cfg['botUserId'] ?? '');
 
             $members = $this->tchap->getMembers($roomId, $cfg);
             $kicked  = 0;
@@ -286,13 +291,41 @@ class TchapController extends AbstractController
             }
 
             // Le bot quitte le salon en dernier (un bot ne peut pas se kicker lui-même)
-            try {
-                $this->tchap->leaveRoom($roomId, $cfg);
-            } catch (\Throwable $e) {
-                $errors[] = ['user' => $cfg['botUserId'] ?? 'bot', 'error' => 'Départ du bot : ' . $e->getMessage()];
+            if ($kickBot) {
+                try {
+                    $this->tchap->leaveRoom($roomId, $cfg);
+                } catch (\Throwable $e) {
+                    $errors[] = ['user' => $cfg['botUserId'] ?? 'bot', 'error' => 'Départ du bot : ' . $e->getMessage()];
+                }
             }
 
-            return $this->json(['ok' => true, 'kicked' => $kicked, 'errors' => $errors]);
+            return $this->json(['ok' => true, 'kicked' => $kicked, 'botKicked' => (bool) $kickBot, 'errors' => $errors]);
+        } catch (\Throwable $e) {
+            return $this->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    // POST /api/tchap/bot-leave  — fait quitter le bot d'un salon
+    #[Route('/bot-leave', name: 'bot_leave', methods: ['POST'])]
+    public function botLeave(Request $request): JsonResponse
+    {
+        /** @var AppUser $user */
+        $user = $this->getUser();
+        if (!$this->roles->canManage($user)) {
+            return $this->json(['error' => 'Accès refusé'], 403);
+        }
+
+        $data   = json_decode($request->getContent(), true) ?? [];
+        $roomId = trim($data['roomId'] ?? '');
+
+        if (!$roomId) {
+            return $this->json(['error' => 'roomId requis'], 400);
+        }
+
+        try {
+            $cfg = $this->getCfgForRoom($roomId);
+            $this->tchap->leaveRoom($roomId, $cfg);
+            return $this->json(['ok' => true]);
         } catch (\Throwable $e) {
             return $this->json(['error' => $e->getMessage()], 500);
         }
@@ -373,10 +406,10 @@ class TchapController extends AbstractController
         }
 
         try {
-            $cfg     = $this->config->getTchapConfig();
-            $invited = 0;
-            $kicked  = 0;
-            $errors  = [];
+            $globalCfg = $this->config->getTchapConfig();
+            $invited   = 0;
+            $kicked    = 0;
+            $errors    = [];
 
             // Charger les agents concernés
             $salonPh = implode(',', array_fill(0, count($salonIds), '?'));
@@ -395,8 +428,25 @@ class TchapController extends AbstractController
                 );
             }
 
-            $unites = $this->db->fetchAllAssociative('SELECT * FROM unites');
+            $unites   = $this->db->fetchAllAssociative('SELECT * FROM unites');
             $uniteMap = array_column($unites, null, 'id');
+
+            // Construire une map salonId → cfg du bot dédié de l'unité (si configuré)
+            $salonBotCfg = [];
+            foreach ($unites as $unite) {
+                $hasDedicatedBot = !empty($unite['bot_id'])
+                    || (!empty($unite['bot_access_token']) && !empty($unite['bot_user_id']));
+                if (!$hasDedicatedBot) {
+                    continue;
+                }
+                $uniteSalons = $this->pgArrayToPhp($unite['Salons'] ?? '{}');
+                $uniteCfg    = $this->resolveBotCfg($unite, $globalCfg);
+                foreach ($uniteSalons as $sid) {
+                    $salonBotCfg[(int) $sid] = $salonBotCfg[(int) $sid] ?? $uniteCfg;
+                }
+            }
+
+            $cfg = $globalCfg; // sera surchargé par salon si bot dédié
 
             // Mode sélection manuelle (crise) : agentIds fournis → tous les agents
             // sélectionnés sont attendus dans tous les salons sélectionnés,
@@ -407,6 +457,9 @@ class TchapController extends AbstractController
                 if (!$salon['room_id']) {
                     continue;
                 }
+
+                // Utiliser le bot dédié de l'unité si ce salon en possède un
+                $cfg = $salonBotCfg[(int) $salon['id']] ?? $globalCfg;
 
                 try {
                     $members    = $this->tchap->getMembers($salon['room_id'], $cfg);
@@ -529,5 +582,62 @@ class TchapController extends AbstractController
     private function arrayToPg(array $arr): string
     {
         return empty($arr) ? '{}' : '{' . implode(',', array_map('intval', $arr)) . '}';
+    }
+
+    // Retourne le cfg du bot approprié pour un room_id donné.
+    private function getCfgForRoom(string $roomId): array
+    {
+        $globalCfg = $this->config->getTchapConfig();
+
+        $salon = $this->db->fetchAssociative(
+            'SELECT id FROM salons WHERE "room_id" = :rid',
+            ['rid' => $roomId]
+        );
+        if (!$salon) {
+            return $globalCfg;
+        }
+
+        $unite = $this->db->fetchAssociative(
+            'SELECT * FROM unites WHERE :sid = ANY("Salons") LIMIT 1',
+            ['sid' => (int) $salon['id']]
+        );
+        if (!$unite) {
+            return $globalCfg;
+        }
+
+        return $this->resolveBotCfg($unite, $globalCfg);
+    }
+
+    // Résout le cfg du bot à utiliser pour une unité donnée.
+    // Priorité : bot_id (bots table) > legacy bot_user_id/bot_access_token > global
+    private function resolveBotCfg(array $unite, array $globalCfg): array
+    {
+        // Priorité 1 : bot_id référence la table bots
+        if (!empty($unite['bot_id'])) {
+            $bot = $this->db->fetchAssociative(
+                'SELECT * FROM bots WHERE id = :id',
+                ['id' => (int) $unite['bot_id']]
+            );
+            if ($bot && !empty($bot['access_token'])) {
+                $hs = $bot['homeserver'] ?: $globalCfg['homeserver'];
+                return array_merge($globalCfg, [
+                    'token'         => $bot['access_token'],
+                    'botUserId'     => $bot['user_id'],
+                    'homeserver'    => $hs,
+                    'bypass_bridge' => !$bot['is_principal'],
+                ]);
+            }
+        }
+
+        // Priorité 2 : legacy bot_user_id + bot_access_token
+        if (!empty($unite['bot_access_token']) && !empty($unite['bot_user_id'])) {
+            return array_merge($globalCfg, [
+                'token'         => $unite['bot_access_token'],
+                'botUserId'     => $unite['bot_user_id'],
+                'bypass_bridge' => true,
+            ]);
+        }
+
+        return $globalCfg;
     }
 }

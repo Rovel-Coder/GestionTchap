@@ -22,7 +22,7 @@ class TchapService
      * Appelle le microservice Node.js tchap-bridge au lieu de l'API Matrix directement.
      * Utilisé quand TCHAP_SERVICE_URL et TCHAP_SERVICE_KEY sont configurés dans .env.
      */
-    private function callBridge(string $method, string $path, ?array $body = null): array
+    public function callBridge(string $method, string $path, ?array $body = null): array
     {
         $url = rtrim($this->bridgeUrl, '/') . $path;
 
@@ -144,8 +144,14 @@ class TchapService
 
     public function getMembers(string $roomId, array $config): array
     {
-        if ($this->bridgeEnabled()) {
-            $data = $this->callBridge('GET', '/rooms/' . rawurlencode($roomId) . '/members');
+        if ($this->bridgeEnabled() && empty($config['bypass_bridge'])) {
+            try {
+                $data = $this->callBridge('GET', '/rooms/' . rawurlencode($roomId) . '/members');
+            } catch (\Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface $e) {
+                error_log('[TchapService] Bridge injoignable pour getMembers, fallback direct : ' . $e->getMessage());
+                $path = '/rooms/' . rawurlencode($roomId) . '/members?membership=join';
+                $data = $this->call('GET', $path, $config);
+            }
         } else {
             $path = '/rooms/' . rawurlencode($roomId) . '/members?membership=join';
             $data = $this->call('GET', $path, $config);
@@ -159,8 +165,12 @@ class TchapService
 
     public function invite(string $roomId, string $userId, array $config): array
     {
-        if ($this->bridgeEnabled()) {
-            return $this->callBridge('POST', '/rooms/' . rawurlencode($roomId) . '/invite', ['userId' => $userId]);
+        if ($this->bridgeEnabled() && empty($config['bypass_bridge'])) {
+            try {
+                return $this->callBridge('POST', '/rooms/' . rawurlencode($roomId) . '/invite', ['userId' => $userId]);
+            } catch (\Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface $e) {
+                error_log('[TchapService] Bridge injoignable pour invite, fallback direct : ' . $e->getMessage());
+            }
         }
 
         return $this->call(
@@ -173,8 +183,12 @@ class TchapService
 
     public function kick(string $roomId, string $userId, string $reason, array $config): array
     {
-        if ($this->bridgeEnabled()) {
-            return $this->callBridge('POST', '/rooms/' . rawurlencode($roomId) . '/kick', ['userId' => $userId, 'reason' => $reason]);
+        if ($this->bridgeEnabled() && empty($config['bypass_bridge'])) {
+            try {
+                return $this->callBridge('POST', '/rooms/' . rawurlencode($roomId) . '/kick', ['userId' => $userId, 'reason' => $reason]);
+            } catch (\Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface $e) {
+                error_log('[TchapService] Bridge injoignable pour kick, fallback direct : ' . $e->getMessage());
+            }
         }
 
         return $this->call(
@@ -187,8 +201,12 @@ class TchapService
 
     public function leaveRoom(string $roomId, array $config): array
     {
-        if ($this->bridgeEnabled()) {
-            return $this->callBridge('POST', '/rooms/' . rawurlencode($roomId) . '/leave');
+        if ($this->bridgeEnabled() && empty($config['bypass_bridge'])) {
+            try {
+                return $this->callBridge('POST', '/rooms/' . rawurlencode($roomId) . '/leave');
+            } catch (\Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface $e) {
+                error_log('[TchapService] Bridge injoignable pour leaveRoom, fallback direct : ' . $e->getMessage());
+            }
         }
 
         return $this->call('POST', '/rooms/' . rawurlencode($roomId) . '/leave', $config, []);
@@ -196,8 +214,14 @@ class TchapService
 
     public function createRoom(string $name, string $topic, string $preset, array $config): array
     {
-        if ($this->bridgeEnabled()) {
-            return $this->callBridge('POST', '/rooms', ['name' => $name, 'topic' => $topic, 'preset' => $preset]);
+        // Si bypass_bridge est demandé (bot dédié d'unité), appel direct à l'API Matrix
+        if ($this->bridgeEnabled() && empty($config['bypass_bridge'])) {
+            try {
+                return $this->callBridge('POST', '/rooms', ['name' => $name, 'topic' => $topic, 'preset' => $preset]);
+            } catch (\Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface $e) {
+                // Bridge injoignable → fallback direct API (sans E2EE)
+                error_log('[TchapService] Bridge injoignable pour createRoom, fallback direct : ' . $e->getMessage());
+            }
         }
 
         return $this->call('POST', '/createRoom', $config, [
@@ -254,6 +278,12 @@ class TchapService
             ]);
         }
 
+        return $this->loginDirect($homeserver, $username, $password);
+    }
+
+    // Login direct Matrix (bypass bridge) — pour les bots secondaires
+    public function loginDirect(string $homeserver, string $username, string $password): array
+    {
         $hs  = rtrim($homeserver, '/');
         $url = $hs . '/_matrix/client/v3/login';
 
@@ -262,8 +292,8 @@ class TchapService
                 'type'       => 'm.login.password',
                 'identifier' => ['type' => 'm.id.user', 'user' => $username],
                 'password'   => $password,
-                'device_id'  => 'PHP_BOT_' . strtoupper(substr(md5($username), 0, 8)),
-                'initial_device_display_name' => 'Gestion Tchap PHP Bot',
+                'device_id'  => 'BOT_' . strtoupper(substr(md5($username . time()), 0, 8)),
+                'initial_device_display_name' => 'Gestion Tchap Bot',
             ],
         ]);
 

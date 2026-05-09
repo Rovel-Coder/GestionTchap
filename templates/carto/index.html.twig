@@ -15,11 +15,28 @@
     <div class="view-toolbar">
         <div class="toolbar-left">
             <span class="view-title">CARTOGRAPHIE</span>
-            <span class="badge" x-text="filteredPersonnel.length + ' membre' + (filteredPersonnel.length > 1 ? 's' : '')"></span>
-            <span x-show="positionCount > 0" class="badge" style="border-color:rgba(110,195,138,.4);color:#6ec38a;background:rgba(110,195,138,.08);"
-                x-text="positionCount + ' géolocalisé' + (positionCount > 1 ? 's' : '')"></span>
+            <span class="badge" x-text="filteredPersonnel.length + ' localisé' + (filteredPersonnel.length > 1 ? 's' : '')"></span>
         </div>
         <div class="toolbar-right">
+            {# ── Bouton partage position (comptes personnel uniquement) ── #}
+            {% if not permissions.isSysAdmin and permissions.personnelId %}
+            <div style="display:flex;align-items:center;gap:8px;">
+                <button x-show="!sharingPosition"
+                    class="btn-ghost" style="font-size:12px;padding:6px 12px;color:#6ec38a;border-color:rgba(110,195,138,.4);"
+                    @click="startSharing()">
+                    <i class="fa-solid fa-location-dot" style="font-size:11px;"></i>
+                    Partager ma position
+                </button>
+                <button x-show="sharingPosition"
+                    class="btn-ghost" style="font-size:12px;padding:6px 12px;color:var(--red-light);border-color:rgba(192,57,43,.4);"
+                    @click="stopSharing()">
+                    <i class="fa-solid fa-location-dot" style="font-size:11px;"></i>
+                    Arrêter le partage
+                </button>
+                <span x-show="sharingError" style="font-size:11px;color:var(--red-light);" x-text="sharingError"></span>
+            </div>
+            {% endif %}
+
             <div class="search-box">
                 <i class="fa-solid fa-magnifying-glass"></i>
                 <input type="text" :value="search" @input="search = $event.target.value"
@@ -92,8 +109,9 @@
             </div>
 
             <div class="carto-sidebar-list">
-                <div x-show="filteredPersonnel.length === 0" class="empty-state" style="padding:30px 14px;font-size:12px;">
-                    Aucun membre
+                <div x-show="filteredPersonnel.length === 0" class="empty-state" style="padding:30px 14px;font-size:12px;text-align:center;line-height:1.7;">
+                    <i class="fa-solid fa-location-dot" style="display:block;font-size:20px;margin-bottom:8px;color:var(--border-light);"></i>
+                    Aucune position partagée
                 </div>
                 <template x-for="p in filteredPersonnel" :key="p.id">
                     <div class="carto-member-item" @click="openMember(p)">

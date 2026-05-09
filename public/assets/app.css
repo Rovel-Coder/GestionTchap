@@ -77,6 +77,7 @@ html,body{height:100%;font-family:var(--font-body);background:var(--bg-base);col
 .btn-ghost{display:inline-flex;align-items:center;gap:7px;padding:8px 16px;background:transparent;border:1px solid var(--border-light);border-radius:var(--radius-sm);color:var(--text-secondary);font-family:var(--font-display);font-size:13px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;transition:all .18s;}
 .btn-ghost:hover{background:var(--bg-hover);color:var(--text-primary);border-color:var(--text-secondary);}
 .btn-ghost:disabled{opacity:.4;cursor:not-allowed;}
+.btn-ghost.btn-active{background:var(--bg-hover);color:var(--text-primary);border-color:var(--blue-light);}
 .btn-danger-ghost{display:inline-flex;align-items:center;gap:7px;padding:8px 16px;background:transparent;border:1px solid var(--red);border-radius:var(--radius-sm);color:var(--red-light);font-family:var(--font-display);font-size:13px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;transition:all .18s;}
 .btn-danger-ghost:hover{background:var(--red-dim);}
 .btn-danger{display:inline-flex;align-items:center;gap:7px;padding:8px 16px;background:var(--red);border:1px solid var(--red-light);border-radius:var(--radius-sm);color:#fff;font-family:var(--font-display);font-size:13px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;transition:all .18s;}
@@ -130,6 +131,7 @@ html,body{height:100%;font-family:var(--font-body);background:var(--bg-base);col
 .card.type-admin::before{background:linear-gradient(90deg,var(--gold),var(--gold-light));}
 .card.unite-card::before{background:linear-gradient(90deg,#7c3aed,#a78bfa);}
 .card:hover{border-color:var(--border-light);transform:translateY(-2px);box-shadow:var(--shadow);}
+.card.card-selected{border-color:var(--blue-light);box-shadow:0 0 0 2px rgba(45,108,223,.25);}
 .card-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;}
 .card-name{font-family:var(--font-display);font-size:15px;font-weight:700;letter-spacing:.06em;word-break:break-word;}
 .card-type-badge{font-family:var(--font-display);font-size:10px;font-weight:700;letter-spacing:.1em;padding:2px 7px;border-radius:3px;text-transform:uppercase;flex-shrink:0;}

@@ -3,6 +3,7 @@
 namespace App\Security;
 
 use Doctrine\DBAL\Connection;
+use Symfony\Component\Security\Core\Exception\CustomUserMessageAuthenticationException;
 use Symfony\Component\Security\Core\Exception\UnsupportedUserException;
 use Symfony\Component\Security\Core\Exception\UserNotFoundException;
 use Symfony\Component\Security\Core\User\UserInterface;
@@ -24,6 +25,18 @@ class AppUserProvider implements UserProviderInterface
 
     public function loadUserByIdentifier(string $identifier): UserInterface
     {
+        $key = strtolower(trim($identifier));
+
+        $lock = $this->db->fetchAssociative(
+            'SELECT locked_at FROM login_locks WHERE LOWER(identifier) = :id AND locked_at IS NOT NULL',
+            ['id' => $key]
+        );
+        if ($lock) {
+            throw new CustomUserMessageAuthenticationException(
+                'Compte verrouillé après plusieurs tentatives incorrectes. Contactez un administrateur système.'
+            );
+        }
+
         // 1 — Chercher dans system_admins (par username, insensible à la casse)
         $sysAdmin = $this->db->fetchAssociative(
             'SELECT * FROM system_admins WHERE LOWER(username) = LOWER(:id)',
@@ -47,8 +60,14 @@ class AppUserProvider implements UserProviderInterface
             ['mail' => trim($identifier)]
         );
 
-        if (!$user || !$user['password_hash']) {
+        if (!$user) {
             throw new UserNotFoundException(sprintf('Utilisateur introuvable : "%s"', $identifier));
+        }
+
+        if (!$user['password_hash']) {
+            throw new CustomUserMessageAuthenticationException(
+                'Compte non activé. Rendez-vous sur /register pour créer votre accès.'
+            );
         }
 
         return $this->buildPersonnelUser($user);

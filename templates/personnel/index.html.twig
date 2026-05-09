@@ -137,6 +137,15 @@
             </div>
 
             {% if permissions.canAdmin %}
+            <button class="btn-ghost" :class="{ 'btn-active': selectMode }" @click="toggleSelectMode()" title="Mode sélection multiple">
+                <i class="fa-solid fa-check-square"></i>
+                <span x-show="!selectMode">Sélectionner</span>
+                <span x-show="selectMode">Annuler</span>
+            </button>
+            <button x-show="selectMode && selectedPersonnel.length > 0" class="btn-danger"
+                @click="confirmBulkDelete()"
+                x-text="'Supprimer (' + selectedPersonnel.length + ')'">
+            </button>
             <button class="btn-icon" @click="syncFromTchap()" title="Synchroniser depuis Tchap">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
             </button>
@@ -163,6 +172,20 @@
         <div class="spinner"></div>
     </div>
 
+    {# ── Barre de sélection ── #}
+    <div x-show="selectMode && !loading" style="display:flex;align-items:center;gap:12px;padding:6px 0;font-size:13px;color:var(--text-secondary);">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+            <input type="checkbox"
+                :checked="selectedPersonnel.length === filtered.length && filtered.length > 0"
+                :indeterminate="selectedPersonnel.length > 0 && selectedPersonnel.length < filtered.length"
+                @change="$event.target.checked ? selectAll() : clearSelection()">
+            Tout sélectionner (<span x-text="filtered.length"></span>)
+        </label>
+        <span x-show="selectedPersonnel.length > 0" style="color:var(--blue-light);">
+            <span x-text="selectedPersonnel.length"></span> sélectionné<span x-show="selectedPersonnel.length > 1">s</span>
+        </span>
+    </div>
+
     {# ── Table ── #}
     <div class="table-wrapper" x-show="!loading">
         <table class="data-table">
@@ -171,11 +194,19 @@
                 <col style="width:150px">
                 <col style="width:140px">
                 <col style="width:auto">
-                {% if permissions.canManage %}<col style="width:40px">{% endif %}
+                {% if permissions.canManage %}<col style="width:60px">{% endif %}
             </colgroup>
             <thead>
                 <tr>
-                    <th>Nom</th>
+                    <th>
+                        <span x-show="selectMode" style="margin-right:6px;">
+                            <input type="checkbox"
+                                :checked="selectedPersonnel.length === filtered.length && filtered.length > 0"
+                                :indeterminate="selectedPersonnel.length > 0 && selectedPersonnel.length < filtered.length"
+                                @change="$event.target.checked ? selectAll() : clearSelection()">
+                        </span>
+                        Nom
+                    </th>
                     <th>Prénom</th>
                     <th>Unité</th>
                     <th>Salons assignés</th>
@@ -187,10 +218,19 @@
                     <td colspan="{{ permissions.canManage ? 5 : 4 }}" class="empty-state">Aucun agent trouvé</td>
                 </tr>
                 <template x-for="agent in paginated" :key="agent.id">
-                    <tr>
+                    <tr :class="{ 'tr-selected': selectedPersonnel.includes(agent.id) }"
+                        @click="selectMode && toggleSelectAgent(agent.id)"
+                        :style="selectMode ? 'cursor:pointer;' : ''">
                         <td class="td-nom" data-label="Nom"
-                            @click="openModal('detail', agent)" style="cursor:pointer;"
-                            x-text="agent.Nom"></td>
+                            @click="!selectMode && openModal('detail', agent)"
+                            :style="!selectMode ? 'cursor:pointer;' : ''">
+                            <input x-show="selectMode" type="checkbox"
+                                :checked="selectedPersonnel.includes(agent.id)"
+                                @click.stop
+                                @change="toggleSelectAgent(agent.id)"
+                                style="margin-right:6px;cursor:pointer;">
+                            <span x-text="agent.Nom"></span>
+                        </td>
                         <td data-label="Prénom" x-text="agent.Prenom"></td>
                         <td data-label="Unité">
                             <template x-for="uid in (agent.Unite || [])" :key="uid">
@@ -199,7 +239,7 @@
                             <span x-show="!agent.Unite || agent.Unite.length === 0"
                                 style="font-size:11px;color:var(--text-muted);">—</span>
                         </td>
-                        <td data-label="Salons assignés" class="td-salons">
+                        <td data-label="Salons assignés">
                             <div class="td-salons">
                                 <template x-for="salon in getAgentSalons(agent)" :key="salon.id">
                                     <span class="salon-tag" :class="'type-' + salon.Type"
@@ -211,10 +251,15 @@
                             </div>
                         </td>
                         {% if permissions.canManage %}
-                        <td data-label="" class="td-actions">
-                            <button class="btn-icon" @click.stop="openModal('edit', agent)" title="Modifier">
+                        <td data-label="" class="td-actions" @click.stop>
+                            <button class="btn-icon" @click="openModal('edit', agent)" title="Modifier">
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                             </button>
+                            {% if permissions.canAdmin %}
+                            <button class="btn-icon" @click="confirmDelete(agent)" title="Supprimer" style="color:var(--red-light);">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                            {% endif %}
                         </td>
                         {% endif %}
                     </tr>
@@ -566,17 +611,22 @@
     </div>
 
     {# ── Confirmation suppression ── #}
-    <div class="modal-overlay" x-show="deleteTarget" x-cloak @click.self="deleteTarget = null">
+    <div class="modal-overlay" x-show="deleteTarget || deleteBulkIds.length > 0" x-cloak @click.self="cancelDelete()">
         <div class="modal modal-sm">
             <div class="modal-header">
                 <h3><i class="fa-solid fa-triangle-exclamation" style="color:var(--red-light);"></i> Confirmer la suppression</h3>
             </div>
             <div class="modal-body">
-                <p>Supprimer <strong x-text="deleteTarget ? deleteTarget.Prenom + ' ' + deleteTarget.Nom : ''"></strong> ?</p>
+                <template x-if="deleteTarget">
+                    <p>Supprimer <strong x-text="deleteTarget.Prenom + ' ' + deleteTarget.Nom"></strong> ?</p>
+                </template>
+                <template x-if="!deleteTarget && deleteBulkIds.length > 0">
+                    <p>Supprimer <strong x-text="deleteBulkIds.length + ' agent' + (deleteBulkIds.length > 1 ? 's' : '')"></strong> ?</p>
+                </template>
                 <p style="font-size:12px;color:var(--text-muted);margin-top:6px;">Cette action est irréversible.</p>
             </div>
             <div class="modal-footer">
-                <button class="btn-ghost" @click="deleteTarget = null">Annuler</button>
+                <button class="btn-ghost" @click="cancelDelete()">Annuler</button>
                 <button class="btn-danger" :disabled="saving" @click="deleteAgent()">
                     <i x-show="saving" class="fa-solid fa-spinner fa-spin"></i>
                     <span x-show="!saving">Supprimer</span>

@@ -19,7 +19,22 @@
                 <button class="salon-filter-btn" :class="{ active: typeFilter === 'crise' }" @click="typeFilter = 'crise'">Crise</button>
                 <button class="salon-filter-btn" :class="{ active: typeFilter === 'admin' }" @click="typeFilter = 'admin'">Admin</button>
             </div>
+            {% if permissions.canAdmin %}
+            <button class="btn-ghost" :class="{ 'btn-active': selectMode }" @click="toggleSelectMode()" title="Mode sélection multiple">
+                <i class="fa-solid fa-check-square"></i>
+                <span x-show="!selectMode">Sélectionner</span>
+                <span x-show="selectMode">Annuler</span>
+            </button>
+            <button x-show="selectMode && selectedSalons.length > 0" class="btn-danger"
+                @click="confirmBulkDelete()"
+                x-text="'Supprimer (' + selectedSalons.length + ')'">
+            </button>
+            {% endif %}
             {% if permissions.canManage %}
+            <button class="btn-ghost" :disabled="syncing" @click="syncAllToTchap()" title="Synchroniser tous les salons vers Tchap">
+                <i class="fa-solid fa-rotate" :class="{ 'fa-spin': syncing }"></i>
+                Synchroniser
+            </button>
             <label class="btn-ghost" style="cursor:pointer;display:flex;align-items:center;gap:7px;" title="Importer des salons depuis un CSV"
                 @click="importOpen = true">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -30,6 +45,19 @@
             </button>
             {% endif %}
         </div>
+    </div>
+
+    {# ── Barre de sélection ── #}
+    <div x-show="selectMode" style="display:flex;align-items:center;gap:12px;padding:6px 0;font-size:13px;color:var(--text-secondary);">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+            <input type="checkbox" :checked="selectedSalons.length === filtered.length && filtered.length > 0"
+                :indeterminate="selectedSalons.length > 0 && selectedSalons.length < filtered.length"
+                @change="$event.target.checked ? selectAll() : clearSelection()">
+            Tout sélectionner (<span x-text="filtered.length"></span>)
+        </label>
+        <span x-show="selectedSalons.length > 0" style="color:var(--blue-light);">
+            <span x-text="selectedSalons.length"></span> sélectionné<span x-show="selectedSalons.length > 1">s</span>
+        </span>
     </div>
 
     {# ── Spinner ── #}
@@ -43,9 +71,17 @@
             Aucun salon trouvé
         </div>
         <template x-for="salon in paginated" :key="salon.id">
-            <div class="card" :class="'type-' + salon.Type">
+            <div class="card" :class="['type-' + salon.Type, selectedSalons.includes(salon.id) ? 'card-selected' : '']"
+                @click="selectMode && toggleSelectSalon(salon.id)">
                 <div class="card-header">
-                    <span class="card-name" x-text="salon.Nom || ''"></span>
+                    <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+                        <input x-show="selectMode" type="checkbox"
+                            :checked="selectedSalons.includes(salon.id)"
+                            @click.stop
+                            @change="toggleSelectSalon(salon.id)"
+                            style="flex-shrink:0;cursor:pointer;">
+                        <span class="card-name" x-text="salon.Nom || ''"></span>
+                    </div>
                     <span class="card-type-badge" x-text="salon.Type || ''"></span>
                 </div>
                 <div x-show="salon.room_id" class="card-meta" style="font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
@@ -76,13 +112,19 @@
                 <div x-show="salon._botPresent !== undefined" style="margin-top:6px;">
                     <span :style="{ color: salon._botPresent ? '#6ec38a' : 'var(--red-light)', fontSize: '10px' }"
                         x-text="salon._botPresent ? '✓ Bot présent' : '✗ Bot absent'"></span>
+                    <div x-show="salon._botUserId" style="font-size:9px;color:var(--text-muted);font-family:monospace;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+                        x-text="salon._botUserId"></div>
                 </div>
 
-                <div class="card-actions">
+                <div class="card-actions" @click.stop>
                     <button class="btn-icon" @click="openModal('detail', salon)" title="Voir membres">
                         <i class="fa-solid fa-eye"></i>
                     </button>
                     {% if permissions.canManage %}
+                    <button class="btn-icon" x-show="!!salon.room_id" @click="openAddMembers(salon)"
+                        title="Ajouter des membres" style="color:var(--green-light, #6ec38a);">
+                        <i class="fa-solid fa-user-plus"></i>
+                    </button>
                     <button class="btn-icon" x-show="!salon.room_id"
                         @click="createTchapRoom(salon)" title="Créer la room sur Tchap"
                         style="color:var(--gold);" :disabled="salon._loading">
@@ -98,7 +140,7 @@
                     </button>
                     {% endif %}
                     {% if permissions.canAdmin %}
-                    <button class="btn-icon" @click="confirmDelete(salon)" title="Supprimer" style="color:var(--red-light);">
+                    <button class="btn-icon" @click="startDeleteFlow(salon)" title="Supprimer" style="color:var(--red-light);">
                         <i class="fa-solid fa-trash"></i>
                     </button>
                     {% endif %}
@@ -248,22 +290,278 @@
         </div>
     </div>
 
-    {# ── Confirmation suppression ── #}
-    <div class="modal-overlay" x-show="deleteTarget" x-cloak @click.self="deleteTarget = null">
-        <div class="modal modal-sm">
-            <div class="modal-header">
-                <h3><i class="fa-solid fa-triangle-exclamation" style="color:var(--red-light);"></i> Confirmer</h3>
+    {# ── Modal Ajouter membres ── #}
+    {# ── Modal Ajouter des membres ── #}
+    <div class="modal-overlay" x-show="addMembersTarget" x-cloak @click.self="closeAddMembers()">
+        <div class="modal" style="max-width:640px;width:95%;display:flex;flex-direction:column;max-height:85vh;">
+            <div class="modal-header" style="flex-shrink:0;">
+                <div>
+                    <h3 style="margin:0;"><i class="fa-solid fa-user-plus" style="color:#6ec38a;margin-right:8px;"></i> Ajouter des membres</h3>
+                    <div style="font-size:12px;color:var(--text-muted);margin-top:3px;">
+                        Salon : <strong x-text="addMembersTarget ? addMembersTarget.Nom : ''"></strong>
+                    </div>
+                </div>
+                <button class="btn-icon" @click="closeAddMembers()"><i class="fa-solid fa-xmark"></i></button>
             </div>
-            <div class="modal-body">
-                <p>Supprimer le salon <strong x-text="deleteTarget ? deleteTarget.Nom : ''"></strong> ?</p>
-            </div>
-            <div class="modal-footer">
-                <button class="btn-ghost" @click="deleteTarget = null">Annuler</button>
-                <button class="btn-danger" :disabled="saving" @click="deleteSalon()">
-                    <i x-show="saving" class="fa-solid fa-spinner fa-spin"></i>
-                    <span x-show="!saving">Supprimer</span>
+
+            {# ── Onglets ── #}
+            <div style="display:flex;border-bottom:1px solid var(--border);background:var(--bg-elevated);flex-shrink:0;">
+                <button class="import-tab-btn" :class="{ active: addMembersTab === 'personnel' }"
+                    @click="addMembersTab = 'personnel'; addMembersResult = null; addMembersError = null;">
+                    <i class="fa-solid fa-users" style="margin-right:5px;"></i> Personnel
+                </button>
+                <button class="import-tab-btn" :class="{ active: addMembersTab === 'csv' }"
+                    @click="addMembersTab = 'csv'; addMembersResult = null; addMembersError = null;">
+                    <i class="fa-solid fa-file-csv" style="margin-right:5px;"></i> Import CSV
+                </button>
+                <button class="import-tab-btn" :class="{ active: addMembersTab === 'manual' }"
+                    @click="addMembersTab = 'manual'; addMembersResult = null; addMembersError = null;">
+                    <i class="fa-solid fa-keyboard" style="margin-right:5px;"></i> Manuel
                 </button>
             </div>
+
+            <div class="modal-body" style="flex:1;overflow-y:auto;min-height:0;">
+
+                {# ── Onglet Personnel ── #}
+                <div x-show="addMembersTab === 'personnel'">
+                    <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;">
+                        <div style="position:relative;flex:1;">
+                            <i class="fa-solid fa-magnifying-glass" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:12px;"></i>
+                            <input type="text" x-model="addMembersSearch"
+                                placeholder="Rechercher par nom, prénom, grade…"
+                                style="padding-left:30px;width:100%;font-size:13px;">
+                        </div>
+                        <span style="font-size:12px;color:var(--text-muted);white-space:nowrap;"
+                            x-text="addMembersSelected.length + ' sélectionné(s)'"></span>
+                        <button class="btn-ghost" style="font-size:11px;padding:4px 10px;flex-shrink:0;"
+                            x-show="addMembersSelected.length > 0"
+                            @click="addMembersSelected = []">Tout désélectionner</button>
+                    </div>
+
+                    <div style="max-height:320px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);">
+                        <template x-if="addMembersPersonnel.length === 0">
+                            <div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px;">Aucun agent trouvé</div>
+                        </template>
+                        <template x-for="person in addMembersPersonnel" :key="person.id">
+                            <div @click="!isAlreadyInRoom(person) && person.user_id ? toggleAddMembersPerson(person.id) : null"
+                                :style="isAlreadyInRoom(person) || !person.user_id
+                                    ? 'opacity:.5;cursor:default;'
+                                    : 'cursor:pointer;'"
+                                :class="addMembersSelected.includes(person.id) ? 'bg-selected' : ''"
+                                style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border);transition:background .1s;"
+                                @mouseenter="if(!isAlreadyInRoom(person) && person.user_id) $el.style.background='var(--bg-hover)'"
+                                @mouseleave="if(!addMembersSelected.includes(person.id)) $el.style.background=''">
+                                {# Checkbox #}
+                                <div style="flex-shrink:0;width:16px;height:16px;border-radius:3px;border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;background:var(--bg-elevated);"
+                                    :style="addMembersSelected.includes(person.id) ? 'background:var(--gold);border-color:var(--gold);' : ''">
+                                    <i class="fa-solid fa-check" style="font-size:9px;color:#fff;"
+                                        x-show="addMembersSelected.includes(person.id)"></i>
+                                </div>
+                                {# Avatar lettre #}
+                                <div style="width:30px;height:30px;border-radius:50%;background:rgba(201,168,76,.2);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--gold);flex-shrink:0;"
+                                    x-text="(person.Prenom||'?').charAt(0).toUpperCase()"></div>
+                                {# Infos #}
+                                <div style="flex:1;min-width:0;">
+                                    <div style="font-size:13px;font-weight:600;" x-text="person.Prenom + ' ' + person.Nom"></div>
+                                    <div style="font-size:11px;color:var(--text-muted);">
+                                        <span x-show="person.Grade" x-text="person.Grade" style="margin-right:8px;"></span>
+                                        <span style="font-family:monospace;" x-text="person.user_id || '—'"></span>
+                                    </div>
+                                </div>
+                                {# Badges état #}
+                                <div style="flex-shrink:0;">
+                                    <span x-show="isAlreadyInRoom(person)"
+                                        style="font-size:10px;padding:2px 8px;border-radius:10px;background:rgba(110,195,138,.15);color:#6ec38a;border:1px solid rgba(110,195,138,.3);">
+                                        déjà présent
+                                    </span>
+                                    <span x-show="!person.user_id && !isAlreadyInRoom(person)"
+                                        style="font-size:10px;padding:2px 8px;border-radius:10px;background:rgba(192,57,43,.1);color:var(--red-light);border:1px solid rgba(192,57,43,.2);">
+                                        pas de compte Tchap
+                                    </span>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                {# ── Onglet Import CSV ── #}
+                <div x-show="addMembersTab === 'csv'">
+                    <div style="margin-bottom:12px;font-size:12px;color:var(--text-secondary);line-height:1.6;">
+                        Importez un fichier <strong>.csv</strong> contenant des adresses email ou des identifiants Matrix
+                        (<code style="font-size:11px;">@prenom.nom:serveur</code>). Les emails sont automatiquement associés au personnel.
+                    </div>
+
+                    <label style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:20px;border:2px dashed var(--border);border-radius:var(--radius-sm);cursor:pointer;background:var(--bg-elevated);margin-bottom:12px;"
+                        @dragover.prevent="$el.style.borderColor='var(--gold)'"
+                        @dragleave="$el.style.borderColor=''"
+                        @drop.prevent="$el.style.borderColor=''; parseCsvForMembers({ target: { files: $event.dataTransfer.files } })">
+                        <i class="fa-solid fa-file-arrow-up" style="font-size:24px;color:var(--text-muted);"></i>
+                        <span style="font-size:13px;color:var(--text-secondary);">Glisser-déposer ou <strong style="color:var(--gold);">cliquer pour choisir</strong></span>
+                        <span style="font-size:11px;color:var(--text-muted);">.csv — colonnes séparées par virgule ou point-virgule</span>
+                        <input type="file" accept=".csv,text/csv" style="display:none;" @change="parseCsvForMembers($event)">
+                    </label>
+
+                    <div x-show="addMembersCsvError" class="alert-error" x-text="addMembersCsvError" style="margin-bottom:10px;"></div>
+
+                    <template x-if="addMembersCsvRows.length > 0">
+                        <div>
+                            <div style="font-size:12px;font-weight:700;color:var(--text-primary);margin-bottom:8px;">
+                                Aperçu —
+                                <span style="color:#6ec38a;" x-text="addMembersCsvRows.filter(r=>r.matched).length + ' trouvé(s)'"></span>
+                                <span x-show="addMembersCsvRows.filter(r=>!r.matched).length > 0"
+                                    style="color:var(--red-light);margin-left:8px;"
+                                    x-text="addMembersCsvRows.filter(r=>!r.matched).length + ' non trouvé(s)'"></span>
+                            </div>
+                            <div style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);">
+                                <template x-for="(row, i) in addMembersCsvRows" :key="i">
+                                    <div style="display:flex;align-items:center;gap:10px;padding:6px 12px;border-bottom:1px solid var(--border);font-size:12px;">
+                                        <i :class="row.matched ? 'fa-solid fa-circle-check' : 'fa-solid fa-circle-xmark'"
+                                            :style="row.matched ? 'color:#6ec38a' : 'color:var(--red-light)'"></i>
+                                        <div style="flex:1;min-width:0;">
+                                            <div x-text="row.name" style="font-weight:600;"></div>
+                                            <div x-show="row.email && row.userId" style="color:var(--text-muted);font-family:monospace;font-size:11px;" x-text="row.userId"></div>
+                                            <div x-show="!row.matched" style="color:var(--red-light);font-size:11px;">Introuvable dans le personnel</div>
+                                        </div>
+                                        <div x-show="isAlreadyInRoom({ user_id: row.userId })"
+                                            style="font-size:10px;padding:2px 7px;border-radius:10px;background:rgba(110,195,138,.15);color:#6ec38a;border:1px solid rgba(110,195,138,.3);">
+                                            déjà présent
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                {# ── Onglet Manuel ── #}
+                <div x-show="addMembersTab === 'manual'">
+                    <div class="form-group">
+                        <label>Identifiants Matrix <small style="color:var(--text-muted);">(un par ligne)</small></label>
+                        <textarea x-model="addMembersInput" rows="8"
+                            placeholder="@prenom.nom:agent.tchap.gouv.fr&#10;@autre.agent:gendarmerie.tchap.gouv.fr"
+                            style="font-family:monospace;font-size:12px;"></textarea>
+                    </div>
+                </div>
+
+                {# ── Messages retour ── #}
+                <div x-show="addMembersError" class="alert-error" x-text="addMembersError" style="margin-top:10px;white-space:pre-wrap;"></div>
+                <div x-show="addMembersResult && !addMembersError"
+                    style="margin-top:10px;padding:8px 12px;background:rgba(110,195,138,.08);border:1px solid rgba(110,195,138,.3);border-radius:var(--radius-sm);font-size:13px;color:#6ec38a;"
+                    x-text="addMembersResult"></div>
+            </div>
+
+            <div class="modal-footer" style="flex-shrink:0;">
+                <button class="btn-ghost" @click="closeAddMembers()">Fermer</button>
+                <button class="btn-primary" :disabled="saving
+                    || (addMembersTab === 'personnel' && addMembersSelected.length === 0)
+                    || (addMembersTab === 'manual'    && !addMembersInput.trim())
+                    || (addMembersTab === 'csv'       && addMembersCsvRows.filter(r=>r.matched).length === 0)"
+                    @click="addMembers()" style="min-width:120px;">
+                    <i x-show="saving" class="fa-solid fa-spinner fa-spin"></i>
+                    <span x-show="!saving">
+                        <i class="fa-solid fa-paper-plane"></i>
+                        <span x-show="addMembersTab === 'personnel'" x-text="'Inviter (' + addMembersSelected.length + ')'"></span>
+                        <span x-show="addMembersTab === 'csv'"       x-text="'Inviter (' + addMembersCsvRows.filter(r=>r.matched).length + ')'"></span>
+                        <span x-show="addMembersTab === 'manual'">Inviter</span>
+                    </span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {# ── Modal Suppression multi-étapes ── #}
+    <div class="modal-overlay" x-show="deleteStep > 0" x-cloak>
+        <div class="modal modal-sm">
+
+            {# Étape 1 : confirmation initiale #}
+            <template x-if="deleteStep === 1">
+                <div>
+                    <div class="modal-header">
+                        <h3><i class="fa-solid fa-triangle-exclamation" style="color:var(--red-light);"></i> Supprimer le salon</h3>
+                    </div>
+                    <div class="modal-body">
+                        <p>Supprimer le salon <strong x-text="deleteTarget ? deleteTarget.Nom : (deleteBulkIds.length + ' salons')"></strong> ?</p>
+                        <p x-show="deleteTarget && deleteTarget.room_id" style="margin-top:10px;font-size:12px;color:var(--text-secondary);">
+                            <i class="fa-solid fa-circle-info"></i>
+                            Tous les membres seront d'abord expulsés du salon Tchap, puis vous pourrez choisir si le bot doit aussi quitter le salon.
+                        </p>
+                        <p x-show="deleteTarget && !deleteTarget.room_id" style="margin-top:10px;font-size:12px;color:var(--text-muted);">
+                            Ce salon n'a pas de room_id — aucune action Tchap ne sera effectuée.
+                        </p>
+                        <p x-show="deleteBulkIds.length > 0" style="margin-top:10px;font-size:12px;color:var(--text-secondary);">
+                            <i class="fa-solid fa-circle-info"></i>
+                            Pour chaque salon ayant un room_id, tous les membres seront expulsés et le bot quittera le salon.
+                        </p>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn-ghost" @click="cancelDelete()">Annuler</button>
+                        <button class="btn-danger" :disabled="saving" @click="runKickUsers()">
+                            <i x-show="saving" class="fa-solid fa-spinner fa-spin"></i>
+                            <span x-show="!saving">Continuer</span>
+                        </button>
+                    </div>
+                </div>
+            </template>
+
+            {# Étape 2 : expulsion en cours / résultat #}
+            <template x-if="deleteStep === 2">
+                <div>
+                    <div class="modal-header">
+                        <h3><i class="fa-solid fa-spinner fa-spin" style="color:var(--blue-light);"></i> Expulsion des membres…</h3>
+                    </div>
+                    <div class="modal-body">
+                        <p style="font-size:13px;color:var(--text-secondary);">Expulsion des membres Tchap en cours, veuillez patienter…</p>
+                    </div>
+                    <div class="modal-footer"></div>
+                </div>
+            </template>
+
+            {# Étape 3 : confirmation suppression du bot #}
+            <template x-if="deleteStep === 3">
+                <div>
+                    <div class="modal-header">
+                        <h3><i class="fa-solid fa-robot" style="color:var(--gold);"></i> Suppression du bot</h3>
+                    </div>
+                    <div class="modal-body">
+                        <p x-show="deleteKickResult !== null" style="margin-bottom:10px;font-size:12px;color:#6ec38a;">
+                            <i class="fa-solid fa-check"></i>
+                            <span x-text="deleteKickResult"></span>
+                        </p>
+                        <p>Voulez-vous également faire quitter le <strong>bot</strong> du salon Tchap ?</p>
+                        <p style="font-size:11px;color:var(--text-muted);margin-top:6px;">
+                            Si vous gardez le bot, il restera membre du salon Tchap même après la suppression dans cette application.
+                        </p>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn-ghost" :disabled="saving" @click="skipBotLeave()">Non, garder le bot</button>
+                        <button class="btn-danger" :disabled="saving" @click="runBotLeave()">
+                            <i x-show="saving" class="fa-solid fa-spinner fa-spin"></i>
+                            <span x-show="!saving">Oui, expulser le bot</span>
+                        </button>
+                    </div>
+                </div>
+            </template>
+
+            {# Étape 4 : suppression définitive dans l'app #}
+            <template x-if="deleteStep === 4">
+                <div>
+                    <div class="modal-header">
+                        <h3><i class="fa-solid fa-trash" style="color:var(--red-light);"></i> Suppression définitive</h3>
+                    </div>
+                    <div class="modal-body">
+                        <p>Supprimer définitivement le salon <strong x-text="deleteTarget ? deleteTarget.Nom : (deleteBulkIds.length + ' salons')"></strong> de l'application de gestion ?</p>
+                        <p style="font-size:11px;color:var(--text-muted);margin-top:6px;">Cette action est irréversible.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn-ghost" @click="cancelDelete()">Annuler</button>
+                        <button class="btn-danger" :disabled="saving" @click="finishDelete()">
+                            <i x-show="saving" class="fa-solid fa-spinner fa-spin"></i>
+                            <span x-show="!saving">Supprimer de l'application</span>
+                        </button>
+                    </div>
+                </div>
+            </template>
+
         </div>
     </div>
 

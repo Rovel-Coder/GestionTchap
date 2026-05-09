@@ -42,46 +42,105 @@ class SecurityController extends AbstractController
             return $this->redirectToRoute('app_home');
         }
 
-        // Seulement autorisé si aucun personnel en base
-        $count = $this->db->fetchOne('SELECT COUNT(*) FROM personnel');
-        if ((int) $count > 0) {
-            $this->addFlash('error', 'L\'inscription directe est désactivée. Contactez un administrateur.');
-            return $this->redirectToRoute('app_login');
+        $count = (int) $this->db->fetchOne('SELECT COUNT(*) FROM personnel');
+
+        // Mode bootstrap : aucun personnel → créer le premier administrateur
+        if ($count === 0) {
+            return $this->handleBootstrap($request);
         }
 
+        // Mode inscription libre : le membre doit exister dans le personnel sans compte
         $error = null;
 
         if ($request->isMethod('POST')) {
-            $email    = trim($request->request->get('email', ''));
-            $password = $request->request->get('password', '');
-            $nom      = trim($request->request->get('nom', ''));
-            $prenom   = trim($request->request->get('prenom', ''));
+            if (!$this->isCsrfTokenValid('register', $request->request->get('_csrf_token', ''))) {
+                $error = 'Token invalide. Rechargez la page.';
+            } else {
+                $email   = trim($request->request->get('email', ''));
+                $pass    = $request->request->get('password', '');
+                $confirm = $request->request->get('confirm', '');
 
-            if (!$email || !$password) {
+                if (!$email || !$pass) {
+                    $error = 'Email et mot de passe requis';
+                } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    $error = 'Adresse email invalide';
+                } elseif (strlen($pass) < 8) {
+                    $error = 'Mot de passe trop court (8 caractères min)';
+                } elseif ($pass !== $confirm) {
+                    $error = 'Les mots de passe ne correspondent pas';
+                } else {
+                    $row = $this->db->fetchAssociative(
+                        'SELECT id, password_hash FROM personnel WHERE LOWER("Mail") = LOWER(:mail)',
+                        ['mail' => $email]
+                    );
+
+                    if (!$row) {
+                        $error = 'Cette adresse email ne figure pas dans le personnel. Contactez un administrateur.';
+                    } elseif (!empty($row['password_hash'])) {
+                        $error = 'Un compte existe déjà pour cette adresse. Connectez-vous directement.';
+                    } else {
+                        $tempUser = new AppUser(0, $email, '', ['ROLE_USER'], false, 'lecteur');
+                        $hash     = $this->hasher->hashPassword($tempUser, $pass);
+
+                        $this->db->executeStatement(
+                            'UPDATE personnel SET password_hash = :hash WHERE id = :id',
+                            ['hash' => $hash, 'id' => $row['id']]
+                        );
+
+                        $this->addFlash('success', 'Compte activé. Vous pouvez vous connecter.');
+                        return $this->redirectToRoute('app_login');
+                    }
+                }
+            }
+        }
+
+        return $this->render('security/register.html.twig', [
+            'mode'  => 'register',
+            'error' => $error,
+        ]);
+    }
+
+    private function handleBootstrap(Request $request): Response
+    {
+        $error = null;
+
+        if ($request->isMethod('POST')) {
+            $email   = trim($request->request->get('email', ''));
+            $pass    = $request->request->get('password', '');
+            $confirm = $request->request->get('confirm', '');
+            $nom     = trim($request->request->get('nom', ''));
+            $prenom  = trim($request->request->get('prenom', ''));
+
+            if (!$email || !$pass) {
                 $error = 'Email et mot de passe requis';
-            } elseif (strlen($email) > 200 || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                $error = 'Email invalide';
-            } elseif (strlen($password) < 8) {
+            } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                $error = 'Adresse email invalide';
+            } elseif (strlen($pass) < 8) {
                 $error = 'Mot de passe trop court (8 caractères min)';
+            } elseif ($pass !== $confirm) {
+                $error = 'Les mots de passe ne correspondent pas';
             } else {
                 $tempUser = new AppUser(0, $email, '', ['ROLE_ADMIN'], false, 'admin');
-                $hash     = $this->hasher->hashPassword($tempUser, $password);
+                $hash     = $this->hasher->hashPassword($tempUser, $pass);
 
                 $this->db->insert('personnel', [
-                    '"Mail"'          => $email,
-                    '"Nom"'           => strtoupper($nom),
-                    '"Prenom"'        => $prenom,
-                    '"Role"'          => 'admin',
-                    '"Statut"'        => 'actif',
-                    'password_hash'   => $hash,
+                    '"Mail"'        => $email,
+                    '"Nom"'         => strtoupper($nom),
+                    '"Prenom"'      => $prenom,
+                    '"Role"'        => 'admin',
+                    '"Statut"'      => 'actif',
+                    'password_hash' => $hash,
                 ]);
 
-                $this->addFlash('success', 'Compte créé. Vous pouvez vous connecter.');
+                $this->addFlash('success', 'Compte administrateur créé. Vous pouvez vous connecter.');
                 return $this->redirectToRoute('app_login');
             }
         }
 
-        return $this->render('security/register.html.twig', ['error' => $error]);
+        return $this->render('security/register.html.twig', [
+            'mode'  => 'bootstrap',
+            'error' => $error,
+        ]);
     }
 
     // POST /api/auth/change-password
@@ -120,42 +179,6 @@ class SecurityController extends AbstractController
                 'UPDATE personnel SET password_hash = :hash WHERE id = :id',
                 ['hash' => $hash, 'id' => $user->getPersonnelId()]
             );
-        }
-
-        return $this->json(['ok' => true]);
-    }
-
-    // POST /api/auth/set-password  (admin définit le mot de passe d'un agent)
-    #[Route('/api/auth/set-password', name: 'api_auth_set_password', methods: ['POST'])]
-    public function setPassword(Request $request): JsonResponse
-    {
-        /** @var AppUser $user */
-        $user = $this->getUser();
-        if (!$user || !$this->roles->canAdmin($user)) {
-            return $this->json(['error' => 'Accès réservé aux administrateurs'], 403);
-        }
-
-        $data        = json_decode($request->getContent(), true) ?? [];
-        $personnelId = $data['personnelId'] ?? null;
-        $password    = $data['password'] ?? '';
-
-        if (!$personnelId || !$password) {
-            return $this->json(['error' => 'personnelId et password requis'], 400);
-        }
-        if (strlen($password) < 8) {
-            return $this->json(['error' => 'Mot de passe trop court (8 caractères min)'], 400);
-        }
-
-        $tempUser = new AppUser(0, '', '', ['ROLE_USER'], false, 'lecteur');
-        $hash     = $this->hasher->hashPassword($tempUser, $password);
-
-        $count = $this->db->executeStatement(
-            'UPDATE personnel SET password_hash = :hash WHERE id = :id',
-            ['hash' => $hash, 'id' => (int) $personnelId]
-        );
-
-        if (!$count) {
-            return $this->json(['error' => 'Agent introuvable'], 404);
         }
 
         return $this->json(['ok' => true]);
@@ -228,7 +251,7 @@ class SecurityController extends AbstractController
 
         try {
             $this->db->insert('system_admins', ['username' => $username, 'password_hash' => $hash]);
-            $id = $this->db->lastInsertId();
+            $id  = $this->db->lastInsertId();
             $row = $this->db->fetchAssociative(
                 'SELECT id, username, created_at FROM system_admins WHERE id = :id',
                 ['id' => $id]
@@ -270,6 +293,44 @@ class SecurityController extends AbstractController
         if (!$count) {
             return $this->json(['error' => 'Admin système introuvable'], 404);
         }
+
+        return $this->json(['ok' => true]);
+    }
+
+    // GET /api/auth/locked-users  (admin + sysadmin)
+    #[Route('/api/auth/locked-users', name: 'api_auth_locked_users', methods: ['GET'])]
+    public function lockedUsers(): JsonResponse
+    {
+        /** @var AppUser $user */
+        $user = $this->getUser();
+        if (!$user || !$this->roles->canAdmin($user)) {
+            return $this->json(['error' => 'Accès réservé aux administrateurs'], 403);
+        }
+
+        $rows = $this->db->fetchAllAssociative(
+            'SELECT identifier, attempts, locked_at, last_attempt_at
+             FROM login_locks
+             WHERE locked_at IS NOT NULL
+             ORDER BY locked_at DESC'
+        );
+
+        return $this->json($rows);
+    }
+
+    // POST /api/auth/locked-users/{identifier}/unlock  (admin + sysadmin)
+    #[Route('/api/auth/locked-users/{identifier}/unlock', name: 'api_auth_unlock', methods: ['POST'])]
+    public function unlock(string $identifier): JsonResponse
+    {
+        /** @var AppUser $user */
+        $user = $this->getUser();
+        if (!$user || !$this->roles->canAdmin($user)) {
+            return $this->json(['error' => 'Accès réservé aux administrateurs'], 403);
+        }
+
+        $this->db->executeStatement(
+            'DELETE FROM login_locks WHERE LOWER(identifier) = LOWER(:id)',
+            ['id' => $identifier]
+        );
 
         return $this->json(['ok' => true]);
     }

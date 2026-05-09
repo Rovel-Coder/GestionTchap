@@ -187,6 +187,37 @@ class PersonnelController extends AbstractController
         return new JsonResponse(null, 204);
     }
 
+    // DELETE /api/personnel — suppression en masse (ids dans le body)
+    #[Route('/api/personnel', name: 'api_personnel_bulk_delete', methods: ['DELETE'])]
+    public function bulkDelete(Request $request): JsonResponse
+    {
+        /** @var AppUser $user */
+        $user = $this->getUser();
+        if (!$this->roles->canAdmin($user)) {
+            return $this->json(['error' => 'Accès réservé aux administrateurs'], 403);
+        }
+
+        $data = json_decode($request->getContent(), true) ?? [];
+        $ids  = array_values(array_filter(array_map('intval', $data['ids'] ?? []), fn($id) => $id > 0));
+
+        if (empty($ids)) {
+            return $this->json(['error' => 'Aucun id fourni'], 400);
+        }
+
+        $placeholders = implode(',', array_map(fn($i) => ":id$i", array_keys($ids)));
+        $params       = [];
+        foreach ($ids as $i => $id) {
+            $params["id$i"] = $id;
+        }
+
+        $deleted = $this->db->executeStatement(
+            "DELETE FROM personnel WHERE id IN ($placeholders)",
+            $params
+        );
+
+        return $this->json(['deleted' => $deleted]);
+    }
+
     // ── Normalisation user_id ──────────────────────────────────────────────
     #[Route('/api/personnel/normalize-user-ids', name: 'api_personnel_normalize_user_ids', methods: ['POST'])]
     public function normalizeUserIds(): JsonResponse

@@ -53,7 +53,7 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=sha
           flavor: |
-            latest=false  # Évite de taguer avec "latest" pour les PR
+            latest=false
 
       - name: Build and push PHP image
         uses: docker/build-push-action@v5
