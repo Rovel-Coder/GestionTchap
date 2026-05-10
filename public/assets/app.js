@@ -128,6 +128,7 @@ function personnelView() {
     unites:    [],
     loading:   true,
     search:    '',
+    filtersOpen: false,
     filters:   { categorie: {}, statut: {}, unite: {}, salons: {} },
     page:      1,
     perPage:   10,
@@ -144,7 +145,20 @@ function personnelView() {
     csvData:    [],
     importError: null,
     importing:  false,
-    form:      {},
+    form: {},
+    mailToMatrixId(mail) {
+        if (!mail || !mail.includes('@')) {
+            return '';
+        }
+
+        const localPart = mail
+            .split('@')[0]
+            .trim()
+            .toLowerCase();
+
+        return `@${localPart}:agent.interieur.tchap.gouv.fr`;
+    },
+
     csvRows:      [],
     csvImporting: false,
     csvModalOpen: false,
@@ -481,8 +495,8 @@ function personnelView() {
     },
 
     get csvInvalid() {
-      return this.csvRows.filter(r => !r.valid);
-    },
+  return (this.csvRows || []).filter(r => r && !r.valid);
+},
 
     async confirmCsvImport() {
       this.csvImporting = true;
@@ -1211,12 +1225,24 @@ function uniteView() {
           const already = (existing.Unite || []).map(Number).includes(Number(this.importTargetUnite.id));
           this.importFoundAgents.push({ agent: existing, already });
         } else {
-          const local = email.split('@')[0];
-          const parts = local.split('.');
-          const prenom = parts.length >= 2 ? parts[0].charAt(0).toUpperCase() + parts[0].slice(1) : '';
-          const nom    = parts.length >= 2 ? parts.slice(1).join(' ').toUpperCase() : local.toUpperCase();
-          this.importNewAgents.push({ email, prenom, nom, user_id: `@${local}:agent.interieur.tchap.gouv.fr` });
-        }
+  const local = email.replace('@', '-');
+  const parts = email.split('@')[0].split('.');
+
+  const prenom = parts.length >= 2
+    ? parts[0].charAt(0).toUpperCase() + parts[0].slice(1)
+    : '';
+
+  const nom = parts.length >= 2
+    ? parts.slice(1).join(' ').toUpperCase()
+    : local.toUpperCase();
+
+  this.importNewAgents.push({
+    email,
+    prenom,
+    nom,
+    user_id: `@${local}:agent.interieur.tchap.gouv.fr`
+  });
+}
       });
       this.importAnalysed = true;
     },

@@ -66,84 +66,153 @@
             </div>
         </div>
 
-        {# ── Séparateur ── #}
-        <div style="width:1px;background:var(--border);flex-shrink:0;"></div>
-
         {# ── Colonne 2 : Personnel ── #}
-        <div class="crisis-col">
-            <div class="crisis-col-header">
-                <div style="display:flex;align-items:center;gap:8px;">
-                    <span class="crisis-col-num">2.</span>
-                    <span class="crisis-col-title">Personnel</span>
-                    <span class="crisis-count" x-text="selectedAgents.length + ' sélectionné(s)'"></span>
-                </div>
-            </div>
+<div class="crisis-col" style="overflow:hidden;">
+    <div class="crisis-col-header">
+        <div style="display:flex;align-items:center;gap:8px;">
+            <span class="crisis-col-num">2.</span>
+            <span class="crisis-col-title">Personnel</span>
+            <span class="crisis-count" x-text="selectedAgents.length + ' sélectionné(s)'"></span>
+        </div>
+    </div>
 
-            <div class="crisis-search-bar">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                </svg>
-                <input type="text" :value="search" @input="search = $event.target.value" @focus="$el.removeAttribute('readonly')" readonly placeholder="Nom, prénom…" autocomplete="off" spellcheck="false">
-            </div>
+    <div class="crisis-search-bar">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
 
-            <div class="crisis-filter-row">
-                <span class="crisis-filter-label">STATUT</span>
-                <div class="crisis-filter-chips">
-                    <button class="crisis-chip" :class="{ active: filters.statut === '' }" @click="filters.statut = ''">Tous</button>
-                    <button class="crisis-chip" :class="{ active: filters.statut === 'actif' }" @click="filters.statut = 'actif'">Actifs</button>
-                    <button class="crisis-chip" :class="{ active: filters.statut === 'reserve' }" @click="filters.statut = 'reserve'">Réserve</button>
-                    <button class="crisis-chip" :class="{ active: filters.statut === 'admin_civil' }" @click="filters.statut = 'admin_civil'">Adm. Civil</button>
-                    <button class="crisis-chip" :class="{ active: filters.statut === 'admin_militaire' }" @click="filters.statut = 'admin_militaire'">Adm. Militaire</button>
-                </div>
-            </div>
+        <input type="text"
+               :value="search"
+               @input="search = $event.target.value"
+               @focus="$el.removeAttribute('readonly')"
+               readonly
+               placeholder="Nom, prénom…"
+               autocomplete="off"
+               spellcheck="false">
+    </div>
 
-            <div class="crisis-filter-row">
-                <span class="crisis-filter-label">UNITÉ</span>
-                <div class="crisis-filter-chips">
-                    <button class="crisis-chip" :class="{ active: !filters.unite }" @click="filters.unite = ''">Toutes</button>
-                    <template x-for="unite in unites" :key="unite.id">
-                        <button class="crisis-chip" :class="{ active: filters.unite == unite.id }"
-                            @click="filters.unite = unite.id"
-                            x-text="unite.Nom || unite.code || '#' + unite.id"></button>
-                    </template>
-                </div>
-            </div>
+    {# ── Filtres repliables ── #}
+    <div class="crisis-filter-bar">
 
-            <div class="crisis-select-all-row">
-                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-                    <input type="checkbox" :checked="allSelected" @change="toggleSelectAll($event.target.checked)"
-                        style="accent-color:var(--red-light);width:14px;height:14px;">
-                    <span style="font-family:var(--font-display);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;">Sélectionner tout</span>
-                </label>
-                <span style="font-size:11px;color:var(--text-muted);"
-                    x-text="filteredAgents.length + ' / ' + personnel.length + ' agent' + (personnel.length > 1 ? 's' : '')"></span>
-            </div>
+        <div class="crisis-filter-row">
+            <span class="crisis-filter-label">STATUT</span>
 
-            <div class="crisis-col-body">
-                <div x-show="filteredAgents.length === 0" class="crisis-empty">Aucun agent correspondant</div>
-                <template x-for="agent in filteredAgents" :key="agent.id">
-                    <div class="crisis-item" :class="{ selected: selectedAgentIds[agent.id] }"
-                        @click="toggleAgent(agent.id, !selectedAgentIds[agent.id])">
-                        <input type="checkbox" :checked="!!selectedAgentIds[agent.id]"
-                            @click.stop @change="toggleAgent(agent.id, $event.target.checked)">
-                        <div style="overflow:hidden;">
-                            <div class="crisis-item-name" x-text="(agent.Prenom || '') + ' ' + (agent.Nom || '')"></div>
-                            <div class="crisis-item-meta">
-                                <span x-show="getAgentUnites(agent).length"
-                                    x-text="getAgentUnites(agent).map(u => u.Nom).join(', ')"></span>
-                                <span x-show="!getAgentUnites(agent).length" style="opacity:.5;">—</span>
-                            </div>
-                        </div>
-                    </div>
-                </template>
+            <div class="crisis-filter-chips">
+                <button class="crisis-chip"
+                        :class="{ active: filters.statut === '' }"
+                        @click="filters.statut = ''">
+                    Tous
+                </button>
+
+                <button class="crisis-chip"
+                        :class="{ active: filters.statut === 'actif' }"
+                        @click="filters.statut = 'actif'">
+                    Actifs
+                </button>
+
+                <button class="crisis-chip"
+                        :class="{ active: filters.statut === 'reserve' }"
+                        @click="filters.statut = 'reserve'">
+                    Réserve
+                </button>
+
+                <button class="crisis-chip"
+                        :class="{ active: filters.statut === 'admin_civil' }"
+                        @click="filters.statut = 'admin_civil'">
+                    Adm. Civil
+                </button>
+
+                <button class="crisis-chip"
+                        :class="{ active: filters.statut === 'admin_militaire' }"
+                        @click="filters.statut = 'admin_militaire'">
+                    Adm. Militaire
+                </button>
             </div>
         </div>
 
-        {# ── Séparateur ── #}
-        <div style="width:1px;background:var(--border);flex-shrink:0;"></div>
+        <div class="crisis-filter-row">
+            <span class="crisis-filter-label">UNITÉ</span>
+
+            <div class="crisis-filter-chips">
+                <button class="crisis-chip"
+                        :class="{ active: !filters.unite }"
+                        @click="filters.unite = ''">
+                    Toutes
+                </button>
+
+                <template x-for="unite in unites" :key="unite.id">
+                    <button class="crisis-chip"
+                            :class="{ active: filters.unite == unite.id }"
+                            @click="filters.unite = unite.id"
+                            x-text="unite.Nom || unite.code || '#' + unite.id">
+                    </button>
+                </template>
+            </div>
+        </div>
+    </div>
+
+    <div class="crisis-select-all-row">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="checkbox"
+                   :checked="allSelected"
+                   @change="toggleSelectAll($event.target.checked)"
+                   style="accent-color:var(--red-light);width:14px;height:14px;">
+
+            <span style="font-family:var(--font-display);
+                         font-size:11px;
+                         font-weight:700;
+                         letter-spacing:.08em;
+                         text-transform:uppercase;">
+                Sélectionner tout
+            </span>
+        </label>
+
+        <span style="font-size:11px;color:var(--text-muted);"
+              x-text="filteredAgents.length + ' / ' + personnel.length + ' agent' + (personnel.length > 1 ? 's' : '')">
+        </span>
+    </div>
+
+    <<div class="crisis-col-body personnel-grid">
+        <div x-show="filteredAgents.length === 0"
+             class="crisis-empty">
+            Aucun agent correspondant
+        </div>
+
+        <template x-for="agent in filteredAgents" :key="agent.id">
+            <div class="crisis-item"
+                 :class="{ selected: selectedAgentIds[agent.id] }"
+                 @click="toggleAgent(agent.id, !selectedAgentIds[agent.id])">
+
+                <input type="checkbox"
+                       :checked="!!selectedAgentIds[agent.id]"
+                       @click.stop
+                       @change="toggleAgent(agent.id, $event.target.checked)">
+
+                <div style="overflow:hidden;">
+                    <div class="crisis-item-name"
+                         x-text="(agent.Prenom || '') + ' ' + (agent.Nom || '')">
+                    </div>
+
+                    <div class="crisis-item-meta">
+                        <span x-show="getAgentUnites(agent).length"
+                              x-text="getAgentUnites(agent).map(u => u.Nom).join(', ')">
+                        </span>
+
+                        <span x-show="!getAgentUnites(agent).length"
+                              style="opacity:.5;">
+                            —
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </div>
+</div>
+
 
         {# ── Colonne 3 : Confirmer ── #}
-        <div class="crisis-col" style="flex:1;min-width:180px;">
+        <div class="crisis-col">
             <div class="crisis-col-header">
                 <div style="display:flex;align-items:center;gap:8px;">
                     <span class="crisis-col-num">3.</span>

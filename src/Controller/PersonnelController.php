@@ -317,11 +317,17 @@ class PersonnelController extends AbstractController
     private function validateFields(array $fields): ?string
     {
         if (isset($fields['NiGend'])) {
-            $n = (string) $fields['NiGend'];
-            if (!preg_match('/^\d{6}$/', $n) || (int) $n < 100000 || (int) $n > 999999) {
-                return 'Le NiGend doit être un nombre à 6 chiffres (100000–999999)';
-            }
+    $n = trim((string) $fields['NiGend']);
+
+    // Autoriser vide
+    if ($n !== '') {
+
+        // Vérification uniquement si renseigné
+        if (!preg_match('/^\d{6}$/', $n) || (int)$n < 100000 || (int)$n > 999999) {
+            return 'Le NiGend doit être un nombre à 6 chiffres (100000–999999)';
         }
+    }
+}
         foreach (self::LIMITS as $key => $limit) {
             if (isset($fields[$key]) && is_string($fields[$key]) && strlen($fields[$key]) > $limit) {
                 return sprintf('Le champ "%s" dépasse la limite de %d caractères', $key, $limit);
