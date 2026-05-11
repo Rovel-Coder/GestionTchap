@@ -2530,13 +2530,14 @@ function hierarchieView() {
   return {
     niveaux:      [],
     unites:       [],
+    tree:         [],   // liste plate construite explicitement (évite les problèmes de réactivité getter)
     personnel:    [],
     loading:      true,
     search:       '',
-    collapsedMap:   {},   // { [uniteId]: true }
-    filterNiveauId: null, // null = tous les niveaux
-    selected:       null, // unité sélectionnée
-    admins:       [],   // unite_roles de l'unité sélectionnée
+    collapsedMap:   {},
+    filterNiveauId: null,
+    selected:       null,
+    admins:       [],
     loadingAdmins: false,
 
     // ── Modale création/édition d'unité
@@ -2560,20 +2561,24 @@ function hierarchieView() {
 
     async init() {
       this.loading = true;
-      // Appels séparés : l'échec de l'un ne bloque pas les autres
       try { this.niveaux   = await apiFetch('/api/niveaux')   || []; } catch (e) { toast('Niveaux: ' + e.message, 'error'); }
       try { this.unites    = await apiFetch('/api/unites')    || []; } catch (e) { toast('Unités: '  + e.message, 'error'); }
       try { this.personnel = await apiFetch('/api/personnel') || []; } catch (e) { /* non-bloquant */ }
+      this.rebuildTree();
       this.loading = false;
+      // Surveiller les changements qui nécessitent de reconstruire l'arbre
+      this.$watch('unites',        () => this.rebuildTree());
+      this.$watch('search',        () => this.rebuildTree());
+      this.$watch('filterNiveauId',() => this.rebuildTree());
+      this.$watch('collapsedMap',  () => this.rebuildTree());
     },
 
     // ── Arbre ──────────────────────────────────────────────
-    buildTree(search) {
-      const q   = search ? search.toLowerCase() : '';
+    rebuildTree() {
+      const q   = this.search ? this.search.toLowerCase() : '';
       const niv = this.filterNiveauId;
       let source = this.unites;
 
-      // Filtre texte OU niveau : garde les correspondances + tous leurs ancêtres
       if (q || niv) {
         const matchIds = new Set(source.filter(u =>
           (q ? u.Nom.toLowerCase().includes(q) || (u.code || '').toLowerCase().includes(q) : true) &&
@@ -2593,7 +2598,7 @@ function hierarchieView() {
 
       const byParent = {};
       source.forEach(u => {
-        const pid = u.parent_id ?? -1;
+        const pid = u.parent_id != null ? u.parent_id : -1;
         (byParent[pid] = byParent[pid] || []).push(u);
       });
       Object.values(byParent).forEach(arr =>
@@ -2608,10 +2613,8 @@ function hierarchieView() {
         });
       };
       walk(-1, 0);
-      return result;
+      this.tree = result;
     },
-
-    get tree() { return this.buildTree(this.search, this.filterNiveauId); },
 
     toggleCollapse(id) {
       this.collapsedMap = { ...this.collapsedMap, [id]: !this.collapsedMap[id] };
