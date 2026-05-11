@@ -29,7 +29,9 @@ class ScopeService
             return $this->cache[$key];
         }
 
-        if ($user->isSysAdmin()) {
+        // Sysadmin et admins globaux voient toutes les unités.
+        // Les gestionnaires/superviseurs sont limités à leurs unite_roles.
+        if ($user->isSysAdmin() || $user->getAppRole() === 'admin') {
             $ids = array_map('intval', array_column(
                 $this->db->fetchAllAssociative('SELECT id FROM unites'),
                 'id'
