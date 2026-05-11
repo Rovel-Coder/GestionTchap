@@ -5,6 +5,7 @@ namespace App\Controller;
 use App\Security\AppUser;
 use App\Service\ConfigService;
 use App\Service\RoleService;
+use App\Service\ScopeService;
 use Doctrine\DBAL\Connection;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -32,6 +33,7 @@ class PersonnelController extends AbstractController
     public function __construct(
         private readonly Connection     $db,
         private readonly RoleService    $roles,
+        private readonly ScopeService   $scope,
         private readonly ConfigService  $config,
     ) {
     }
@@ -89,9 +91,29 @@ class PersonnelController extends AbstractController
             return $this->json(['error' => 'Accès réservé aux gestionnaires'], 403);
         }
 
-        $rows = $this->db->fetchAllAssociative(
-            'SELECT * FROM personnel ORDER BY "Nom", "Prenom"'
-        );
+        if ($user->isSysAdmin()) {
+            $rows = $this->db->fetchAllAssociative(
+                'SELECT * FROM personnel ORDER BY "Nom", "Prenom"'
+            );
+        } else {
+            $ids = $this->scope->getPerimeterIds($user);
+            if (empty($ids)) {
+                return $this->json([]);
+            }
+            $pgIds = $this->scope->toPgIntArray($ids);
+            // Inclure les agents liés via personnel_unite ET via l'ancien champ Unite[]
+            $rows = $this->db->fetchAllAssociative(
+                'SELECT DISTINCT p.*
+                 FROM personnel p
+                 WHERE EXISTS (
+                     SELECT 1 FROM personnel_unite pu
+                     WHERE pu.personnel_id = p.id
+                       AND pu.unite_id = ANY(:ids::int[])
+                 ) OR p."Unite" && :ids::int[]
+                 ORDER BY p."Nom", p."Prenom"',
+                ['ids' => $pgIds]
+            );
+        }
 
         return $this->json(array_map($this->formatRow(...), $rows));
     }

@@ -5,6 +5,7 @@ namespace App\Controller;
 use App\Security\AppUser;
 use App\Service\ConfigService;
 use App\Service\RoleService;
+use App\Service\ScopeService;
 use Doctrine\DBAL\Connection;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -14,15 +15,15 @@ use Symfony\Component\Routing\Attribute\Route;
 
 class UniteController extends AbstractController
 {
-    private const WRITABLE = ['Nom', 'code', 'Salons', 'numero', 'adresse', 'bot_id'];
+    private const WRITABLE = ['Nom', 'code', 'Salons', 'numero', 'adresse', 'bot_id', 'parent_id', 'niveau_id', 'type'];
     private const LIMITS   = ['Nom' => 200, 'code' => 50, 'numero' => 50, 'adresse' => 500];
 
     public function __construct(
         private readonly Connection    $db,
         private readonly RoleService   $roles,
+        private readonly ScopeService  $scope,
         private readonly ConfigService $config,
-    ) {
-    }
+    ) {}
 
     #[Route('/unites', name: 'app_unites', methods: ['GET'])]
     public function page(): Response
@@ -49,7 +50,28 @@ class UniteController extends AbstractController
             return $this->json(['error' => 'Accès réservé aux gestionnaires'], 403);
         }
 
-        $rows = $this->db->fetchAllAssociative('SELECT * FROM unites ORDER BY "Nom"');
+        if ($user->isSysAdmin()) {
+            $rows = $this->db->fetchAllAssociative(
+                'SELECT u.*, n.nom AS niveau_nom, n.ordre AS niveau_ordre
+                 FROM unites u
+                 LEFT JOIN niveaux n ON n.id = u.niveau_id
+                 ORDER BY n.ordre NULLS LAST, u."Nom"'
+            );
+        } else {
+            $ids = $this->scope->getPerimeterIds($user);
+            if (empty($ids)) {
+                return $this->json([]);
+            }
+            $rows = $this->db->fetchAllAssociative(
+                'SELECT u.*, n.nom AS niveau_nom, n.ordre AS niveau_ordre
+                 FROM unites u
+                 LEFT JOIN niveaux n ON n.id = u.niveau_id
+                 WHERE u.id = ANY(:ids::int[])
+                 ORDER BY n.ordre NULLS LAST, u."Nom"',
+                ['ids' => $this->scope->toPgIntArray($ids)]
+            );
+        }
+
         return $this->json(array_map($this->formatRow(...), $rows));
     }
 
@@ -65,16 +87,31 @@ class UniteController extends AbstractController
         $data   = json_decode($request->getContent(), true) ?? [];
         $fields = $this->extract($data);
 
+        // Si un parent est fourni, vérifier qu'il est dans le périmètre
+        if (isset($fields['parent_id']) && $fields['parent_id'] !== null) {
+            if (!$this->scope->canManageUnit($user, $fields['parent_id'])) {
+                return $this->json(['error' => "L'unité parente est hors de votre périmètre"], 403);
+            }
+        } elseif (!$user->isSysAdmin()) {
+            // Créer une unité sans parent (racine) est réservé aux sysadmin
+            return $this->json(['error' => 'Seul un administrateur système peut créer une unité racine'], 403);
+        }
+
         $err = $this->validate($fields);
         if ($err) {
             return $this->json(['error' => $err], 400);
         }
 
         [$cols, $vals, $phs] = $this->buildInsert($fields);
-
         $this->db->executeStatement("INSERT INTO unites ($cols) VALUES ($phs)", $vals);
+
         $id  = $this->db->lastInsertId();
-        $row = $this->db->fetchAssociative('SELECT * FROM unites WHERE id = :id', ['id' => $id]);
+        $row = $this->db->fetchAssociative(
+            'SELECT u.*, n.nom AS niveau_nom, n.ordre AS niveau_ordre
+             FROM unites u LEFT JOIN niveaux n ON n.id = u.niveau_id
+             WHERE u.id = :id',
+            ['id' => $id]
+        );
 
         return $this->json($this->formatRow($row), 201);
     }
@@ -88,11 +125,25 @@ class UniteController extends AbstractController
             return $this->json(['error' => 'Accès réservé aux gestionnaires'], 403);
         }
 
+        if (!$this->scope->canManageUnit($user, $id)) {
+            return $this->json(['error' => 'Cette unité est hors de votre périmètre'], 403);
+        }
+
         $data   = json_decode($request->getContent(), true) ?? [];
         $fields = $this->extract($data);
 
         if (empty($fields)) {
             return $this->json(['error' => 'Aucun champ à mettre à jour'], 400);
+        }
+
+        // Vérifier le nouveau parent s'il change
+        if (array_key_exists('parent_id', $fields) && $fields['parent_id'] !== null) {
+            if ($fields['parent_id'] === $id) {
+                return $this->json(['error' => 'Une unité ne peut pas être son propre parent'], 400);
+            }
+            if (!$this->scope->canManageUnit($user, $fields['parent_id'])) {
+                return $this->json(['error' => "L'unité parente est hors de votre périmètre"], 403);
+            }
         }
 
         $err = $this->validate($fields);
@@ -106,11 +157,11 @@ class UniteController extends AbstractController
 
         foreach ($fields as $k => $v) {
             if ($k === 'Salons') {
-                $sets[]       = "\"Salons\" = :p$i";
-                $vals["p$i"] = $this->arrayToPg($v);
+                $sets[]       = '"Salons" = :p' . $i;
+                $vals['p' . $i] = $this->arrayToPg($v);
             } else {
                 $sets[]       = "\"$k\" = :p$i";
-                $vals["p$i"] = $v;
+                $vals['p' . $i] = $v;
             }
             $i++;
         }
@@ -124,7 +175,12 @@ class UniteController extends AbstractController
             return $this->json(['error' => 'Unité introuvable'], 404);
         }
 
-        $row = $this->db->fetchAssociative('SELECT * FROM unites WHERE id = :id', ['id' => $id]);
+        $row = $this->db->fetchAssociative(
+            'SELECT u.*, n.nom AS niveau_nom, n.ordre AS niveau_ordre
+             FROM unites u LEFT JOIN niveaux n ON n.id = u.niveau_id
+             WHERE u.id = :id',
+            ['id' => $id]
+        );
 
         return $this->json($this->formatRow($row));
     }
@@ -136,6 +192,18 @@ class UniteController extends AbstractController
         $user = $this->getUser();
         if (!$this->roles->canAdmin($user)) {
             return $this->json(['error' => 'Accès réservé aux administrateurs'], 403);
+        }
+
+        if (!$this->scope->canManageUnit($user, $id)) {
+            return $this->json(['error' => 'Cette unité est hors de votre périmètre'], 403);
+        }
+
+        $children = (int) $this->db->fetchOne(
+            'SELECT COUNT(*) FROM unites WHERE parent_id = :id',
+            ['id' => $id]
+        );
+        if ($children > 0) {
+            return $this->json(['error' => "Impossible de supprimer une unité qui a $children unité(s) subordonnée(s)"], 409);
         }
 
         $count = $this->db->executeStatement('DELETE FROM unites WHERE id = :id', ['id' => $id]);
@@ -162,6 +230,23 @@ class UniteController extends AbstractController
             return $this->json(['error' => 'Aucun id fourni'], 400);
         }
 
+        // Vérifier le périmètre pour chaque ID
+        foreach ($ids as $uniteId) {
+            if (!$this->scope->canManageUnit($user, $uniteId)) {
+                return $this->json(['error' => "L'unité $uniteId est hors de votre périmètre"], 403);
+            }
+        }
+
+        // Vérifier qu'aucune n'a d'enfants
+        $pgIds    = $this->scope->toPgIntArray($ids);
+        $children = (int) $this->db->fetchOne(
+            'SELECT COUNT(*) FROM unites WHERE parent_id = ANY(:ids::int[]) AND id != ALL(:ids::int[])',
+            ['ids' => $pgIds]
+        );
+        if ($children > 0) {
+            return $this->json(['error' => 'Une ou plusieurs unités sélectionnées ont des unités subordonnées'], 409);
+        }
+
         $placeholders = implode(',', array_map(fn($i) => ":id$i", array_keys($ids)));
         $params       = [];
         foreach ($ids as $i => $id) {
@@ -176,6 +261,8 @@ class UniteController extends AbstractController
         return $this->json(['deleted' => $deleted]);
     }
 
+    // ── Helpers ────────────────────────────────────────────────────────────
+
     private function extract(array $data): array
     {
         $fields = [];
@@ -183,8 +270,13 @@ class UniteController extends AbstractController
             if (!array_key_exists($k, $data)) {
                 continue;
             }
-            $fields[$k] = $k === 'Salons' ? $this->toIntArray($data[$k]) : $data[$k];
+            $fields[$k] = match ($k) {
+                'Salons'                  => $this->toIntArray($data[$k]),
+                'bot_id', 'parent_id', 'niveau_id' => ($data[$k] !== null && $data[$k] !== '') ? (int) $data[$k] : null,
+                default                   => $data[$k],
+            };
         }
+
         return $fields;
     }
 
@@ -195,6 +287,10 @@ class UniteController extends AbstractController
                 return sprintf('Le champ "%s" dépasse la limite de %d caractères', $k, $limit);
             }
         }
+        if (isset($fields['type']) && !in_array($fields['type'], ['reel', 'virtuel'], true)) {
+            return 'Le type doit être "reel" ou "virtuel"';
+        }
+
         return null;
     }
 
@@ -210,6 +306,7 @@ class UniteController extends AbstractController
                 fn($n) => $n !== 0
             ));
         }
+
         return [];
     }
 
@@ -238,15 +335,17 @@ class UniteController extends AbstractController
     private function formatRow(array $row): array
     {
         $s = $row['Salons'] ?? '{}';
-        if (is_string($s)) {
-            $row['Salons'] = $s === '{}' || $s === '' ? [] : array_map('intval', explode(',', trim($s, '{}')));
-        } else {
-            $row['Salons'] = array_map('intval', (array) $s);
-        }
-        // Ne jamais exposer les tokens
+        $row['Salons'] = is_string($s)
+            ? ($s === '{}' || $s === '' ? [] : array_map('intval', explode(',', trim($s, '{}'))))
+            : array_map('intval', (array) $s);
+
+        $row['bot_id']    = isset($row['bot_id'])    ? (int) $row['bot_id']    : null;
+        $row['parent_id'] = isset($row['parent_id']) ? (int) $row['parent_id'] : null;
+        $row['niveau_id'] = isset($row['niveau_id']) ? (int) $row['niveau_id'] : null;
+        $row['type']      = $row['type'] ?? 'virtuel';
+
         unset($row['bot_access_token']);
-        // bot_id peut être null ou int
-        $row['bot_id'] = isset($row['bot_id']) && $row['bot_id'] !== null ? (int) $row['bot_id'] : null;
+
         return $row;
     }
 }

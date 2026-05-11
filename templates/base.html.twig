@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Gestion Personnel Tchap{% endblock %}</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c9a84c' stroke-width='2'><path d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/></svg>">
-    <link rel="stylesheet" href="{{ asset('assets/app.css') }}?v=20260507f">
+    <link rel="stylesheet" href="{{ asset('assets/app.css') }}?v=20260511a">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous">
     {% block head_extra %}{% endblock %}
 </head>
@@ -55,6 +55,12 @@
             <a href="{{ path('app_carto') }}" class="nav-btn {% if app.request.attributes.get('_route') starts with 'app_carto' %}active{% endif %}">
                 <i class="fa-solid fa-map-location-dot"></i>
                 <span class="nav-label">Carto</span>
+            </a>
+            {% endif %}
+            {% if permissions.canAdmin %}
+            <a href="{{ path('app_hierarchie') }}" class="nav-btn {% if app.request.attributes.get('_route') starts with 'app_hierarchie' %}active{% endif %}">
+                <i class="fa-solid fa-diagram-project"></i>
+                <span class="nav-label">Hiérarchie</span>
             </a>
             {% endif %}
             {% if permissions.isSysAdmin %}
@@ -121,6 +127,11 @@
         {% if permissions.canCrise %}
         <a href="{{ path('app_crise') }}" class="nav-btn crisis {% if app.request.attributes.get('_route') starts with 'app_crise' %}active{% endif %}">
             <i class="fa-solid fa-triangle-exclamation"></i><span>Crise</span>
+        </a>
+        {% endif %}
+        {% if permissions.canAdmin %}
+        <a href="{{ path('app_hierarchie') }}" class="nav-btn {% if app.request.attributes.get('_route') starts with 'app_hierarchie' %}active{% endif %}">
+            <i class="fa-solid fa-diagram-project"></i><span>Hiérarchie</span>
         </a>
         {% endif %}
         {% if permissions.isSysAdmin %}
@@ -200,7 +211,7 @@ window.UI_CONFIG    = {{ uiConfig|json_encode|raw }};
 </script>
 
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js"></script>
-<script src="{{ asset('assets/app.js') }}?v=20260507f"></script>
+<script src="{{ asset('assets/app.js') }}?v=20260511a"></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

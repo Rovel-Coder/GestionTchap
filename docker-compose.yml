@@ -31,7 +31,7 @@ services:
       TCHAP_SERVICE_URL: http://tchap-bridge:3000
       TCHAP_SERVICE_KEY: ${TCHAP_SERVICE_KEY:-dev-api-key-shared}
     command: >
-      sh -c "php bin/console app:seed-sysadmin && php-fpm"
+      sh -c "php bin/console app:db:migrate && php bin/console app:seed-sysadmin && php-fpm"
     depends_on:
       postgres:
         condition: service_healthy

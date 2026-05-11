@@ -1084,6 +1084,7 @@ function salonView() {
 function uniteView() {
   return {
     unites:     [],
+    niveaux:    [],
     salons:     [],
     personnel:  [],
     loading:    true,
@@ -1128,11 +1129,12 @@ function uniteView() {
     async load() {
       this.loading = true;
       try {
-        const [u, s, p, b] = await Promise.all([apiFetch('/api/unites'), apiFetch('/api/salons'), apiFetch('/api/personnel'), apiFetch('/api/bots').catch(() => [])]);
+        const [u, s, p, b, n] = await Promise.all([apiFetch('/api/unites'), apiFetch('/api/salons'), apiFetch('/api/personnel'), apiFetch('/api/bots').catch(() => []), apiFetch('/api/niveaux').catch(() => [])]);
         this.unites    = (u || []).map(unite => ({ ...unite, _syncing: false }));
         this.salons    = s || [];
         this.personnel = p || [];
         this.bots      = b || [];
+        this.niveaux   = n || [];
       } catch (e) {
         toast(e.message, 'error');
       }
@@ -1307,7 +1309,7 @@ function uniteView() {
       this.modalError = null;
       this.form = unite
         ? { ...unite, Salons: [...(unite.Salons || [])], _salonSearch: '' }
-        : { Nom: '', code: '', Salons: [], _salonSearch: '' };
+        : { Nom: '', code: '', Salons: [], _salonSearch: '', parent_id: null, niveau_id: null, type: 'virtuel' };
       this.modalOpen = true;
     },
 
@@ -1396,12 +1398,15 @@ function uniteView() {
       this.salonSearch = '';
       this.quickSalon  = { Nom: '', Type: 'operationnel', Description: '' };
       this.detailForm  = {
-        Nom:     unite.Nom     || '',
-        code:    unite.code    || '',
-        numero:  unite.numero  || '',
-        adresse: unite.adresse || '',
-        bot_id:  unite.bot_id  ?? null,
-        Salons:  [...(unite.Salons || [])],
+        Nom:       unite.Nom       || '',
+        code:      unite.code      || '',
+        numero:    unite.numero    || '',
+        adresse:   unite.adresse   || '',
+        bot_id:    unite.bot_id    ?? null,
+        parent_id: unite.parent_id ?? null,
+        niveau_id: unite.niveau_id ?? null,
+        type:      unite.type      || 'virtuel',
+        Salons:    [...(unite.Salons || [])],
       };
       this.detailOpen = true;
     },
@@ -1415,11 +1420,14 @@ function uniteView() {
         const updated = await apiFetch(`/api/unites/${this.detailUnite.id}`, {
           method: 'PATCH',
           body: JSON.stringify({
-            Nom:         this.detailForm.Nom,
-            code:        this.detailForm.code,
-            numero:      this.detailForm.numero,
-            adresse:     this.detailForm.adresse,
-            bot_user_id: this.detailForm.bot_user_id,
+            Nom:       this.detailForm.Nom,
+            code:      this.detailForm.code,
+            numero:    this.detailForm.numero,
+            adresse:   this.detailForm.adresse,
+            bot_id:    this.detailForm.bot_id,
+            parent_id: this.detailForm.parent_id,
+            niveau_id: this.detailForm.niveau_id,
+            type:      this.detailForm.type,
           }),
         });
         const idx = this.unites.findIndex(u => u.id === this.detailUnite.id);
@@ -2517,6 +2525,282 @@ function cartoView() {
   };
 }
 
+// ── Vue Hiérarchie ─────────────────────────────────────────
+function hierarchieView() {
+  return {
+    niveaux:      [],
+    unites:       [],
+    personnel:    [],
+    loading:      true,
+    search:       '',
+    collapsedMap: {},   // { [uniteId]: true }
+    selected:     null, // unité sélectionnée
+    admins:       [],   // unite_roles de l'unité sélectionnée
+    loadingAdmins: false,
+
+    // ── Modale création/édition d'unité
+    modalOpen:  false,
+    modalMode:  'create',
+    modalError: null,
+    saving:     false,
+    form:       {},
+
+    // ── Modale gestion des niveaux (sysadmin)
+    niveauxOpen:  false,
+    niveauxForm:  { nom: '', slug: '', ordre: 1 },
+    niveauxError: null,
+    niveauxSaving: false,
+
+    // ── Modale ajout d'admin
+    addAdminOpen:  false,
+    addAdminForm:  { personnel_id: null, role: 'gestionnaire' },
+    addAdminError: null,
+    addAdminSearch: '',
+
+    async init() {
+      this.loading = true;
+      try {
+        const [n, u, p] = await Promise.all([
+          apiFetch('/api/niveaux'),
+          apiFetch('/api/unites'),
+          apiFetch('/api/personnel'),
+        ]);
+        this.niveaux   = n || [];
+        this.unites    = u || [];
+        this.personnel = p || [];
+      } catch (e) { toast(e.message, 'error'); }
+      this.loading = false;
+    },
+
+    // ── Arbre ──────────────────────────────────────────────
+    buildTree(search) {
+      const q = search ? search.toLowerCase() : '';
+      let source = this.unites;
+      if (q) {
+        const matchIds = new Set(source.filter(u =>
+          u.Nom.toLowerCase().includes(q) || (u.code || '').toLowerCase().includes(q)
+        ).map(u => u.id));
+        // inclure les ancêtres des matches
+        const withAncestors = new Set(matchIds);
+        const addAncestors = id => {
+          const u = source.find(x => x.id === id);
+          if (u && u.parent_id && !withAncestors.has(u.parent_id)) {
+            withAncestors.add(u.parent_id);
+            addAncestors(u.parent_id);
+          }
+        };
+        matchIds.forEach(id => addAncestors(id));
+        source = source.filter(u => withAncestors.has(u.id));
+      }
+
+      const byParent = {};
+      source.forEach(u => {
+        const pid = u.parent_id ?? -1;
+        (byParent[pid] = byParent[pid] || []).push(u);
+      });
+      Object.values(byParent).forEach(arr =>
+        arr.sort((a, b) => (a.niveau_ordre ?? 999) - (b.niveau_ordre ?? 999) || a.Nom.localeCompare(b.Nom))
+      );
+      const result = [];
+      const walk = (pid, depth) => {
+        (byParent[pid] || []).forEach(u => {
+          const hasChildren = (byParent[u.id] || []).length > 0;
+          result.push({ ...u, _depth: depth, _hasChildren: hasChildren });
+          if (!this.collapsedMap[u.id]) walk(u.id, depth + 1);
+        });
+      };
+      walk(-1, 0);
+      return result;
+    },
+
+    get tree() { return this.buildTree(this.search); },
+
+    toggleCollapse(id) {
+      this.collapsedMap = { ...this.collapsedMap, [id]: !this.collapsedMap[id] };
+    },
+
+    niveauLabel(niveauId) {
+      return this.niveaux.find(n => n.id === Number(niveauId))?.nom ?? '—';
+    },
+
+    niveauColor(niveauId) {
+      const ordre = this.niveaux.find(n => n.id === Number(niveauId))?.ordre ?? 0;
+      const colors = ['#c9a84c', '#2d6cdf', '#6ec38a', '#e07b54', '#a78bfa', '#f472b6'];
+      return colors[(ordre - 1) % colors.length] || '#8888aa';
+    },
+
+    parentLabel(parentId) {
+      if (!parentId) return '— (racine)';
+      return this.unites.find(u => u.id === Number(parentId))?.Nom ?? `#${parentId}`;
+    },
+
+    childCount(id) {
+      return this.unites.filter(u => u.parent_id === id).length;
+    },
+
+    agentCount(uniteId) {
+      return this.personnel.filter(a =>
+        (a.Unite || []).includes(Number(uniteId))
+      ).length;
+    },
+
+    // ── Sélection d'une unité ──────────────────────────────
+    async selectUnite(unite) {
+      if (this.selected?.id === unite.id) { this.selected = null; return; }
+      this.selected = unite;
+      this.admins = [];
+      this.loadingAdmins = true;
+      try {
+        this.admins = await apiFetch(`/api/unites/${unite.id}/admins`);
+      } catch (e) { toast(e.message, 'error'); }
+      this.loadingAdmins = false;
+    },
+
+    // ── Modale Créer/Éditer ────────────────────────────────
+    openCreate(parentId = null) {
+      const parent    = parentId ? this.unites.find(u => u.id === parentId) : null;
+      const parentNiv = parent ? this.niveaux.find(n => n.id === parent.niveau_id) : null;
+      const nextNiv   = parentNiv ? this.niveaux.find(n => n.ordre === parentNiv.ordre + 1) : this.niveaux[0];
+      this.form = {
+        Nom: '', code: '', numero: '', adresse: '',
+        parent_id: parentId,
+        niveau_id: nextNiv?.id ?? null,
+        type: 'reel',
+        bot_id: null,
+        Salons: [],
+      };
+      this.modalMode  = 'create';
+      this.modalError = null;
+      this.modalOpen  = true;
+    },
+
+    openEdit(unite) {
+      this.form = {
+        id:        unite.id,
+        Nom:       unite.Nom       || '',
+        code:      unite.code      || '',
+        numero:    unite.numero    || '',
+        adresse:   unite.adresse   || '',
+        parent_id: unite.parent_id ?? null,
+        niveau_id: unite.niveau_id ?? null,
+        type:      unite.type      || 'virtuel',
+        bot_id:    unite.bot_id    ?? null,
+        Salons:    [...(unite.Salons || [])],
+      };
+      this.modalMode  = 'edit';
+      this.modalError = null;
+      this.modalOpen  = true;
+    },
+
+    async saveModal() {
+      this.saving = true;
+      this.modalError = null;
+      try {
+        const url    = this.modalMode === 'create' ? '/api/unites' : `/api/unites/${this.form.id}`;
+        const method = this.modalMode === 'create' ? 'POST' : 'PATCH';
+        await apiFetch(url, { method, body: JSON.stringify(this.form) });
+        toast(this.modalMode === 'create' ? 'Unité créée' : 'Unité mise à jour', 'success');
+        this.modalOpen = false;
+        const [u, n] = await Promise.all([apiFetch('/api/unites'), apiFetch('/api/niveaux')]);
+        this.unites  = u || [];
+        this.niveaux = n || [];
+        if (this.selected) this.selected = this.unites.find(u => u.id === this.selected.id) ?? null;
+      } catch (e) { this.modalError = e.message; }
+      this.saving = false;
+    },
+
+    async deleteSelected() {
+      if (!this.selected) return;
+      if (!confirm(`Supprimer l'unité « ${this.selected.Nom} » ?`)) return;
+      try {
+        await apiFetch(`/api/unites/${this.selected.id}`, { method: 'DELETE' });
+        toast('Unité supprimée', 'success');
+        this.selected = null;
+        this.unites = await apiFetch('/api/unites');
+      } catch (e) { toast(e.message, 'error'); }
+    },
+
+    // ── Gestion des admins ─────────────────────────────────
+    get filteredPersonnelForAdmin() {
+      const q = this.addAdminSearch.toLowerCase();
+      const alreadyIds = new Set(this.admins.map(a => a.personnel_id));
+      return this.personnel
+        .filter(p => !alreadyIds.has(p.id))
+        .filter(p => !q ||
+          (p.Nom || '').toLowerCase().includes(q) ||
+          (p.Prenom || '').toLowerCase().includes(q) ||
+          (p.Mail || '').toLowerCase().includes(q)
+        )
+        .slice(0, 20);
+    },
+
+    async addAdmin() {
+      if (!this.selected || !this.addAdminForm.personnel_id) return;
+      this.addAdminError = null;
+      this.addAdminSaving = true;
+      try {
+        await apiFetch(`/api/personnel/${this.addAdminForm.personnel_id}/unite-roles`, {
+          method: 'POST',
+          body: JSON.stringify({ unite_id: this.selected.id, role: this.addAdminForm.role }),
+        });
+        this.admins = await apiFetch(`/api/unites/${this.selected.id}/admins`);
+        this.addAdminOpen = false;
+        this.addAdminForm = { personnel_id: null, role: 'gestionnaire' };
+        this.addAdminSearch = '';
+        toast('Administrateur ajouté', 'success');
+      } catch (e) { this.addAdminError = e.message; }
+      this.addAdminSaving = false;
+    },
+
+    async removeAdmin(admin) {
+      if (!confirm(`Retirer le rôle de ${admin.Prenom} ${admin.Nom} sur cette unité ?`)) return;
+      try {
+        await apiFetch(`/api/personnel/${admin.personnel_id}/unite-roles/${this.selected.id}`, { method: 'DELETE' });
+        this.admins = this.admins.filter(a => a.id !== admin.id);
+        toast('Rôle retiré', 'success');
+      } catch (e) { toast(e.message, 'error'); }
+    },
+
+    // ── Gestion des niveaux (sysadmin) ─────────────────────
+    async saveNiveau(niveauId) {
+      const niv = this.niveaux.find(n => n.id === niveauId);
+      if (!niv) return;
+      try {
+        await apiFetch(`/api/niveaux/${niveauId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ nom: niv.nom, ordre: niv.ordre }),
+        });
+        toast('Niveau mis à jour', 'success');
+      } catch (e) { toast(e.message, 'error'); }
+    },
+
+    async createNiveau() {
+      this.niveauxError = null;
+      this.niveauxSaving = true;
+      try {
+        const n = await apiFetch('/api/niveaux', {
+          method: 'POST',
+          body: JSON.stringify(this.niveauxForm),
+        });
+        this.niveaux.push(n);
+        this.niveaux.sort((a, b) => a.ordre - b.ordre);
+        this.niveauxForm  = { nom: '', slug: '', ordre: (this.niveaux[this.niveaux.length - 1]?.ordre ?? 0) + 1 };
+        toast('Niveau créé', 'success');
+      } catch (e) { this.niveauxError = e.message; }
+      this.niveauxSaving = false;
+    },
+
+    async deleteNiveau(id) {
+      if (!confirm('Supprimer ce niveau ?')) return;
+      try {
+        await apiFetch(`/api/niveaux/${id}`, { method: 'DELETE' });
+        this.niveaux = this.niveaux.filter(n => n.id !== id);
+        toast('Niveau supprimé', 'success');
+      } catch (e) { toast(e.message, 'error'); }
+    },
+  };
+}
+
 // ── Enregistrement Alpine ──────────────────────────────────
 document.addEventListener('alpine:init', () => {
   Alpine.data('appRoot',        appRoot);
@@ -2528,4 +2812,5 @@ document.addEventListener('alpine:init', () => {
   Alpine.data('criseView',      criseView);
   Alpine.data('suiviCriseView', suiviCriseView);
   Alpine.data('cartoView',      cartoView);
+  Alpine.data('hierarchieView', hierarchieView);
 });

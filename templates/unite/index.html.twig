@@ -138,6 +138,31 @@
                         <input type="text" x-model="form.Nom" maxlength="200">
                     </div>
                     <div class="form-group">
+                        <label>Niveau hiérarchique</label>
+                        <select x-model.number="form.niveau_id">
+                            <option :value="null">— Non défini —</option>
+                            <template x-for="n in niveaux" :key="n.id">
+                                <option :value="n.id" x-text="n.nom"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Type</label>
+                        <select x-model="form.type">
+                            <option value="reel">Réelle</option>
+                            <option value="virtuel">Virtuelle</option>
+                        </select>
+                    </div>
+                    <div class="form-group form-full">
+                        <label>Unité parente</label>
+                        <select x-model.number="form.parent_id">
+                            <option :value="null">— Aucune (racine) —</option>
+                            <template x-for="u in unites" :key="u.id">
+                                <option :value="u.id" x-text="u.Nom + (u.code ? ' (' + u.code + ')' : '')"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div class="form-group">
                         <label>Code</label>
                         <input type="text" x-model="form.code" maxlength="50">
                     </div>
@@ -462,6 +487,31 @@
                     <div class="form-group form-full">
                         <label>Nom *</label>
                         <input type="text" x-model="detailForm.Nom" maxlength="200">
+                    </div>
+                    <div class="form-group">
+                        <label>Niveau hiérarchique</label>
+                        <select x-model.number="detailForm.niveau_id">
+                            <option :value="null">— Non défini —</option>
+                            <template x-for="n in niveaux" :key="n.id">
+                                <option :value="n.id" x-text="n.nom"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Type</label>
+                        <select x-model="detailForm.type">
+                            <option value="reel">Réelle</option>
+                            <option value="virtuel">Virtuelle</option>
+                        </select>
+                    </div>
+                    <div class="form-group form-full">
+                        <label>Unité parente</label>
+                        <select x-model.number="detailForm.parent_id">
+                            <option :value="null">— Aucune (racine) —</option>
+                            <template x-for="u in unites.filter(u => u.id !== detailUnite.id)" :key="u.id">
+                                <option :value="u.id" x-text="u.Nom + (u.code ? ' (' + u.code + ')' : '')"></option>
+                            </template>
+                        </select>
                     </div>
                     <div class="form-group">
                         <label>Code</label>

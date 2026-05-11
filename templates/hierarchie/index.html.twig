@@ -1,0 +1,385 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Hiérarchie — Gestion Tchap{% endblock %}
+
+{% block content %}
+<div class="view" x-data="hierarchieView()" x-init="init()">
+
+    {# ── Toolbar ── #}
+    <div class="view-toolbar">
+        <div class="toolbar-left">
+            <span class="view-title">HIÉRARCHIE</span>
+            <span class="badge" x-text="unites.length + ' unité' + (unites.length > 1 ? 's' : '')"></span>
+        </div>
+        <div class="toolbar-right">
+            <div class="search-box">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" :value="search" @input="search = $event.target.value" placeholder="Rechercher…" autocomplete="off" spellcheck="false">
+            </div>
+            {% if permissions.isSysAdmin %}
+            <button class="btn-ghost" @click="niveauxOpen = true">
+                <i class="fa-solid fa-layer-group"></i>
+                <span>Niveaux</span>
+            </button>
+            {% endif %}
+            {% if permissions.canAdmin %}
+            <button class="btn-primary" @click="openCreate()">
+                <i class="fa-solid fa-plus"></i> Créer une unité
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    {# ── Légende des niveaux ── #}
+    <div x-show="!loading && niveaux.length > 0" style="display:flex;flex-wrap:wrap;gap:8px;padding:0 0 14px;border-bottom:1px solid var(--border);margin-bottom:16px;">
+        <template x-for="n in niveaux" :key="n.id">
+            <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 10px;border-radius:999px;border:1px solid var(--border);">
+                <span style="width:8px;height:8px;border-radius:50%;flex-shrink:0;"
+                    :style="'background:' + niveauColor(n.id)"></span>
+                <span x-text="n.nom"></span>
+            </span>
+        </template>
+    </div>
+
+    {# ── Spinner ── #}
+    <div x-show="loading" style="flex:1;display:flex;align-items:center;justify-content:center;">
+        <div class="spinner"></div>
+    </div>
+
+    {# ── Layout deux colonnes ── #}
+    <div x-show="!loading" style="display:flex;gap:16px;flex:1;min-height:0;overflow:hidden;">
+
+        {# ── Colonne gauche : arbre ── #}
+        <div style="flex:1;min-width:0;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-card);">
+            <div x-show="tree.length === 0" class="empty-state">
+                Aucune unité trouvée
+            </div>
+            <template x-for="u in tree" :key="u.id">
+                <div class="hier-row"
+                    :class="{ 'hier-row-selected': selected && selected.id === u.id }"
+                    :style="'padding-left:' + (16 + u._depth * 24) + 'px'"
+                    @click="selectUnite(u)">
+
+                    {# Toggle collapse #}
+                    <span class="hier-toggle" @click.stop="toggleCollapse(u.id)" :style="u._hasChildren ? '' : 'visibility:hidden'">
+                        <i class="fa-solid" :class="collapsedMap[u.id] ? 'fa-chevron-right' : 'fa-chevron-down'"
+                            style="font-size:10px;color:var(--text-muted);"></i>
+                    </span>
+
+                    {# Pastille niveau #}
+                    <span class="hier-dot" :style="'background:' + niveauColor(u.niveau_id)"></span>
+
+                    {# Nom #}
+                    <span class="hier-nom" x-text="u.Nom"></span>
+
+                    {# Code #}
+                    <span x-show="u.code" class="hier-code" x-text="u.code"></span>
+
+                    {# Type badge #}
+                    <span x-show="u.type === 'virtuel'" class="hier-type-badge">virtuel</span>
+
+                    {# Actions #}
+                    <div class="hier-actions" @click.stop>
+                        <button class="btn-icon" @click="openCreate(u.id)" title="Ajouter une unité subordonnée">
+                            <i class="fa-solid fa-plus" style="font-size:10px;"></i>
+                        </button>
+                        {% if permissions.canAdmin %}
+                        <button class="btn-icon" @click="openEdit(u)" title="Modifier">
+                            <i class="fa-solid fa-pen" style="font-size:10px;"></i>
+                        </button>
+                        {% endif %}
+                    </div>
+
+                </div>
+            </template>
+        </div>
+
+        {# ── Colonne droite : panneau détail ── #}
+        <div style="width:360px;flex-shrink:0;overflow-y:auto;">
+
+            {# État vide #}
+            <div x-show="!selected" style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-muted);gap:10px;border:1px dashed var(--border);border-radius:var(--radius);padding:40px;">
+                <i class="fa-solid fa-sitemap" style="font-size:28px;opacity:.3;"></i>
+                <span style="font-size:13px;">Sélectionnez une unité</span>
+            </div>
+
+            {# Panneau unité sélectionnée #}
+            <div x-show="selected" style="display:flex;flex-direction:column;gap:12px;">
+
+                {# En-tête #}
+                <div style="border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-card);padding:16px;">
+                    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+                        <div>
+                            <div style="font-size:16px;font-weight:700;color:var(--text-primary);" x-text="selected?.Nom"></div>
+                            <div style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap;">
+                                <span style="font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;border:1px solid var(--border);"
+                                    :style="'color:' + niveauColor(selected?.niveau_id)"
+                                    x-text="niveauLabel(selected?.niveau_id)"></span>
+                                <span x-show="selected?.type === 'virtuel'" style="font-size:11px;color:var(--text-muted);font-style:italic;">virtuel</span>
+                                <span x-show="selected?.code" style="font-size:12px;color:var(--text-muted);font-family:monospace;" x-text="selected?.code"></span>
+                            </div>
+                            <div x-show="selected?.parent_id" style="font-size:11px;color:var(--text-muted);margin-top:4px;">
+                                <i class="fa-solid fa-arrow-up" style="font-size:9px;"></i>
+                                <span x-text="parentLabel(selected?.parent_id)"></span>
+                            </div>
+                        </div>
+                        <div style="display:flex;gap:6px;flex-shrink:0;">
+                            {% if permissions.canAdmin %}
+                            <button class="btn-icon" @click="openEdit(selected)" title="Modifier">
+                                <i class="fa-solid fa-pen"></i>
+                            </button>
+                            <button class="btn-icon" @click="deleteSelected()" title="Supprimer" style="color:var(--red-light);">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {# Stats #}
+                    <div style="display:flex;gap:16px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+                        <div style="text-align:center;">
+                            <div style="font-size:18px;font-weight:700;color:var(--text-primary);" x-text="childCount(selected?.id)"></div>
+                            <div style="font-size:10px;color:var(--text-muted);">Subordonnées</div>
+                        </div>
+                        <div style="text-align:center;">
+                            <div style="font-size:18px;font-weight:700;color:var(--text-primary);" x-text="agentCount(selected?.id)"></div>
+                            <div style="font-size:10px;color:var(--text-muted);">Agents</div>
+                        </div>
+                        <div style="text-align:center;">
+                            <div style="font-size:18px;font-weight:700;color:var(--text-primary);" x-text="(selected?.Salons || []).length"></div>
+                            <div style="font-size:10px;color:var(--text-muted);">Salons</div>
+                        </div>
+                    </div>
+                </div>
+
+                {# Administrateurs de l'unité #}
+                <div style="border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-card);overflow:hidden;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);">
+                        <span style="font-family:var(--font-display);font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--text-muted);">ADMINISTRATEURS</span>
+                        <button class="btn-ghost" style="padding:3px 10px;font-size:11px;"
+                            @click="addAdminOpen = true; addAdminForm = { personnel_id: null, role: 'gestionnaire' }; addAdminSearch = '';">
+                            <i class="fa-solid fa-plus" style="font-size:10px;"></i> Ajouter
+                        </button>
+                    </div>
+
+                    <div x-show="loadingAdmins" style="padding:20px;text-align:center;">
+                        <div class="spinner" style="width:20px;height:20px;"></div>
+                    </div>
+
+                    <div x-show="!loadingAdmins && admins.length === 0"
+                        style="padding:16px;font-size:12px;color:var(--text-muted);text-align:center;">
+                        Aucun administrateur défini
+                    </div>
+
+                    <template x-for="admin in admins" :key="admin.id">
+                        <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border);">
+                            <div style="width:30px;height:30px;border-radius:50%;background:var(--bg-elevated);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--gold);flex-shrink:0;"
+                                x-text="(admin.Prenom?.[0] || '') + (admin.Nom?.[0] || '')"></div>
+                            <div style="flex:1;min-width:0;">
+                                <div style="font-size:13px;font-weight:600;" x-text="admin.Prenom + ' ' + admin.Nom"></div>
+                                <div style="font-size:11px;color:var(--text-muted);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" x-text="admin.Mail || admin.Grade || ''"></div>
+                            </div>
+                            <span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:999px;text-transform:uppercase;"
+                                :style="admin.role === 'admin' ? 'background:rgba(201,168,76,.15);color:var(--gold)' : 'background:rgba(45,108,223,.1);color:var(--blue-light)'"
+                                x-text="admin.role"></span>
+                            <button class="btn-icon" @click="removeAdmin(admin)" title="Retirer" style="color:var(--red-light);">
+                                <i class="fa-solid fa-xmark" style="font-size:11px;"></i>
+                            </button>
+                        </div>
+                    </template>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    {# ── Modal Créer / Modifier une unité ── #}
+    <div class="modal-overlay" x-show="modalOpen" x-cloak @click.self="modalOpen = false">
+        <div class="modal" style="max-width:620px;width:95vw;">
+            <div class="modal-header">
+                <h3 x-text="modalMode === 'create' ? 'Créer une unité' : 'Modifier l\'unité'"></h3>
+                <button class="btn-icon" @click="modalOpen = false"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div x-show="modalError" class="alert-error" x-text="modalError"></div>
+                <div class="form-grid">
+                    <div class="form-group form-full">
+                        <label>Nom *</label>
+                        <input type="text" x-model="form.Nom" maxlength="200" autofocus>
+                    </div>
+                    <div class="form-group">
+                        <label>Niveau hiérarchique</label>
+                        <select x-model.number="form.niveau_id">
+                            <option :value="null">— Non défini —</option>
+                            <template x-for="n in niveaux" :key="n.id">
+                                <option :value="n.id" x-text="n.nom"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Type</label>
+                        <select x-model="form.type">
+                            <option value="reel">Réelle (annuaire officiel)</option>
+                            <option value="virtuel">Virtuelle (événement / domaine)</option>
+                        </select>
+                    </div>
+                    <div class="form-group form-full">
+                        <label>Unité parente</label>
+                        <select x-model.number="form.parent_id">
+                            <option :value="null">— Aucune (racine) —</option>
+                            <template x-for="u in unites.filter(u => !form.id || u.id !== form.id)" :key="u.id">
+                                <option :value="u.id"
+                                    x-text="('　'.repeat(0)) + niveauLabel(u.niveau_id) + ' — ' + u.Nom"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Code</label>
+                        <input type="text" x-model="form.code" maxlength="50" placeholder="ex: RG-G7">
+                    </div>
+                    <div class="form-group">
+                        <label>Numéro d'unité</label>
+                        <input type="text" x-model="form.numero" maxlength="50" placeholder="ex: 98138">
+                    </div>
+                    <div class="form-group form-full">
+                        <label>Adresse</label>
+                        <textarea x-model="form.adresse" rows="2" maxlength="500"></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-ghost" @click="modalOpen = false">Annuler</button>
+                <button class="btn-primary" :disabled="saving || !form.Nom?.trim()" @click="saveModal()">
+                    <i x-show="saving" class="fa-solid fa-spinner fa-spin"></i>
+                    <span x-show="!saving" x-text="modalMode === 'create' ? 'Créer' : 'Enregistrer'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {# ── Modal Ajouter admin ── #}
+    <div class="modal-overlay" x-show="addAdminOpen" x-cloak @click.self="addAdminOpen = false">
+        <div class="modal modal-sm" style="max-width:480px;">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-user-shield" style="margin-right:8px;color:var(--gold);"></i> Ajouter un administrateur</h3>
+                <button class="btn-icon" @click="addAdminOpen = false"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div x-show="addAdminError" class="alert-error" x-text="addAdminError"></div>
+                <div class="form-group">
+                    <label>Rechercher un agent</label>
+                    <input type="text" x-model="addAdminSearch" placeholder="Nom, prénom, email…" autocomplete="off">
+                    <div x-show="addAdminSearch.length > 0" style="border:1px solid var(--border);border-radius:var(--radius-sm);margin-top:4px;max-height:180px;overflow-y:auto;">
+                        <div x-show="filteredPersonnelForAdmin.length === 0" style="padding:10px;font-size:12px;color:var(--text-muted);">Aucun résultat</div>
+                        <template x-for="p in filteredPersonnelForAdmin" :key="p.id">
+                            <div style="padding:8px 12px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);"
+                                :style="addAdminForm.personnel_id === p.id ? 'background:rgba(45,108,223,.1);' : ''"
+                                @click="addAdminForm.personnel_id = p.id; addAdminSearch = p.Prenom + ' ' + p.Nom;">
+                                <span style="font-weight:600;" x-text="p.Prenom + ' ' + p.Nom"></span>
+                                <span style="font-size:11px;color:var(--text-muted);" x-text="p.Grade || ''"></span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+                <div class="form-group" style="margin-top:12px;">
+                    <label>Rôle sur cette unité</label>
+                    <select x-model="addAdminForm.role">
+                        <option value="gestionnaire">Gestionnaire — gère les salons de cette unité</option>
+                        <option value="admin">Administrateur — gère cette unité et tout l'arbre en dessous</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-ghost" @click="addAdminOpen = false">Annuler</button>
+                <button class="btn-primary" :disabled="!addAdminForm.personnel_id || addAdminSaving" @click="addAdmin()">
+                    <i x-show="addAdminSaving" class="fa-solid fa-spinner fa-spin"></i>
+                    <span x-show="!addAdminSaving">Confirmer</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {# ── Modal Niveaux (sysadmin) ── #}
+    {% if permissions.isSysAdmin %}
+    <div class="modal-overlay" x-show="niveauxOpen" x-cloak @click.self="niveauxOpen = false">
+        <div class="modal" style="max-width:560px;width:95vw;">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-layer-group" style="margin-right:8px;color:var(--gold);"></i> Gestion des niveaux hiérarchiques</h3>
+                <button class="btn-icon" @click="niveauxOpen = false"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">
+                    Les niveaux définissent les échelons de la hiérarchie (National → Région → Groupement…).
+                </p>
+
+                {# Liste des niveaux existants #}
+                <div style="border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;margin-bottom:20px;">
+                    <div x-show="niveaux.length === 0" style="padding:16px;font-size:12px;color:var(--text-muted);text-align:center;">
+                        Aucun niveau défini
+                    </div>
+                    <template x-for="n in niveaux" :key="n.id">
+                        <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border);">
+                            <span class="hier-dot" :style="'background:' + niveauColor(n.id)"></span>
+                            <input type="text" :value="n.nom" @change="n.nom = $event.target.value"
+                                style="flex:1;background:transparent;border:none;color:var(--text-primary);font-size:13px;font-weight:600;outline:none;">
+                            <input type="number" :value="n.ordre" @change="n.ordre = parseInt($event.target.value)"
+                                style="width:52px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);font-size:12px;padding:2px 6px;text-align:center;">
+                            <button class="btn-ghost" style="padding:3px 10px;font-size:11px;" @click="saveNiveau(n.id)">
+                                <i class="fa-solid fa-floppy-disk"></i>
+                            </button>
+                            <button class="btn-icon" @click="deleteNiveau(n.id)" style="color:var(--red-light);">
+                                <i class="fa-solid fa-trash" style="font-size:10px;"></i>
+                            </button>
+                        </div>
+                    </template>
+                </div>
+
+                {# Créer un nouveau niveau #}
+                <div style="background:var(--bg-elevated);border-radius:var(--radius-sm);padding:14px;">
+                    <div style="font-family:var(--font-display);font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--text-muted);margin-bottom:10px;">AJOUTER UN NIVEAU</div>
+                    <div x-show="niveauxError" class="alert-error" style="margin-bottom:8px;" x-text="niveauxError"></div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <input type="text" x-model="niveauxForm.nom" placeholder="Nom (ex: Brigade)" style="flex:1;min-width:120px;font-size:13px;">
+                        <input type="text" x-model="niveauxForm.slug" placeholder="slug (ex: brigade)" style="width:130px;font-size:12px;font-family:monospace;">
+                        <input type="number" x-model.number="niveauxForm.ordre" placeholder="Ordre" style="width:70px;font-size:13px;" min="1">
+                        <button class="btn-primary" :disabled="!niveauxForm.nom || !niveauxForm.slug || niveauxSaving" @click="createNiveau()">
+                            <i x-show="niveauxSaving" class="fa-solid fa-spinner fa-spin"></i>
+                            <span x-show="!niveauxSaving">Ajouter</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-primary" @click="niveauxOpen = false">Fermer</button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}
+
+{% block head_extra %}
+<style>
+.hier-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-right: 12px;
+    padding-top: 7px;
+    padding-bottom: 7px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background .12s;
+}
+.hier-row:hover { background: var(--bg-hover); }
+.hier-row-selected { background: rgba(45,108,223,.08) !important; border-left: 2px solid var(--blue-light); }
+.hier-toggle { width: 18px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.hier-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.hier-nom { font-size: 13px; font-weight: 600; color: var(--text-primary); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hier-code { font-size: 11px; color: var(--text-muted); font-family: monospace; flex-shrink: 0; }
+.hier-type-badge { font-size: 10px; color: var(--text-muted); font-style: italic; border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; flex-shrink: 0; }
+.hier-actions { display: flex; gap: 2px; flex-shrink: 0; opacity: 0; transition: opacity .12s; }
+.hier-row:hover .hier-actions { opacity: 1; }
+</style>
+{% endblock %}
