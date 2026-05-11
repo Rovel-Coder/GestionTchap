@@ -2579,7 +2579,7 @@ function hierarchieView() {
       // N'afficher que les unités qui appartiennent à la hiérarchie :
       // celles avec un niveau ou un parent (les unités virtuelles plates sont exclues)
       let source = this.unites.filter(u => u.niveau_id != null || u.parent_id != null);
-      console.log('[rebuildTree] unites total:', this.unites.length, '| avec niveau/parent:', source.length, '| exemple:', source[0] ? JSON.stringify({id:source[0].id, nom:source[0].Nom, niveau_id:source[0].niveau_id}) : 'aucun');
+      console.log('[rebuildTree] q:', JSON.stringify(q), '| niv:', JSON.stringify(niv), '(type:', typeof niv, ')| source:', source.length, '| ex niveau_id:', source[0]?.niveau_id, '(type:', typeof source[0]?.niveau_id, ')');
 
       if (q || niv) {
         // eslint-disable-next-line eqeqeq
