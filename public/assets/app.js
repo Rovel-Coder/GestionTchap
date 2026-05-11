@@ -2537,8 +2537,15 @@ function hierarchieView() {
     collapsedMap:   {},
     filterNiveauId: null,
     selected:       null,
-    admins:       [],
-    loadingAdmins: false,
+    admins:            [],
+    loadingAdmins:     false,
+    uniteAdmins:       [],   // unités administratrices
+    loadingUniteAdmins: false,
+    addUniteAdminOpen:  false,
+    addUniteAdminForm:  { unite_source_id: null, role: 'gestionnaire' },
+    addUniteAdminSearch: '',
+    addUniteAdminSaving: false,
+    addUniteAdminError:  null,
 
     // ── Modale création/édition d'unité
     modalOpen:  false,
@@ -2661,10 +2668,56 @@ function hierarchieView() {
 
     async loadAdmins(uniteId) {
       this.loadingAdmins = true;
+      this.loadingUniteAdmins = true;
       try {
-        this.admins = await apiFetch(`/api/unites/${uniteId}/admins`);
+        [this.admins, this.uniteAdmins] = await Promise.all([
+          apiFetch(`/api/unites/${uniteId}/admins`),
+          apiFetch(`/api/unites/${uniteId}/unite-admins`),
+        ]);
       } catch (e) { toast(e.message, 'error'); }
       this.loadingAdmins = false;
+      this.loadingUniteAdmins = false;
+    },
+
+    // ── Gestion des unités administratrices ───────────────
+    get filteredUnitesForAdmin() {
+      const q = this.addUniteAdminSearch.toLowerCase();
+      const alreadyIds = new Set(this.uniteAdmins.map(a => a.unite_source));
+      const cibleId = this.selected?.id;
+      return this.unites
+        .filter(u => u.id !== cibleId && !alreadyIds.has(u.id))
+        .filter(u => !q || u.Nom.toLowerCase().includes(q) || (u.code || '').toLowerCase().includes(q))
+        .slice(0, 20);
+    },
+
+    async addUniteAdmin() {
+      if (!this.selected || !this.addUniteAdminForm.unite_source_id) return;
+      this.addUniteAdminError = null;
+      this.addUniteAdminSaving = true;
+      try {
+        await apiFetch(`/api/unites/${this.selected.id}/unite-admins`, {
+          method: 'POST',
+          body: JSON.stringify({
+            unite_source_id: this.addUniteAdminForm.unite_source_id,
+            role: this.addUniteAdminForm.role,
+          }),
+        });
+        this.uniteAdmins = await apiFetch(`/api/unites/${this.selected.id}/unite-admins`);
+        this.addUniteAdminOpen = false;
+        this.addUniteAdminForm = { unite_source_id: null, role: 'gestionnaire' };
+        this.addUniteAdminSearch = '';
+        toast('Unité administratrice ajoutée', 'success');
+      } catch (e) { this.addUniteAdminError = e.message; }
+      this.addUniteAdminSaving = false;
+    },
+
+    async removeUniteAdmin(entry) {
+      if (!confirm(`Retirer « ${entry.source_nom} » de l'administration de cette unité ?`)) return;
+      try {
+        await apiFetch(`/api/unites/${this.selected.id}/unite-admins/${entry.unite_source}`, { method: 'DELETE' });
+        this.uniteAdmins = this.uniteAdmins.filter(a => a.id !== entry.id);
+        toast('Association retirée', 'success');
+      } catch (e) { toast(e.message, 'error'); }
     },
 
     // ── Modale Créer/Éditer ────────────────────────────────

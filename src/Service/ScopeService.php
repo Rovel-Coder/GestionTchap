@@ -46,10 +46,20 @@ class ScopeService
 
         $rows = $this->db->fetchAllAssociative(
             'WITH RECURSIVE perimetre AS (
-                SELECT ur.unite_id AS id
-                FROM unite_roles ur
-                WHERE ur.personnel_id = :pid
+                SELECT id FROM (
+                    -- Droits directs : person → unite
+                    SELECT ur.unite_id AS id
+                    FROM unite_roles ur
+                    WHERE ur.personnel_id = :pid
+                    UNION
+                    -- Droits hérités : via appartenance à une unité administratrice
+                    SELECT uur.unite_cible AS id
+                    FROM unite_unite_roles uur
+                    JOIN personnel_unite pu ON pu.unite_id = uur.unite_source
+                    WHERE pu.personnel_id = :pid
+                ) roots
                 UNION ALL
+                -- Descendants récursifs
                 SELECT u.id
                 FROM unites u
                 JOIN perimetre p ON u.parent_id = p.id
@@ -108,6 +118,25 @@ class ScopeService
              WHERE pu.personnel_id = :pid
              ORDER BY pu.type, n.ordre NULLS LAST, u."Nom"',
             ['pid' => $personnelId]
+        );
+    }
+
+    /**
+     * Retourne les unités qui administrent une unité donnée (unite_unite_roles).
+     */
+    public function getUniteUniteRoles(int $uniteId): array
+    {
+        return $this->db->fetchAllAssociative(
+            'SELECT uur.id, uur.unite_source, uur.role,
+                    u."Nom"      AS source_nom,
+                    n.nom        AS niveau_nom,
+                    n.ordre      AS niveau_ordre
+             FROM unite_unite_roles uur
+             JOIN unites u  ON u.id  = uur.unite_source
+             LEFT JOIN niveaux n ON n.id = u.niveau_id
+             WHERE uur.unite_cible = :uid
+             ORDER BY n.ordre NULLS LAST, u."Nom"',
+            ['uid' => $uniteId]
         );
     }
 

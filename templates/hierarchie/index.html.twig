@@ -202,6 +202,99 @@
                     </template>
                 </div>
 
+                {# ── Unités administratrices ── #}
+                <div style="border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-card);overflow:hidden;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);">
+                        <div>
+                            <span style="font-family:var(--font-display);font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--text-muted);">UNITÉS ADMINISTRATRICES</span>
+                            <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Toute unité listée ici donne ses droits à ses membres</div>
+                        </div>
+                        <button class="btn-ghost" style="padding:3px 10px;font-size:11px;"
+                            @click="addUniteAdminOpen = true; addUniteAdminForm = { unite_source_id: null, role: 'gestionnaire' }; addUniteAdminSearch = '';">
+                            <i class="fa-solid fa-plus" style="font-size:10px;"></i> Ajouter
+                        </button>
+                    </div>
+
+                    <div x-show="loadingUniteAdmins" style="padding:20px;text-align:center;">
+                        <div class="spinner" style="width:20px;height:20px;"></div>
+                    </div>
+
+                    <div x-show="!loadingUniteAdmins && uniteAdmins.length === 0"
+                        style="padding:16px;font-size:12px;color:var(--text-muted);text-align:center;">
+                        Aucune unité administratrice définie
+                    </div>
+
+                    <template x-for="entry in uniteAdmins" :key="entry.id">
+                        <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border);">
+                            <i class="fa-solid fa-building" style="color:var(--blue-light);font-size:13px;flex-shrink:0;"></i>
+                            <div style="flex:1;min-width:0;">
+                                <div style="font-size:13px;font-weight:600;" x-text="entry.source_nom"></div>
+                                <div style="font-size:11px;color:var(--text-muted);" x-text="entry.niveau_nom || '—'"></div>
+                            </div>
+                            <span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:999px;text-transform:uppercase;"
+                                :style="entry.role === 'admin' ? 'background:rgba(201,168,76,.15);color:var(--gold)' : 'background:rgba(45,108,223,.1);color:var(--blue-light)'"
+                                x-text="entry.role"></span>
+                            <button class="btn-icon" @click="removeUniteAdmin(entry)" title="Retirer" style="color:var(--red-light);">
+                                <i class="fa-solid fa-xmark" style="font-size:11px;"></i>
+                            </button>
+                        </div>
+                    </template>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    {# ── Modal Ajouter unité administratrice ── #}
+    <div class="modal-overlay" x-show="addUniteAdminOpen" x-cloak @click.self="addUniteAdminOpen = false">
+        <div class="modal modal-sm" style="max-width:480px;">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-building" style="margin-right:8px;color:var(--blue-light);"></i> Ajouter une unité administratrice</h3>
+                <button class="btn-icon" @click="addUniteAdminOpen = false"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div x-show="addUniteAdminError" class="alert-error" x-text="addUniteAdminError"></div>
+                <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">
+                    Tous les membres de l'unité choisie hériteront des droits sur
+                    <strong style="color:var(--text-primary);" x-text="selected?.Nom"></strong>.
+                </p>
+                <div class="form-group">
+                    <label>Rechercher une unité</label>
+                    <input type="text" x-model="addUniteAdminSearch" placeholder="Nom ou code de l'unité…" autocomplete="off">
+                    <div x-show="addUniteAdminSearch.length > 0"
+                        style="border:1px solid var(--border);border-radius:var(--radius-sm);margin-top:4px;max-height:200px;overflow-y:auto;">
+                        <div x-show="filteredUnitesForAdmin.length === 0"
+                            style="padding:10px;font-size:12px;color:var(--text-muted);">Aucun résultat</div>
+                        <template x-for="u in filteredUnitesForAdmin" :key="u.id">
+                            <div style="padding:8px 12px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);"
+                                :style="addUniteAdminForm.unite_source_id === u.id ? 'background:rgba(45,108,223,.1);' : ''"
+                                @click="addUniteAdminForm.unite_source_id = u.id; addUniteAdminSearch = u.Nom;">
+                                <span style="width:8px;height:8px;border-radius:50%;flex-shrink:0;"
+                                    :style="'background:' + niveauColor(u.niveau_id)"></span>
+                                <div>
+                                    <div style="font-weight:600;" x-text="u.Nom"></div>
+                                    <div style="font-size:11px;color:var(--text-muted);" x-text="niveauLabel(u.niveau_id) + (u.code ? ' · ' + u.code : '')"></div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+                <div class="form-group" style="margin-top:12px;">
+                    <label>Rôle accordé aux membres</label>
+                    <select x-model="addUniteAdminForm.role">
+                        <option value="gestionnaire">Gestionnaire — gère les salons de l'unité cible</option>
+                        <option value="admin">Administrateur — gère l'unité cible et tout son arbre</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-ghost" @click="addUniteAdminOpen = false">Annuler</button>
+                <button class="btn-primary"
+                    :disabled="!addUniteAdminForm.unite_source_id || addUniteAdminSaving"
+                    @click="addUniteAdmin()">
+                    <i x-show="addUniteAdminSaving" class="fa-solid fa-spinner fa-spin"></i>
+                    <span x-show="!addUniteAdminSaving">Confirmer</span>
+                </button>
             </div>
         </div>
     </div>
