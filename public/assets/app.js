@@ -2560,16 +2560,10 @@ function hierarchieView() {
 
     async init() {
       this.loading = true;
-      try {
-        const [n, u, p] = await Promise.all([
-          apiFetch('/api/niveaux'),
-          apiFetch('/api/unites'),
-          apiFetch('/api/personnel'),
-        ]);
-        this.niveaux   = n || [];
-        this.unites    = u || [];
-        this.personnel = p || [];
-      } catch (e) { toast(e.message, 'error'); }
+      // Appels séparés : l'échec de l'un ne bloque pas les autres
+      try { this.niveaux   = await apiFetch('/api/niveaux')   || []; } catch (e) { toast('Niveaux: ' + e.message, 'error'); }
+      try { this.unites    = await apiFetch('/api/unites')    || []; } catch (e) { toast('Unités: '  + e.message, 'error'); }
+      try { this.personnel = await apiFetch('/api/personnel') || []; } catch (e) { /* non-bloquant */ }
       this.loading = false;
     },
 
