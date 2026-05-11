@@ -2554,9 +2554,10 @@ function hierarchieView() {
     niveauxSaving: false,
 
     // ── Modale ajout d'admin
-    addAdminOpen:  false,
-    addAdminForm:  { personnel_id: null, role: 'gestionnaire' },
-    addAdminError: null,
+    addAdminOpen:   false,
+    addAdminSaving: false,
+    addAdminForm:   { personnel_id: null, role: 'gestionnaire' },
+    addAdminError:  null,
     addAdminSearch: '',
 
     async load() {
