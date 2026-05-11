@@ -2559,15 +2559,13 @@ function hierarchieView() {
     addAdminError: null,
     addAdminSearch: '',
 
-    async init() {
+    async load() {
       this.loading = true;
       try { this.niveaux   = await apiFetch('/api/niveaux')   || []; } catch (e) { toast('Niveaux: ' + e.message, 'error'); }
       try { this.unites    = await apiFetch('/api/unites')    || []; } catch (e) { toast('Unités: '  + e.message, 'error'); }
       try { this.personnel = await apiFetch('/api/personnel') || []; } catch (e) { /* non-bloquant */ }
       this.rebuildTree();
       this.loading = false;
-      // Surveiller les changements qui nécessitent de reconstruire l'arbre
-      this.$watch('unites',        () => this.rebuildTree());
       this.$watch('search',        () => this.rebuildTree());
       this.$watch('filterNiveauId',() => this.rebuildTree());
       this.$watch('collapsedMap',  () => this.rebuildTree());
@@ -2705,6 +2703,7 @@ function hierarchieView() {
         const [u, n] = await Promise.all([apiFetch('/api/unites'), apiFetch('/api/niveaux')]);
         this.unites  = u || [];
         this.niveaux = n || [];
+        this.rebuildTree();
         if (this.selected) this.selected = this.unites.find(u => u.id === this.selected.id) ?? null;
       } catch (e) { this.modalError = e.message; }
       this.saving = false;
