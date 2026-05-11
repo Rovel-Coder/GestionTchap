@@ -2616,7 +2616,9 @@ function hierarchieView() {
         });
       };
       walk(-1, 0);
-      this.tree = result;
+      // Mutation en place pour forcer la réactivité Alpine
+      this.tree.splice(0, this.tree.length, ...result);
+      console.log('[rebuildTree] FINAL tree.length:', this.tree.length);
     },
 
     toggleCollapse(id) {
