@@ -2533,8 +2533,9 @@ function hierarchieView() {
     personnel:    [],
     loading:      true,
     search:       '',
-    collapsedMap: {},   // { [uniteId]: true }
-    selected:     null, // unité sélectionnée
+    collapsedMap:   {},   // { [uniteId]: true }
+    filterNiveauId: null, // null = tous les niveaux
+    selected:       null, // unité sélectionnée
     admins:       [],   // unite_roles de l'unité sélectionnée
     loadingAdmins: false,
 
@@ -2574,13 +2575,16 @@ function hierarchieView() {
 
     // ── Arbre ──────────────────────────────────────────────
     buildTree(search) {
-      const q = search ? search.toLowerCase() : '';
+      const q   = search ? search.toLowerCase() : '';
+      const niv = this.filterNiveauId;
       let source = this.unites;
-      if (q) {
+
+      // Filtre texte OU niveau : garde les correspondances + tous leurs ancêtres
+      if (q || niv) {
         const matchIds = new Set(source.filter(u =>
-          u.Nom.toLowerCase().includes(q) || (u.code || '').toLowerCase().includes(q)
+          (q ? u.Nom.toLowerCase().includes(q) || (u.code || '').toLowerCase().includes(q) : true) &&
+          (niv ? Number(u.niveau_id) === Number(niv) : true)
         ).map(u => u.id));
-        // inclure les ancêtres des matches
         const withAncestors = new Set(matchIds);
         const addAncestors = id => {
           const u = source.find(x => x.id === id);
@@ -2613,7 +2617,7 @@ function hierarchieView() {
       return result;
     },
 
-    get tree() { return this.buildTree(this.search); },
+    get tree() { return this.buildTree(this.search, this.filterNiveauId); },
 
     toggleCollapse(id) {
       this.collapsedMap = { ...this.collapsedMap, [id]: !this.collapsedMap[id] };
