@@ -2562,13 +2562,10 @@ function hierarchieView() {
 
     async load() {
       this.loading = true;
-      console.log('[DEBUG] hierarchieView.load() démarré');
       try { this.niveaux   = await apiFetch('/api/niveaux')   || []; } catch (e) { toast('Niveaux: ' + e.message, 'error'); }
       try { this.unites    = await apiFetch('/api/unites')    || []; } catch (e) { toast('Unités: '  + e.message, 'error'); }
       try { this.personnel = await apiFetch('/api/personnel') || []; } catch (e) { /* non-bloquant */ }
-      console.log('[DEBUG] niveaux:', this.niveaux.length, '| unites:', this.unites.length, '| personnel:', this.personnel.length);
       this.rebuildTree();
-      console.log('[DEBUG] tree après rebuildTree:', this.tree.length);
       this.loading = false;
       this.$watch('search',        () => this.rebuildTree());
       this.$watch('filterNiveauId',() => this.rebuildTree());
@@ -2579,7 +2576,9 @@ function hierarchieView() {
     rebuildTree() {
       const q   = this.search ? this.search.toLowerCase() : '';
       const niv = this.filterNiveauId;
-      let source = this.unites;
+      // N'afficher que les unités qui appartiennent à la hiérarchie :
+      // celles avec un niveau ou un parent (les unités virtuelles plates sont exclues)
+      let source = this.unites.filter(u => u.niveau_id != null || u.parent_id != null);
 
       if (q || niv) {
         const matchIds = new Set(source.filter(u =>
@@ -2816,10 +2815,5 @@ document.addEventListener('alpine:init', () => {
   Alpine.data('criseView',      criseView);
   Alpine.data('suiviCriseView', suiviCriseView);
   Alpine.data('cartoView',      cartoView);
-  try {
-    Alpine.data('hierarchieView', hierarchieView);
-    console.log('[DEBUG] hierarchieView enregistré, addAdminSaving:', hierarchieView().addAdminSaving);
-  } catch(e) {
-    console.error('[DEBUG] Erreur enregistrement hierarchieView:', e);
-  }
+  Alpine.data('hierarchieView', hierarchieView);
 });
