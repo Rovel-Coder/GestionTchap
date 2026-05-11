@@ -2562,10 +2562,13 @@ function hierarchieView() {
 
     async load() {
       this.loading = true;
+      console.log('[DEBUG] hierarchieView.load() démarré');
       try { this.niveaux   = await apiFetch('/api/niveaux')   || []; } catch (e) { toast('Niveaux: ' + e.message, 'error'); }
       try { this.unites    = await apiFetch('/api/unites')    || []; } catch (e) { toast('Unités: '  + e.message, 'error'); }
       try { this.personnel = await apiFetch('/api/personnel') || []; } catch (e) { /* non-bloquant */ }
+      console.log('[DEBUG] niveaux:', this.niveaux.length, '| unites:', this.unites.length, '| personnel:', this.personnel.length);
       this.rebuildTree();
+      console.log('[DEBUG] tree après rebuildTree:', this.tree.length);
       this.loading = false;
       this.$watch('search',        () => this.rebuildTree());
       this.$watch('filterNiveauId',() => this.rebuildTree());
