@@ -2813,5 +2813,10 @@ document.addEventListener('alpine:init', () => {
   Alpine.data('criseView',      criseView);
   Alpine.data('suiviCriseView', suiviCriseView);
   Alpine.data('cartoView',      cartoView);
-  Alpine.data('hierarchieView', hierarchieView);
+  try {
+    Alpine.data('hierarchieView', hierarchieView);
+    console.log('[DEBUG] hierarchieView enregistré, addAdminSaving:', hierarchieView().addAdminSaving);
+  } catch(e) {
+    console.error('[DEBUG] Erreur enregistrement hierarchieView:', e);
+  }
 });
