@@ -2648,13 +2648,21 @@ function hierarchieView() {
     },
 
     // ── Sélection d'une unité ──────────────────────────────
-    async selectUnite(unite) {
-      if (this.selected?.id === unite.id) { this.selected = null; return; }
+    selectUnite(unite) {
+      // Deuxième clic sur la même unité = désélection
+      if (this.selected !== null && this.selected.id == unite.id) {
+        this.selected = null;
+        return;
+      }
       this.selected = unite;
       this.admins = [];
+      this.loadAdmins(unite.id);
+    },
+
+    async loadAdmins(uniteId) {
       this.loadingAdmins = true;
       try {
-        this.admins = await apiFetch(`/api/unites/${unite.id}/admins`);
+        this.admins = await apiFetch(`/api/unites/${uniteId}/admins`);
       } catch (e) { toast(e.message, 'error'); }
       this.loadingAdmins = false;
     },
@@ -2720,7 +2728,8 @@ function hierarchieView() {
         await apiFetch(`/api/unites/${this.selected.id}`, { method: 'DELETE' });
         toast('Unité supprimée', 'success');
         this.selected = null;
-        this.unites = await apiFetch('/api/unites');
+        this.unites = await apiFetch('/api/unites') || [];
+        this.rebuildTree();
       } catch (e) { toast(e.message, 'error'); }
     },
 
