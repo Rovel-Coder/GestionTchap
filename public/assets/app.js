@@ -2581,9 +2581,10 @@ function hierarchieView() {
       let source = this.unites.filter(u => u.niveau_id != null || u.parent_id != null);
 
       if (q || niv) {
+        // eslint-disable-next-line eqeqeq
         const matchIds = new Set(source.filter(u =>
           (q ? u.Nom.toLowerCase().includes(q) || (u.code || '').toLowerCase().includes(q) : true) &&
-          (niv ? Number(u.niveau_id) === Number(niv) : true)
+          (niv ? u.niveau_id == niv : true)
         ).map(u => u.id));
         const withAncestors = new Set(matchIds);
         const addAncestors = id => {
