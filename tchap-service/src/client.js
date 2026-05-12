@@ -139,8 +139,15 @@ async function start() {
     ? new MatrixClient(config.homeserver, config.accessToken, storage, crypto)
     : new MatrixClient(config.homeserver, config.accessToken, storage);
 
-  matrixClient.on('room.failed_decryption', (roomId, _event, err) => {
-    console.warn(`[E2EE] Décryptage échoué salon ${roomId}: ${err.message}`);
+  matrixClient.on('room.failed_decryption', (roomId, event, err) => {
+    const session = event?.content?.session_id ?? '?';
+    console.warn(`[E2EE] ✗ Décryptage échoué — salon: ${roomId} | session: ${session} | erreur: ${err.message}`);
+    // Les salons qui existaient avant la connexion du bot ont des sessions Megolm
+    // que le bot n'a jamais reçues. Le SDK Rust tente automatiquement une
+    // m.room_key_request vers l'expéditeur — aucune action supplémentaire requise.
+    // Si ce message vient d'un nouveau message (pas d'historique), vérifier que :
+    //   1. Le device du bot est bien enregistré : GET /whoami
+    //   2. Les clés Olm sont publiées sur le homeserver : voir log [E2EE] ✓ Clés device publiées
   });
 
   // Écoute des événements to-device pour la vérification SAS
@@ -244,8 +251,32 @@ async function _verifyKeyUpload(config) {
 
 async function loginAndRestart(homeserver, username, password) {
   const hs = homeserver.replace(/\/$/, '');
-  // Ne pas forcer un device_id fixe : laisser Matrix en générer un nouveau à chaque connexion.
-  // Cela évite les conflits de clés OTP quand le crypto store local diverge du serveur.
+
+  // ── Réutilisation du device_id existant ───────────────────────────────────
+  // Chaque nouvelle connexion sans device_id crée un nouvel appareil Matrix :
+  //   • nouveau crypto store vide
+  //   • nouvelles sessions Megolm à établir dans chaque salon
+  //   • l'ancien device reste actif côté serveur (accumulation)
+  //   • les membres des salons reçoivent "[impossible de déchiffrer]" le temps
+  //     que le nouveau device récupère les sessions Megolm
+  //
+  // En réutilisant le device_id, le bot conserve ses sessions Megolm et son
+  // crypto store — les messages restent lisibles par tous les membres.
+  // En cas de conflit OTK (store local ≠ serveur), start() purge le store et
+  // efface le deviceId enregistré, forçant un nouveau device au prochain login.
+
+  const existing    = loadBotConfig();
+  const loginLocal  = username.replace(/^@/, '').split(':')[0].toLowerCase();
+  const savedLocal  = existing.userId ? existing.userId.replace(/^@/, '').split(':')[0].toLowerCase() : null;
+  const sameAccount = existing.homeserver === homeserver && savedLocal === loginLocal && existing.deviceId;
+  const cryptoDb    = sameAccount ? path.join(getBotDir(existing.userId), 'crypto.db') : null;
+  const reuseDevice = sameAccount && cryptoDb && fs.existsSync(cryptoDb);
+
+  if (reuseDevice) {
+    console.log(`[E2EE] Reconnexion même compte — réutilisation device ${existing.deviceId} (sessions Megolm préservées)`);
+  } else {
+    console.log(`[E2EE] Nouveau device Matrix (premier login ou compte différent)`);
+  }
 
   const resp = await fetch(`${hs}/_matrix/client/v3/login`, {
     method: 'POST',
@@ -255,7 +286,7 @@ async function loginAndRestart(homeserver, username, password) {
       identifier: { type: 'm.id.user', user: username },
       password,
       initial_device_display_name: 'Gestion Tchap Bridge',
-      // Pas de device_id → Matrix génère un ID unique → pas de conflit OTP
+      ...(reuseDevice ? { device_id: existing.deviceId } : {}),
     }),
   });
 

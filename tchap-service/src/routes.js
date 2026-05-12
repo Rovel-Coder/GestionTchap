@@ -186,6 +186,11 @@ router.post('/rooms', async (req, res) => {
             topic:            topic ?? '',
             preset:           preset ?? 'private_chat',
             creation_content: { 'm.federate': false },
+            initial_state: [{
+                type:      'm.room.encryption',
+                state_key: '',
+                content:   { algorithm: 'm.megolm.v1.aes-sha2' },
+            }],
         });
         res.json({ room_id: roomId });
     } catch (e) {
