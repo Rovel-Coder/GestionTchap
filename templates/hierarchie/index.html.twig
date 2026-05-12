@@ -62,8 +62,8 @@
     {# ── Layout deux colonnes ── #}
     <div x-show="!loading" style="display:flex;gap:16px;flex:1;min-height:0;overflow:hidden;">
 
-        {# ── Colonne gauche : arbre ── #}
-        <div style="flex:1;min-width:0;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-card);">
+        {# ── Colonne gauche : arbre (largeur fixe) ── #}
+        <div style="width:340px;flex-shrink:0;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-card);">
             <div x-show="tree.length === 0" class="empty-state">
                 Aucune unité trouvée
             </div>
@@ -107,8 +107,8 @@
             </template>
         </div>
 
-        {# ── Colonne droite : panneau détail ── #}
-        <div style="width:360px;flex-shrink:0;overflow-y:auto;">
+        {# ── Colonne droite : panneau détail (prend tout l'espace restant) ── #}
+        <div style="flex:1;min-width:0;overflow-y:auto;">
 
             {# État vide #}
             <div x-show="selected === null" style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-muted);gap:10px;border:1px dashed var(--border);border-radius:var(--radius);padding:40px;">
