@@ -90,8 +90,86 @@
         </span>
     </div>
 
-    {# ── Grille de cartes ── #}
-    <div class="cards-grid" x-show="!loading">
+    {# ── Vue arbre (onglet Annuaire) ── #}
+    <div x-show="!loading && activeTypeTab === 'reel'"
+        style="border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-card);overflow:hidden;">
+        <div x-show="annuaireTree.length === 0" class="empty-state">
+            Aucune unité trouvée
+        </div>
+        <template x-for="u in annuaireTree" :key="u.id">
+            <div class="annuaire-row"
+                :class="{ 'annuaire-selected': selectedUnites.includes(u.id) }"
+                :style="'padding-left:' + (12 + u._depth * 22) + 'px'"
+                @click="selectMode ? toggleSelectUnite(u.id) : openDetail(u)">
+
+                {# Sélection #}
+                <input x-show="selectMode" type="checkbox"
+                    :checked="selectedUnites.includes(u.id)"
+                    @click.stop @change="toggleSelectUnite(u.id)"
+                    style="flex-shrink:0;cursor:pointer;">
+
+                {# Toggle collapse #}
+                <span class="ann-toggle" @click.stop="toggleAnnuaireCollapse(u.id)"
+                    :style="u._hasChildren ? 'cursor:pointer;' : 'visibility:hidden;'">
+                    <i class="fa-solid"
+                        :class="annuaireCollapsed[u.id] ? 'fa-chevron-right' : 'fa-chevron-down'"
+                        style="font-size:9px;color:var(--text-muted);"></i>
+                </span>
+
+                {# Pastille niveau #}
+                <span class="ann-dot" :style="'background:' + niveauColor(u.niveau_id)"></span>
+
+                {# Infos #}
+                <div style="flex:1;min-width:0;display:flex;align-items:center;gap:8px;overflow:hidden;">
+                    <span style="font-size:13px;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+                        x-text="u.Nom"></span>
+                    <span x-show="u.code"
+                        style="font-size:11px;color:var(--text-muted);font-family:monospace;flex-shrink:0;"
+                        x-text="u.code"></span>
+                    <span x-show="u.niveau_id"
+                        style="font-size:10px;font-weight:500;padding:1px 7px;border-radius:999px;border:1px solid;flex-shrink:0;"
+                        :style="'border-color:' + niveauColor(u.niveau_id) + '55;color:' + niveauColor(u.niveau_id)"
+                        x-text="niveauLabel(u.niveau_id)"></span>
+                </div>
+
+                {# Compteurs #}
+                <div style="display:flex;align-items:center;gap:14px;flex-shrink:0;font-size:11px;color:var(--text-muted);">
+                    <span x-show="getAgentCount(u.id) > 0" style="display:flex;align-items:center;gap:4px;">
+                        <i class="fa-solid fa-users" style="font-size:10px;opacity:.6;"></i>
+                        <span x-text="getAgentCount(u.id)"></span>
+                    </span>
+                    <span x-show="(u.Salons || []).length > 0" style="display:flex;align-items:center;gap:4px;">
+                        <i class="fa-solid fa-comments" style="font-size:10px;opacity:.6;"></i>
+                        <span x-text="(u.Salons || []).length"></span>
+                    </span>
+                </div>
+
+                {# Actions #}
+                <div class="ann-actions" @click.stop>
+                    {% if permissions.canManage %}
+                    <button class="btn-icon" @click="syncUnite(u)" :disabled="u._syncing"
+                        title="Synchroniser vers Tchap" style="color:var(--blue-light);">
+                        <i class="fa-solid fa-rotate" :class="{ 'fa-spin': u._syncing }" style="font-size:11px;"></i>
+                    </button>
+                    <button class="btn-icon" @click="openImportPersonnel(u)" title="Importer du personnel">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    </button>
+                    <button class="btn-icon" @click="openDetail(u)" title="Modifier" style="font-size:11px;">
+                        <i class="fa-solid fa-pen"></i>
+                    </button>
+                    {% endif %}
+                    {% if permissions.canAdmin %}
+                    <button class="btn-icon" @click="confirmDelete(u)" title="Supprimer" style="color:var(--red-light);">
+                        <i class="fa-solid fa-trash" style="font-size:11px;"></i>
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </template>
+    </div>
+
+    {# ── Grille de cartes (onglet Virtuelles) ── #}
+    <div class="cards-grid" x-show="!loading && activeTypeTab === 'virtuel'">
         <div x-show="filtered.length === 0" class="empty-state" style="grid-column:1/-1;">
             Aucune unité trouvée
         </div>
@@ -108,7 +186,7 @@
                             style="flex-shrink:0;cursor:pointer;">
                         <span class="card-name" x-text="unite.Nom"></span>
                     </div>
-                    <span class="card-type-badge" x-text="unite.numero ? ('#' + unite.numero) : 'Unité'"></span>
+                    <span class="card-type-badge" x-text="unite.numero ? ('#' + unite.numero) : 'Virtuelle'"></span>
                 </div>
                 <div class="card-meta" x-show="unite.code" x-text="unite.code"></div>
                 <div class="card-salons-list">
@@ -734,4 +812,26 @@
     </div>
 
 </div>
+{% endblock %}
+
+{% block head_extra %}
+<style>
+.annuaire-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-top: 7px;
+    padding-bottom: 7px;
+    padding-right: 12px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background .12s;
+}
+.annuaire-row:hover { background: var(--bg-hover); }
+.annuaire-selected { background: rgba(45,108,223,.07) !important; border-left: 2px solid var(--blue-light); }
+.ann-toggle { width: 18px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.ann-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.ann-actions { display: flex; gap: 2px; flex-shrink: 0; opacity: 0; transition: opacity .12s; }
+.annuaire-row:hover .ann-actions { opacity: 1; }
+</style>
 {% endblock %}

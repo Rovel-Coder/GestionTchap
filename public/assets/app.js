@@ -1087,9 +1087,10 @@ function uniteView() {
     niveaux:    [],
     salons:     [],
     personnel:  [],
-    loading:      true,
-    search:       '',
-    activeTypeTab: 'reel',   // 'reel' = annuaire | 'virtuel' = temporaires
+    loading:         true,
+    search:          '',
+    activeTypeTab:   'reel',   // 'reel' = annuaire | 'virtuel' = temporaires
+    annuaireCollapsed: {},
     modalOpen:  false,
     modalMode:  'create',
     modalError: null,
@@ -1306,6 +1307,58 @@ function uniteView() {
 
     getAgentCount(uniteId) {
       return this.personnel.filter(a => (a.Unite || []).includes(Number(uniteId))).length;
+    },
+
+    niveauLabel(niveauId) {
+      return this.niveaux.find(n => n.id === Number(niveauId))?.nom ?? '';
+    },
+
+    niveauColor(niveauId) {
+      const ordre = this.niveaux.find(n => n.id === Number(niveauId))?.ordre ?? 0;
+      const colors = ['#c9a84c', '#2d6cdf', '#6ec38a', '#e07b54', '#a78bfa', '#f472b6'];
+      return colors[(ordre - 1) % colors.length] || '#8888aa';
+    },
+
+    toggleAnnuaireCollapse(id) {
+      this.annuaireCollapsed = { ...this.annuaireCollapsed, [id]: !this.annuaireCollapsed[id] };
+    },
+
+    get annuaireTree() {
+      const q = this.search ? this.search.toLowerCase() : '';
+      let source = this.unites.filter(u => u.type !== 'virtuel');
+      if (q) {
+        const matchIds = new Set(source.filter(u =>
+          u.Nom.toLowerCase().includes(q) || (u.code || '').toLowerCase().includes(q)
+        ).map(u => u.id));
+        const withAncestors = new Set(matchIds);
+        const addAncestors = id => {
+          const u = source.find(x => x.id === id);
+          if (u && u.parent_id && !withAncestors.has(u.parent_id)) {
+            withAncestors.add(u.parent_id);
+            addAncestors(u.parent_id);
+          }
+        };
+        matchIds.forEach(id => addAncestors(id));
+        source = source.filter(u => withAncestors.has(u.id));
+      }
+      const byParent = {};
+      source.forEach(u => {
+        const pid = u.parent_id ?? -1;
+        (byParent[pid] = byParent[pid] || []).push(u);
+      });
+      Object.values(byParent).forEach(arr =>
+        arr.sort((a, b) => (a.niveau_ordre ?? 999) - (b.niveau_ordre ?? 999) || a.Nom.localeCompare(b.Nom))
+      );
+      const result = [];
+      const walk = (pid, depth) => {
+        (byParent[pid] || []).forEach(u => {
+          const hasChildren = (byParent[u.id] || []).length > 0;
+          result.push({ ...u, _depth: depth, _hasChildren: hasChildren });
+          if (!this.annuaireCollapsed[u.id]) walk(u.id, depth + 1);
+        });
+      };
+      walk(-1, 0);
+      return result;
     },
 
     openModal(mode, unite = null) {
