@@ -48,6 +48,34 @@
         <div class="spinner"></div>
     </div>
 
+    {# ── Onglets annuaire / virtuelles ── #}
+    <div x-show="!loading" style="display:flex;border-bottom:2px solid var(--border);margin-bottom:14px;">
+        <button
+            @click="activeTypeTab = 'reel'"
+            style="display:flex;align-items:center;gap:7px;padding:8px 20px;font-size:12px;font-weight:600;background:transparent;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;transition:color .15s,border-color .15s;"
+            :style="activeTypeTab === 'reel'
+                ? 'color:var(--blue-light);border-bottom-color:var(--blue-light);'
+                : 'color:var(--text-muted);'">
+            <i class="fa-solid fa-sitemap"></i>
+            Annuaire
+            <span style="font-size:10px;padding:1px 7px;border-radius:999px;"
+                :style="activeTypeTab === 'reel' ? 'background:rgba(45,108,223,.12);color:var(--blue-light);' : 'background:var(--bg-elevated);color:var(--text-muted);'"
+                x-text="unites.filter(u => u.type !== 'virtuel').length"></span>
+        </button>
+        <button
+            @click="activeTypeTab = 'virtuel'"
+            style="display:flex;align-items:center;gap:7px;padding:8px 20px;font-size:12px;font-weight:600;background:transparent;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;transition:color .15s,border-color .15s;"
+            :style="activeTypeTab === 'virtuel'
+                ? 'color:var(--blue-light);border-bottom-color:var(--blue-light);'
+                : 'color:var(--text-muted);'">
+            <i class="fa-solid fa-layer-group"></i>
+            Virtuelles &amp; temporaires
+            <span style="font-size:10px;padding:1px 7px;border-radius:999px;"
+                :style="activeTypeTab === 'virtuel' ? 'background:rgba(45,108,223,.12);color:var(--blue-light);' : 'background:var(--bg-elevated);color:var(--text-muted);'"
+                x-text="unites.filter(u => u.type === 'virtuel').length"></span>
+        </button>
+    </div>
+
     {# ── Barre de sélection ── #}
     <div x-show="selectMode" style="display:flex;align-items:center;gap:12px;padding:6px 0;font-size:13px;color:var(--text-secondary);">
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">

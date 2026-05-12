@@ -1087,8 +1087,9 @@ function uniteView() {
     niveaux:    [],
     salons:     [],
     personnel:  [],
-    loading:    true,
-    search:     '',
+    loading:      true,
+    search:       '',
+    activeTypeTab: 'reel',   // 'reel' = annuaire | 'virtuel' = temporaires
     modalOpen:  false,
     modalMode:  'create',
     modalError: null,
@@ -1154,9 +1155,12 @@ function uniteView() {
     },
 
     get filtered() {
-      if (!this.search) return this.unites;
+      const src = this.activeTypeTab === 'reel'
+        ? this.unites.filter(u => u.type !== 'virtuel')
+        : this.unites.filter(u => u.type === 'virtuel');
+      if (!this.search) return src;
       const q = this.search.toLowerCase();
-      return this.unites.filter(u => u.Nom.toLowerCase().includes(q) || (u.code || '').toLowerCase().includes(q));
+      return src.filter(u => u.Nom.toLowerCase().includes(q) || (u.code || '').toLowerCase().includes(q));
     },
 
     getSalonName(id) {
@@ -1309,7 +1313,7 @@ function uniteView() {
       this.modalError = null;
       this.form = unite
         ? { ...unite, Salons: [...(unite.Salons || [])], _salonSearch: '' }
-        : { Nom: '', code: '', Salons: [], _salonSearch: '', parent_id: null, niveau_id: null, type: 'virtuel' };
+        : { Nom: '', code: '', Salons: [], _salonSearch: '', parent_id: null, niveau_id: null, type: this.activeTypeTab };
       this.modalOpen = true;
     },
 
