@@ -2548,7 +2548,7 @@ function hierarchieView() {
 
     // ── Modale gestion des niveaux (sysadmin)
     niveauxOpen:  false,
-    niveauxForm:  { nom: '', slug: '', ordre: 1 },
+    niveauxForm:  { nom: '', slug: '', insertBefore: null },
     niveauxError: null,
     niveauxSaving: false,
 
@@ -2772,23 +2772,56 @@ function hierarchieView() {
       try {
         await apiFetch(`/api/niveaux/${niveauId}`, {
           method: 'PATCH',
-          body: JSON.stringify({ nom: niv.nom, ordre: niv.ordre }),
+          body: JSON.stringify({ nom: niv.nom }),
         });
         toast('Niveau mis à jour', 'success');
       } catch (e) { toast(e.message, 'error'); }
+    },
+
+    async moveNiveauUp(id) {
+      const idx = this.niveaux.findIndex(n => n.id === id);
+      if (idx <= 0) return;
+      const arr = [...this.niveaux];
+      [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
+      this.niveaux.splice(0, this.niveaux.length, ...arr);
+      await this._sendReorder();
+    },
+
+    async moveNiveauDown(id) {
+      const idx = this.niveaux.findIndex(n => n.id === id);
+      if (idx < 0 || idx >= this.niveaux.length - 1) return;
+      const arr = [...this.niveaux];
+      [arr[idx], arr[idx + 1]] = [arr[idx + 1], arr[idx]];
+      this.niveaux.splice(0, this.niveaux.length, ...arr);
+      await this._sendReorder();
+    },
+
+    async _sendReorder() {
+      try {
+        const updated = await apiFetch('/api/niveaux/reorder', {
+          method: 'POST',
+          body: JSON.stringify({ ids: this.niveaux.map(n => n.id) }),
+        });
+        this.niveaux.splice(0, this.niveaux.length, ...updated);
+        toast('Ordre mis à jour', 'success');
+      } catch (e) {
+        toast(e.message, 'error');
+        const n = await apiFetch('/api/niveaux');
+        this.niveaux.splice(0, this.niveaux.length, ...(n || []));
+      }
     },
 
     async createNiveau() {
       this.niveauxError = null;
       this.niveauxSaving = true;
       try {
-        const n = await apiFetch('/api/niveaux', {
-          method: 'POST',
-          body: JSON.stringify(this.niveauxForm),
-        });
-        this.niveaux.push(n);
-        this.niveaux.sort((a, b) => a.ordre - b.ordre);
-        this.niveauxForm  = { nom: '', slug: '', ordre: (this.niveaux[this.niveaux.length - 1]?.ordre ?? 0) + 1 };
+        const payload = { nom: this.niveauxForm.nom, slug: this.niveauxForm.slug };
+        if (this.niveauxForm.insertBefore !== null) payload.insertBefore = this.niveauxForm.insertBefore;
+        await apiFetch('/api/niveaux', { method: 'POST', body: JSON.stringify(payload) });
+        // Recharge tous les niveaux pour avoir les ordres à jour
+        const updated = await apiFetch('/api/niveaux');
+        this.niveaux.splice(0, this.niveaux.length, ...(updated || []));
+        this.niveauxForm = { nom: '', slug: '', insertBefore: null };
         toast('Niveau créé', 'success');
       } catch (e) { this.niveauxError = e.message; }
       this.niveauxSaving = false;

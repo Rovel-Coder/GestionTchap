@@ -24,6 +24,55 @@ class NiveauxController extends AbstractController
         return $this->json($rows);
     }
 
+    /**
+     * Réordonne tous les niveaux selon le tableau d'IDs fourni.
+     * Le premier ID reçoit ordre=1, le second ordre=2, etc.
+     */
+    #[Route('/api/niveaux/reorder', name: 'api_niveaux_reorder', methods: ['POST'])]
+    public function reorder(Request $request): JsonResponse
+    {
+        /** @var AppUser $user */
+        $user = $this->getUser();
+        if (!$user->isSysAdmin()) {
+            return $this->json(['error' => 'Réservé aux administrateurs système'], 403);
+        }
+
+        $data = json_decode($request->getContent(), true) ?? [];
+        $ids  = $data['ids'] ?? [];
+
+        if (!is_array($ids) || empty($ids)) {
+            return $this->json(['error' => 'ids est requis'], 400);
+        }
+
+        $ids = array_map('intval', $ids);
+
+        // Utilise un offset temporaire élevé pour éviter les conflits d'unicité
+        // si une contrainte UNIQUE existe sur (ordre).
+        $this->db->beginTransaction();
+        try {
+            foreach ($ids as $index => $id) {
+                $this->db->executeStatement(
+                    'UPDATE niveaux SET ordre = :ordre WHERE id = :id',
+                    ['ordre' => $index + 1, 'id' => $id]
+                );
+            }
+            $this->db->commit();
+        } catch (\Exception $e) {
+            $this->db->rollBack();
+            throw $e;
+        }
+
+        $rows = $this->db->fetchAllAssociative('SELECT * FROM niveaux ORDER BY ordre');
+
+        return $this->json($rows);
+    }
+
+    /**
+     * Crée un nouveau niveau.
+     * Si insertBefore (ID d'un niveau existant) est fourni, décale tous les niveaux
+     * dont l'ordre est >= à celui du niveau cible, puis insère à cette position.
+     * Sinon, ajoute à la fin.
+     */
     #[Route('/api/niveaux', name: 'api_niveaux_create', methods: ['POST'])]
     public function create(Request $request): JsonResponse
     {
@@ -34,24 +83,51 @@ class NiveauxController extends AbstractController
         }
 
         $data = json_decode($request->getContent(), true) ?? [];
-        $err  = $this->validate($data);
-        if ($err) {
-            return $this->json(['error' => $err], 400);
+
+        if (empty($data['nom']) || !is_string($data['nom'])) {
+            return $this->json(['error' => 'Le nom est requis'], 400);
+        }
+        if (empty($data['slug']) || !preg_match('/^[a-z0-9_]+$/', (string) $data['slug'])) {
+            return $this->json(['error' => 'Le slug est requis (lettres minuscules, chiffres, underscores uniquement)'], 400);
         }
 
+        $insertBefore = isset($data['insertBefore']) ? (int) $data['insertBefore'] : null;
+
+        $this->db->beginTransaction();
         try {
+            if ($insertBefore !== null) {
+                $targetOrdre = $this->db->fetchOne(
+                    'SELECT ordre FROM niveaux WHERE id = :id',
+                    ['id' => $insertBefore]
+                );
+                if ($targetOrdre === false) {
+                    $this->db->rollBack();
+                    return $this->json(['error' => 'Niveau de référence introuvable'], 404);
+                }
+                $ordre = (int) $targetOrdre;
+                $this->db->executeStatement(
+                    'UPDATE niveaux SET ordre = ordre + 1 WHERE ordre >= :ordre',
+                    ['ordre' => $ordre]
+                );
+            } else {
+                $maxOrdre = $this->db->fetchOne('SELECT COALESCE(MAX(ordre), 0) FROM niveaux');
+                $ordre    = (int) $maxOrdre + 1;
+            }
+
             $this->db->executeStatement(
                 'INSERT INTO niveaux (nom, slug, ordre) VALUES (:nom, :slug, :ordre)',
-                ['nom' => trim($data['nom']), 'slug' => trim($data['slug']), 'ordre' => (int) $data['ordre']]
+                ['nom' => trim($data['nom']), 'slug' => trim($data['slug']), 'ordre' => $ordre]
             );
+            $id = $this->db->lastInsertId();
+            $this->db->commit();
         } catch (\Exception $e) {
+            $this->db->rollBack();
             if (str_contains($e->getMessage(), 'unique') || str_contains($e->getMessage(), 'duplicate')) {
                 return $this->json(['error' => 'Ce slug existe déjà'], 409);
             }
             throw $e;
         }
 
-        $id  = $this->db->lastInsertId();
         $row = $this->db->fetchAssociative('SELECT * FROM niveaux WHERE id = :id', ['id' => $id]);
 
         return $this->json($row, 201);
@@ -133,20 +209,5 @@ class NiveauxController extends AbstractController
         }
 
         return new JsonResponse(null, 204);
-    }
-
-    private function validate(array $data): ?string
-    {
-        if (empty($data['nom']) || !is_string($data['nom'])) {
-            return 'Le nom est requis';
-        }
-        if (empty($data['slug']) || !preg_match('/^[a-z0-9_]+$/', (string) $data['slug'])) {
-            return 'Le slug est requis (lettres minuscules, chiffres, underscores uniquement)';
-        }
-        if (!isset($data['ordre']) || !is_int($data['ordre']) || $data['ordre'] < 1) {
-            return "L'ordre doit être un entier positif";
-        }
-
-        return null;
     }
 }
