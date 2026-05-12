@@ -49,21 +49,23 @@
     </div>
 
     {# ── Onglets annuaire / virtuelles ── #}
-    <div x-show="!loading" style="display:flex;border-bottom:2px solid var(--border);margin-bottom:14px;">
-        <button class="import-tab-btn" :class="{ active: activeTypeTab === 'reel' }"
-            @click="activeTypeTab = 'reel'">
-            <i class="fa-solid fa-sitemap" style="margin-right:6px;"></i>
-            Annuaire
-            <span style="margin-left:7px;padding:1px 7px;border-radius:999px;background:var(--bg-elevated);font-size:10px;"
-                x-text="unites.filter(u => u.type !== 'virtuel').length"></span>
-        </button>
-        <button class="import-tab-btn" :class="{ active: activeTypeTab === 'virtuel' }"
-            @click="activeTypeTab = 'virtuel'">
-            <i class="fa-solid fa-layer-group" style="margin-right:6px;"></i>
-            Virtuelles &amp; temporaires
-            <span style="margin-left:7px;padding:1px 7px;border-radius:999px;background:var(--bg-elevated);font-size:10px;"
-                x-text="unites.filter(u => u.type === 'virtuel').length"></span>
-        </button>
+    <div x-show="!loading">
+        <div class="unite-type-tabs">
+            <button class="import-tab-btn" :class="{ active: activeTypeTab === 'reel' }"
+                @click="activeTypeTab = 'reel'">
+                <i class="fa-solid fa-sitemap" style="margin-right:6px;"></i>
+                Annuaire
+                <span style="margin-left:7px;padding:1px 7px;border-radius:999px;background:var(--bg-elevated);font-size:10px;"
+                    x-text="unites.filter(u => u.type !== 'virtuel').length"></span>
+            </button>
+            <button class="import-tab-btn" :class="{ active: activeTypeTab === 'virtuel' }"
+                @click="activeTypeTab = 'virtuel'">
+                <i class="fa-solid fa-layer-group" style="margin-right:6px;"></i>
+                Virtuelles &amp; temporaires
+                <span style="margin-left:7px;padding:1px 7px;border-radius:999px;background:var(--bg-elevated);font-size:10px;"
+                    x-text="unites.filter(u => u.type === 'virtuel').length"></span>
+            </button>
+        </div>
     </div>
 
     {# ── Barre de sélection ── #}
@@ -806,6 +808,7 @@
 
 {% block head_extra %}
 <style>
+.unite-type-tabs { display: flex; border-bottom: 2px solid var(--border); margin-bottom: 14px; }
 .annuaire-row {
     display: flex;
     align-items: center;
