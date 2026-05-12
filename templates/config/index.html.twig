@@ -278,41 +278,31 @@
                         Vérification SAS de l'appareil bot
                     </div>
 
-                    {# État idle — aucune demande #}
-                    <div x-show="verifState === null || verifState === 'idle'">
-                        <p style="font-size:12px;color:var(--text-secondary);line-height:1.6;margin-bottom:10px;">
-                            Dans Tchap : <strong>Paramètres → Sécurité → Appareils → Bot → Vérifier l'appareil</strong>, puis revenez ici.
-                        </p>
-                        <button class="btn-ghost" style="font-size:11px;padding:5px 12px;" @click="pollVerif()">
-                            <i class="fa-solid fa-rotate" style="margin-right:5px;"></i>Vérifier si une demande est en attente
+                    {# Étape 1 — idle : instructions + bouton de vérification #}
+                    <div x-show="!verifState || verifState === 'idle'">
+                        <ol style="font-size:12px;color:var(--text-secondary);line-height:1.8;margin:0 0 12px 16px;padding:0;">
+                            <li>Dans <strong>Tchap</strong> : ouvrez le profil du bot → <strong>Vérifier l'appareil</strong></li>
+                            <li>Revenez ici et cliquez sur <strong>Vérifier l'état</strong></li>
+                            <li>Comparez les emojis affichés des deux côtés</li>
+                        </ol>
+                        <button class="btn-ghost" style="font-size:11px;padding:5px 12px;"
+                            @click="acceptVerif()">
+                            <i class="fa-solid fa-rotate" style="margin-right:5px;"></i>Vérifier l'état
                         </button>
                     </div>
 
-                    {# Demande reçue — attente d'acceptation #}
-                    <div x-show="verifState === 'requested'" style="padding:12px 14px;background:rgba(45,108,223,.07);border:1px solid rgba(45,108,223,.25);border-radius:var(--radius-sm);">
-                        <p style="font-size:12px;font-weight:600;color:var(--blue-light);margin-bottom:6px;">
-                            <i class="fa-solid fa-bell" style="margin-right:6px;"></i>Demande de vérification reçue de <span x-text="verifUserId"></span>
-                        </p>
-                        <p style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;">Acceptez pour démarrer l'échange SAS.</p>
-                        <div style="display:flex;gap:8px;">
-                            <button class="btn-primary" style="font-size:12px;" @click="verifAccept()">
-                                <i x-show="verifState === 'accepting'" class="fa-solid fa-spinner fa-spin"></i>
-                                Accepter
-                            </button>
-                            <button class="btn-ghost" style="font-size:12px;color:var(--red-light);border-color:var(--red-light);" @click="verifCancel()">Refuser</button>
-                        </div>
-                    </div>
-
-                    {# Intermédiaire — en attente des clés #}
-                    <div x-show="['accepted','accepting','started','key-sent'].includes(verifState)"
+                    {# Vérification en cours — échange de clés (bridge auto-accepte) #}
+                    <div x-show="['accepting','requested','accepted','started','key-sent'].includes(verifState)"
                          style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:8px;">
-                        <i class="fa-solid fa-spinner fa-spin"></i> Échange de clés en cours…
+                        <i class="fa-solid fa-spinner fa-spin"></i>
+                        <span>Échange de clés en cours<template x-if="verifUserId"> — demande de <strong x-text="verifUserId"></strong></template>…</span>
+                        <button class="btn-ghost" style="margin-left:auto;font-size:11px;padding:3px 8px;" @click="cancelVerif()">Annuler</button>
                     </div>
 
-                    {# Emojis à comparer #}
+                    {# Étape 2 — emojis à comparer #}
                     <div x-show="verifState === 'sas'">
                         <p style="font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:10px;">
-                            Comparez ces emojis avec ceux affichés dans Tchap :
+                            Comparez ces 7 emojis avec ceux affichés dans Tchap :
                         </p>
                         <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
                             <template x-for="e in verifEmoji" :key="e.label">
@@ -324,13 +314,19 @@
                         </div>
                         <p style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">Ils correspondent exactement dans Tchap ?</p>
                         <div style="display:flex;gap:8px;">
-                            <button class="btn-primary" style="font-size:12px;background:var(--green,#27ae60);border-color:#27ae60;" @click="verifConfirm()">
-                                <i class="fa-solid fa-check"></i> Oui, ils correspondent
+                            <button class="btn-primary" style="font-size:12px;background:#27ae60;border-color:#27ae60;" @click="confirmVerif()">
+                                <i class="fa-solid fa-check"></i> Oui, identiques
                             </button>
-                            <button class="btn-ghost" style="font-size:12px;color:var(--red-light);border-color:var(--red-light);" @click="verifMismatch()">
+                            <button class="btn-ghost" style="font-size:12px;color:var(--red-light);border-color:var(--red-light);" @click="mismatchVerif()">
                                 <i class="fa-solid fa-xmark"></i> Non, annuler
                             </button>
                         </div>
+                    </div>
+
+                    {# Confirmation en cours #}
+                    <div x-show="verifState === 'confirming'"
+                         style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:8px;">
+                        <i class="fa-solid fa-spinner fa-spin"></i> Envoi de la confirmation…
                     </div>
 
                     {# Succès #}
@@ -341,11 +337,10 @@
                         <button class="btn-ghost" style="margin-left:auto;font-size:11px;" @click="verifState = null">OK</button>
                     </div>
 
-                    {# Erreur ou annulation #}
-                    <div x-show="verifState === 'error' || verifState === 'cancelled'"
+                    {# Erreur #}
+                    <div x-show="verifState === 'error'"
                          style="font-size:12px;color:var(--red-light);padding:10px 12px;background:rgba(192,57,43,.07);border:1px solid rgba(192,57,43,.25);border-radius:var(--radius-sm);">
-                        <span x-show="verifState === 'cancelled'">Vérification annulée.</span>
-                        <span x-show="verifState === 'error'" x-text="'Erreur : ' + verifError"></span>
+                        <span x-text="'✗ ' + (verifError || 'Erreur inconnue')"></span>
                         <button class="btn-ghost" style="margin-left:8px;font-size:11px;" @click="verifState = null">Réessayer</button>
                     </div>
                 </div>

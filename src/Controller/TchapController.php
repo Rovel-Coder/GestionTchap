@@ -135,16 +135,80 @@ class TchapController extends AbstractController
         ], 400);
     }
 
-    // POST /api/tchap/e2ee/verif-accept — non applicable sans session interactive
-    #[Route('/e2ee/verif-accept', name: 'e2ee_verif_accept', methods: ['POST'])]
-    #[Route('/e2ee/verif-cancel', name: 'e2ee_verif_cancel', methods: ['POST'])]
-    #[Route('/e2ee/verif-confirm', name: 'e2ee_verif_confirm', methods: ['POST'])]
-    #[Route('/e2ee/verif-mismatch', name: 'e2ee_verif_mismatch', methods: ['POST'])]
-    public function e2eeVerif(): JsonResponse
+    // GET /api/tchap/e2ee/verif-status — état courant de la vérification SAS dans le bridge
+    #[Route('/e2ee/verif-status', name: 'e2ee_verif_status', methods: ['GET'])]
+    public function e2eeVerifStatus(): JsonResponse
     {
-        return $this->json([
-            'error' => 'La vérification SAS interactive n\'est pas disponible via le bridge. Utilisez l\'application Tchap directement.',
-        ], 400);
+        /** @var AppUser $user */
+        $user = $this->getUser();
+        if (!$this->roles->canAdmin($user)) {
+            return $this->json(['error' => 'Accès réservé aux administrateurs'], 403);
+        }
+        try {
+            return $this->json($this->tchap->callBridge('GET', '/verif'));
+        } catch (\Throwable $e) {
+            return $this->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    // POST /api/tchap/e2ee/verif-accept — le bridge auto-accepte ; cette route retourne l'état courant
+    #[Route('/e2ee/verif-accept', name: 'e2ee_verif_accept', methods: ['POST'])]
+    public function e2eeVerifAccept(): JsonResponse
+    {
+        /** @var AppUser $user */
+        $user = $this->getUser();
+        if (!$this->roles->canAdmin($user)) {
+            return $this->json(['error' => 'Accès réservé aux administrateurs'], 403);
+        }
+        try {
+            $status = $this->tchap->callBridge('GET', '/verif');
+            $phase  = $status['phase'] ?? 'idle';
+            if ($phase === 'idle') {
+                return $this->json(['error' => 'Aucune demande de vérification en cours. Initiez la vérification depuis Tchap.'], 400);
+            }
+            return $this->json([
+                'phase'  => $phase,
+                'emoji'  => $status['emoji']  ?? [],
+                'userId' => $status['userId'] ?? null,
+            ]);
+        } catch (\Throwable $e) {
+            return $this->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    // POST /api/tchap/e2ee/verif-confirm — confirmer que les emojis correspondent
+    #[Route('/e2ee/verif-confirm', name: 'e2ee_verif_confirm', methods: ['POST'])]
+    public function e2eeVerifConfirm(): JsonResponse
+    {
+        /** @var AppUser $user */
+        $user = $this->getUser();
+        if (!$this->roles->canAdmin($user)) {
+            return $this->json(['error' => 'Accès réservé aux administrateurs'], 403);
+        }
+        try {
+            $this->tchap->callBridge('POST', '/verif/confirm');
+            return $this->json(['ok' => true]);
+        } catch (\Throwable $e) {
+            return $this->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    // POST /api/tchap/e2ee/verif-cancel — annuler la vérification (ou emojis ne correspondent pas)
+    #[Route('/e2ee/verif-cancel',   name: 'e2ee_verif_cancel',   methods: ['POST'])]
+    #[Route('/e2ee/verif-mismatch', name: 'e2ee_verif_mismatch', methods: ['POST'])]
+    public function e2eeVerifCancel(): JsonResponse
+    {
+        /** @var AppUser $user */
+        $user = $this->getUser();
+        if (!$this->roles->canAdmin($user)) {
+            return $this->json(['error' => 'Accès réservé aux administrateurs'], 403);
+        }
+        try {
+            $this->tchap->callBridge('POST', '/verif/cancel');
+            return $this->json(['ok' => true]);
+        } catch (\Throwable $e) {
+            return $this->json(['error' => $e->getMessage()], 500);
+        }
     }
 
     // GET /api/tchap/profile/{userId} — profil Matrix (displayname, avatar_url)

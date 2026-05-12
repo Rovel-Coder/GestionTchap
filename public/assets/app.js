@@ -2031,24 +2031,65 @@ function configView() {
       this.keyImportLoading = false;
     },
 
+    // ── Vérification SAS ───────────────────────────────────────────────────
+
+    // Applique l'état reçu du bridge et démarre le polling si nécessaire.
+    _applyVerifStatus(r) {
+      const phase = r.phase ?? 'idle';
+      if (phase === 'idle') {
+        this.verifState = null;
+        this._stopVerifPoll();
+        return;
+      }
+      if (phase === 'sas') {
+        this.verifState = 'sas';
+        this.verifEmoji  = r.emoji  || [];
+        this.verifUserId = r.userId || '';
+        this._stopVerifPoll();
+        return;
+      }
+      this.verifState  = phase;
+      this.verifUserId = r.userId || '';
+      this._startVerifPoll();
+    },
+
+    // Lance un poll toutes les 2 s pour les phases transitoires (accepted → sas).
+    _startVerifPoll() {
+      if (this._verifPollTimer) return;
+      this._verifPollTimer = setInterval(async () => {
+        try {
+          const r = await apiFetch('/api/tchap/e2ee/verif-status');
+          this._applyVerifStatus(r);
+        } catch (_) {}
+      }, 2000);
+    },
+
+    _stopVerifPoll() {
+      if (!this._verifPollTimer) return;
+      clearInterval(this._verifPollTimer);
+      this._verifPollTimer = null;
+    },
+
+    // Appelé par le bouton "Actualiser / Vérifier l'état" — interroge le bridge.
     async acceptVerif() {
       this.verifState = 'accepting';
       try {
         const r = await apiFetch('/api/tchap/e2ee/verif-accept', { method: 'POST' });
-        this.verifState = 'sas';
-        this.verifEmoji = r.emoji || [];
+        this._applyVerifStatus(r);
       } catch (e) {
-        this.verifState = 'error';
-        this.verifError = e.message;
+        this.verifState  = 'error';
+        this.verifError  = e.message;
       }
     },
 
     async cancelVerif() {
+      this._stopVerifPoll();
       try { await apiFetch('/api/tchap/e2ee/verif-cancel', { method: 'POST' }); } catch (_) {}
-      this.verifState = 'cancelled';
+      this.verifState = null;
     },
 
     async confirmVerif() {
+      this._stopVerifPoll();
       this.verifState = 'confirming';
       try {
         await apiFetch('/api/tchap/e2ee/verif-confirm', { method: 'POST' });
@@ -2061,6 +2102,7 @@ function configView() {
     },
 
     async mismatchVerif() {
+      this._stopVerifPoll();
       try { await apiFetch('/api/tchap/e2ee/verif-mismatch', { method: 'POST' }); } catch (_) {}
       this.verifState = 'error';
       this.verifError = 'Les emojis ne correspondaient pas — vérification annulée.';
