@@ -71,8 +71,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS personnel_unite_unique_detachement
 
 -- Migrer les Unite[] existants vers personnel_unite (type virtuel)
 INSERT INTO personnel_unite (personnel_id, unite_id, type)
-SELECT
-    DISTINCT p.id, u.id, 'virtuel'
+SELECT DISTINCT p.id, u.id, 'virtuel'
 FROM personnel p
 JOIN unites u ON u.id = ANY(p."Unite")
 WHERE array_length(p."Unite", 1) > 0

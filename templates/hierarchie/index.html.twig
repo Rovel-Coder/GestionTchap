@@ -428,14 +428,29 @@
                     <div x-show="niveaux.length === 0" style="padding:16px;font-size:12px;color:var(--text-muted);text-align:center;">
                         Aucun niveau défini
                     </div>
-                    <template x-for="n in niveaux" :key="n.id">
-                        <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border);">
+                    <template x-for="(n, idx) in niveaux" :key="n.id">
+                        <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);">
+                            {# Boutons déplacement #}
+                            <div style="display:flex;flex-direction:column;gap:1px;flex-shrink:0;">
+                                <button class="btn-icon" style="padding:1px 5px;font-size:9px;line-height:1.2;"
+                                    :disabled="idx === 0"
+                                    @click="moveNiveauUp(n.id)"
+                                    title="Monter">
+                                    <i class="fa-solid fa-chevron-up"></i>
+                                </button>
+                                <button class="btn-icon" style="padding:1px 5px;font-size:9px;line-height:1.2;"
+                                    :disabled="idx === niveaux.length - 1"
+                                    @click="moveNiveauDown(n.id)"
+                                    title="Descendre">
+                                    <i class="fa-solid fa-chevron-down"></i>
+                                </button>
+                            </div>
+                            {# Numéro d'ordre #}
+                            <span style="font-size:11px;color:var(--text-muted);width:18px;text-align:center;flex-shrink:0;" x-text="n.ordre"></span>
                             <span class="hier-dot" :style="'background:' + niveauColor(n.id)"></span>
                             <input type="text" :value="n.nom" @change="n.nom = $event.target.value"
                                 style="flex:1;background:transparent;border:none;color:var(--text-primary);font-size:13px;font-weight:600;outline:none;">
-                            <input type="number" :value="n.ordre" @change="n.ordre = parseInt($event.target.value)"
-                                style="width:52px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);font-size:12px;padding:2px 6px;text-align:center;">
-                            <button class="btn-ghost" style="padding:3px 10px;font-size:11px;" @click="saveNiveau(n.id)">
+                            <button class="btn-ghost" style="padding:3px 10px;font-size:11px;" @click="saveNiveau(n.id)" title="Enregistrer le nom">
                                 <i class="fa-solid fa-floppy-disk"></i>
                             </button>
                             <button class="btn-icon" @click="deleteNiveau(n.id)" style="color:var(--red-light);">
@@ -449,10 +464,18 @@
                 <div style="background:var(--bg-elevated);border-radius:var(--radius-sm);padding:14px;">
                     <div style="font-family:var(--font-display);font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--text-muted);margin-bottom:10px;">AJOUTER UN NIVEAU</div>
                     <div x-show="niveauxError" class="alert-error" style="margin-bottom:8px;" x-text="niveauxError"></div>
-                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
                         <input type="text" x-model="niveauxForm.nom" placeholder="Nom (ex: Brigade)" style="flex:1;min-width:120px;font-size:13px;">
                         <input type="text" x-model="niveauxForm.slug" placeholder="slug (ex: brigade)" style="width:130px;font-size:12px;font-family:monospace;">
-                        <input type="number" x-model.number="niveauxForm.ordre" placeholder="Ordre" style="width:70px;font-size:13px;" min="1">
+                    </div>
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                        <label style="font-size:11px;color:var(--text-muted);white-space:nowrap;">Insérer avant :</label>
+                        <select x-model="niveauxForm.insertBefore" style="flex:1;min-width:140px;font-size:12px;">
+                            <option :value="null">— À la fin —</option>
+                            <template x-for="n in niveaux" :key="n.id">
+                                <option :value="n.id" x-text="n.ordre + '. ' + n.nom"></option>
+                            </template>
+                        </select>
                         <button class="btn-primary" :disabled="!niveauxForm.nom || !niveauxForm.slug || niveauxSaving" @click="createNiveau()">
                             <i x-show="niveauxSaving" class="fa-solid fa-spinner fa-spin"></i>
                             <span x-show="!niveauxSaving">Ajouter</span>
