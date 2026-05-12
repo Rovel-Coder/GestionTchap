@@ -1,247 +1,245 @@
-# Guide de déploiement — Gestion Personnel Tchap
+# Déploiement — Gestion Personnel Tchap
 
-## Prérequis sur la VM
+Deux modes d'installation sont disponibles :
 
-| Composant | Version minimale |
-|-----------|-----------------|
-| PHP | 8.3 |
-| Extensions PHP | `pdo`, `pdo_pgsql`, `intl`, `mbstring`, `xml`, `ctype`, `iconv` |
-| PostgreSQL | 14+ |
-| Composer | 2.x |
-| Serveur web | Apache 2.4+ **ou** Nginx 1.18+ |
+| Mode | Recommandé pour |
+|------|----------------|
+| **[Docker](#docker)** | Mise en route rapide, poste de développement, serveur isolé |
+| **[VM Ubuntu 24.04 LTS](#vm-ubuntu-2404-lts)** | Production, intégration dans une infrastructure existante |
 
 ---
 
-## 1. Transfert des fichiers
+## Docker
 
-Copier le projet sur la VM (adapter selon votre méthode) :
+### Prérequis
+
+- Docker ≥ 24
+- Docker Compose (plugin intégré `docker compose` ou standalone `docker-compose`)
 
 ```bash
-# Via rsync
-rsync -av --exclude='.git' --exclude='vendor' \
-    /chemin/local/gestion-personnel-tchap-PHP/ \
-    user@vm:/var/www/gestion-tchap/
-
-# Via git (si dépôt distant configuré)
-git clone https://votre-depot.git /var/www/gestion-tchap
+docker --version
+docker compose version
 ```
 
----
-
-## 2. Dépendances PHP
+### 1. Récupérer les sources
 
 ```bash
-cd /var/www/gestion-tchap
-
-composer install --no-dev --optimize-autoloader --no-interaction
+git clone https://github.com/Rovel-Coder/GestionTchap.git gestion-tchap
+cd gestion-tchap
 ```
 
-> **Note :** `--no-dev` exclut les outils de développement (maker-bundle). Ne pas omettre en production.
-
----
-
-## 3. Configuration de l'environnement
+### 2. Configurer l'environnement
 
 ```bash
 cp .env.example .env
 ```
 
-Éditer `.env` avec les valeurs réelles :
+Ouvrir `.env` et renseigner les valeurs obligatoires :
 
 ```dotenv
-APP_ENV=prod
-APP_SECRET=<chaîne_aléatoire_32_caractères_minimum>
-DATABASE_URL="postgresql://utilisateur:motdepasse@localhost:5432/nom_base?serverVersion=14&charset=utf8"
+# Secret applicatif — générer avec : openssl rand -base64 32
+APP_SECRET=<secret_32_caracteres>
+
+# Mot de passe PostgreSQL
+DB_PASSWORD=<mot_de_passe_fort>
+
+# Reprendre DB_PASSWORD ci-dessus
+DATABASE_URL=postgresql://tchap:<mot_de_passe_fort>@postgres:5432/gestion_tchap
+
+# Clé API partagée entre PHP et le bridge Tchap — générer avec : openssl rand -hex 32
+TCHAP_SERVICE_KEY=<cle_api_bridge>
 ```
 
-Générer un `APP_SECRET` sécurisé :
+> Les valeurs par défaut (`changeme-…`) ne doivent **jamais** être conservées en production.
+
+### 3. Démarrer les services
 
 ```bash
-php -r "echo bin2hex(random_bytes(32)) . PHP_EOL;"
+docker compose up -d
 ```
 
-> **Sécurité :** Le fichier `.env` ne doit jamais être lisible publiquement. Vérifier les permissions :
-> ```bash
-> chmod 640 .env
-> chown www-data:www-data .env
-> ```
+Au premier démarrage, Docker :
+1. Construit les images PHP et tchap-bridge
+2. Démarre PostgreSQL et attend qu'il soit prêt
+3. Exécute les migrations SQL (`app:db:migrate`)
+4. Crée le compte administrateur initial (`app:seed-sysadmin`)
+5. Lance PHP-FPM et Nginx
+
+Suivre les logs de démarrage :
+
+```bash
+docker compose logs -f php
+```
+
+### 4. Accéder à l'application
+
+Ouvrir **http://localhost:8088** dans un navigateur.
+
+Identifiants initiaux :
+- Login : `Sic`
+- Mot de passe : `SicGestionTchap`
+
+> **Changer ce mot de passe immédiatement** via le menu utilisateur en haut à droite → *Changer le mot de passe*.
+
+### 5. Connecter le bot Tchap
+
+Dans l'interface web → **Configuration** → section *Bots Matrix*, renseigner les credentials du bot Tchap. Le bridge démarrera la session E2EE et conservera les clés dans le volume `tchap_data`.
+
+### Commandes utiles
+
+```bash
+# Arrêter les services
+docker compose down
+
+# Redémarrer après une mise à jour du code
+docker compose up -d --build
+
+# Voir les logs en temps réel
+docker compose logs -f
+
+# Accéder au shell PHP
+docker compose exec php bash
+
+# Accéder à PostgreSQL
+docker compose exec postgres psql -U tchap -d gestion_tchap
+
+# Réappliquer les migrations manuellement
+docker compose exec php php bin/console app:db:migrate
+```
+
+### Mise à jour
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+Les migrations sont automatiquement appliquées au redémarrage du conteneur PHP.
+
+### Volumes persistants
+
+| Volume | Contenu |
+|--------|---------|
+| `postgres_data` | Base de données PostgreSQL |
+| `vendor_cache` | Dépendances Composer (accélère les rebuilds) |
+| `tchap_data` | Clés E2EE et session Matrix du bridge |
+
+> **Sauvegarder `postgres_data` régulièrement.** Les clés E2EE dans `tchap_data` ne sont pas critiques (reconnexion possible via l'interface) mais leur perte provoque une interruption temporaire du bot.
 
 ---
 
-## 4. Base de données
+## VM Ubuntu 24.04 LTS
 
-### 4.1 Créer la base (si elle n'existe pas)
+### Dimensionnement recommandé
+
+| Ressource | Minimum | Recommandé |
+|-----------|---------|------------|
+| vCPU | 2 | 4 |
+| RAM | 2 Go | 4 Go |
+| Disque système | 20 Go | 40 Go |
+| Disque données | 10 Go | 50 Go |
+
+### 1. Mise à jour système et paquets de base
 
 ```bash
-sudo -u postgres psql -c "CREATE DATABASE gestion_tchap OWNER votre_user;"
+apt update && apt upgrade -y
+apt install -y curl wget git unzip vim htop ufw
 ```
 
-### 4.2 Initialiser le schéma
+### 2. PHP 8.3
+
+Ubuntu 24.04 LTS inclut PHP 8.3 dans ses dépôts officiels.
 
 ```bash
-psql -U votre_user -d gestion_tchap -f schema.sql
+apt install -y \
+    php8.3 \
+    php8.3-fpm \
+    php8.3-pgsql \
+    php8.3-mbstring \
+    php8.3-xml \
+    php8.3-intl \
+    php8.3-curl \
+    php8.3-opcache
+
+systemctl enable php8.3-fpm
+systemctl start php8.3-fpm
+
+php -v
 ```
 
-Le fichier `schema.sql` crée les 5 tables nécessaires :
-- `personnel` — agents avec grades, rôles, unités
-- `salons` — salons Tchap/Matrix
-- `unites` — unités organisationnelles
-- `config` — paramètres applicatifs (clé/valeur JSONB)
-- `system_admins` — comptes administrateurs système
+**Configuration production** — éditer `/etc/php/8.3/fpm/php.ini` :
 
----
+```ini
+opcache.enable = 1
+opcache.memory_consumption = 128
+opcache.max_accelerated_files = 10000
+opcache.validate_timestamps = 0
 
-## 5. Compte administrateur initial
+expose_php = Off
+display_errors = Off
+log_errors = On
 
-```bash
-php bin/console app:seed-sysadmin
+memory_limit = 256M
+max_execution_time = 60
+session.cookie_httponly = On
+session.cookie_secure = On
 ```
 
-Cette commande crée le compte **Sic** (mot de passe par défaut : `SicGestionTchap`) si il n'existe pas encore.
+### 3. PostgreSQL 16
 
-> **Important :** Changer ce mot de passe immédiatement après la première connexion via l'interface de configuration.
-
----
-
-## 6. Cache et permissions
+Ubuntu 24.04 inclut PostgreSQL 16. Utiliser le dépôt officiel PostgreSQL pour une version plus récente.
 
 ```bash
-# Vider et préchauffer le cache en mode prod
-APP_ENV=prod php bin/console cache:clear
-APP_ENV=prod php bin/console cache:warmup
+# Depuis les dépôts Ubuntu (PostgreSQL 16)
+apt install -y postgresql postgresql-contrib
 
-# Permissions sur les répertoires d'écriture
-chown -R www-data:www-data /var/www/gestion-tchap/var/
-chmod -R 775 /var/www/gestion-tchap/var/
+systemctl enable postgresql
+systemctl start postgresql
 ```
 
----
-
-## 7. Service Tchap Bridge (requis — salons chiffrés E2EE)
-
-Le service `tchap-service/` est un daemon Node.js persistant qui maintient la session Matrix et les clés de chiffrement E2EE. Il écoute **uniquement en loopback** (`127.0.0.1:3000`) et n'est jamais exposé sur Internet.
-
-### 7.1 Installer Node.js
+**Créer l'utilisateur et la base :**
 
 ```bash
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo -u postgres psql <<EOF
+CREATE USER tchap_user WITH PASSWORD 'mot_de_passe_fort';
+CREATE DATABASE gestion_tchap OWNER tchap_user;
+GRANT ALL PRIVILEGES ON DATABASE gestion_tchap TO tchap_user;
+EOF
+```
+
+**Restreindre l'écoute réseau** — dans `/etc/postgresql/16/main/postgresql.conf` :
+
+```conf
+listen_addresses = 'localhost'
+```
+
+```bash
+systemctl restart postgresql
+```
+
+### 4. Composer
+
+```bash
+curl -sS https://getcomposer.org/installer | php
+mv composer.phar /usr/local/bin/composer
+chmod +x /usr/local/bin/composer
+composer --version
+```
+
+### 5. Node.js 20 (pour le bridge Tchap)
+
+```bash
+curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
 apt install -y nodejs
-node --version  # doit afficher v20.x ou supérieur
+node --version   # v20.x
 ```
 
-### 7.2 Déployer le service
+### 6. Nginx
 
 ```bash
-# Copier le dossier tchap-service sur la VM
-cp -r /chemin/local/gestion-personnel-tchap-PHP/tchap-service /opt/tchap-bridge
-
-# Installer les dépendances Node.js
-cd /opt/tchap-bridge
-npm install --omit=dev
-
-# Créer le répertoire de données (clés E2EE, session)
-mkdir -p /opt/tchap-bridge/data
-chown -R www-data:www-data /opt/tchap-bridge
-chmod 750 /opt/tchap-bridge/data
+apt install -y nginx
+systemctl enable nginx
 ```
-
-### 7.3 Configurer l'environnement du bridge
-
-```bash
-cp /opt/tchap-bridge/.env.example /opt/tchap-bridge/.env
-chmod 640 /opt/tchap-bridge/.env
-chown www-data:www-data /opt/tchap-bridge/.env
-```
-
-Éditer `/opt/tchap-bridge/.env` :
-
-```dotenv
-PORT=3000
-
-# Générer avec : openssl rand -hex 32
-API_KEY=<clé_secrète_32_octets_hex>
-
-# Credentials du bot (optionnel ici — configurable via l'interface PHP)
-TCHAP_HOMESERVER=https://matrix.agent.interieur.tchap.gouv.fr
-TCHAP_ACCESS_TOKEN=
-```
-
-> **Important :** `API_KEY` doit être identique à `TCHAP_SERVICE_KEY` dans le `.env` PHP.
-
-### 7.4 Activer le service systemd
-
-```bash
-cp /opt/tchap-bridge/tchap-bridge.service /etc/systemd/system/
-systemctl daemon-reload
-systemctl enable tchap-bridge
-systemctl start tchap-bridge
-systemctl status tchap-bridge
-```
-
-### 7.5 Vérifier que le bridge répond
-
-```bash
-curl http://127.0.0.1:3000/health
-# Réponse attendue : {"ok":true,"ready":false,"userId":null,...}
-# "ready: false" est normal avant la première connexion du bot via l'interface PHP
-```
-
-### 7.6 Connecter le bot depuis l'interface PHP
-
-Dans l'interface web → Configuration → paramètres Tchap, renseigner les credentials du bot. L'application appellera `POST /login` sur le bridge qui démarrera la session E2EE et persistera les clés dans `/opt/tchap-bridge/data/`.
-
-> **Note :** Les clés E2EE sont conservées entre les redémarrages. Un `systemctl restart tchap-bridge` ne perd pas les sessions chiffrées.
-
-### 7.7 Mise à jour du bridge
-
-```bash
-cd /opt/tchap-bridge
-# Remplacer les fichiers src/ par la nouvelle version (rsync ou git pull)
-npm install --omit=dev
-systemctl restart tchap-bridge
-```
-
----
-
-## 8. Configuration du serveur web
-
-### Apache
-
-Créer `/etc/apache2/sites-available/gestion-tchap.conf` :
-
-```apache
-<VirtualHost *:80>
-    ServerName gestion-tchap.votre-domaine.fr
-    DocumentRoot /var/www/gestion-tchap/public
-
-    <Directory /var/www/gestion-tchap/public>
-        AllowOverride All
-        Require all granted
-        Options -Indexes
-        DirectoryIndex index.php
-    </Directory>
-
-    # Logs
-    ErrorLog  ${APACHE_LOG_DIR}/gestion-tchap-error.log
-    CustomLog ${APACHE_LOG_DIR}/gestion-tchap-access.log combined
-</VirtualHost>
-```
-
-Activer le site et les modules nécessaires :
-
-```bash
-a2enmod rewrite headers
-a2ensite gestion-tchap.conf
-systemctl reload apache2
-```
-
-Vérifier que le fichier `public/.htaccess` (généré par Symfony) est présent. Sinon, le créer :
-
-```bash
-APP_ENV=prod php bin/console assets:install public
-```
-
-### Nginx
 
 Créer `/etc/nginx/sites-available/gestion-tchap` :
 
@@ -265,9 +263,7 @@ server {
         internal;
     }
 
-    location ~ \.php$ {
-        return 404;
-    }
+    location ~ \.php$ { return 404; }
 
     access_log /var/log/nginx/gestion-tchap-access.log;
     error_log  /var/log/nginx/gestion-tchap-error.log;
@@ -279,77 +275,158 @@ ln -s /etc/nginx/sites-available/gestion-tchap /etc/nginx/sites-enabled/
 nginx -t && systemctl reload nginx
 ```
 
----
-
-## 9. HTTPS (recommandé)
+### 7. Déployer l'application
 
 ```bash
-# Avec Certbot (Let's Encrypt)
-apt install certbot python3-certbot-apache   # ou python3-certbot-nginx
-certbot --apache -d gestion-tchap.votre-domaine.fr
-# ou
+# Cloner ou copier les sources
+git clone https://github.com/Rovel-Coder/GestionTchap.git /var/www/gestion-tchap
+cd /var/www/gestion-tchap
+
+# Dépendances PHP
+composer install --no-dev --optimize-autoloader --no-interaction
+
+# Configurer l'environnement
+cp .env.example .env
+chmod 640 .env
+```
+
+Éditer `/var/www/gestion-tchap/.env` :
+
+```dotenv
+APP_ENV=prod
+
+# Générer avec : openssl rand -base64 32
+APP_SECRET=<secret_32_caracteres>
+
+DATABASE_URL=postgresql://tchap_user:mot_de_passe_fort@127.0.0.1:5432/gestion_tchap
+
+# Générer avec : openssl rand -hex 32
+TCHAP_SERVICE_KEY=<cle_api_bridge>
+
+TCHAP_SERVICE_URL=http://127.0.0.1:3000
+```
+
+```bash
+# Appliquer les migrations et créer le compte admin
+APP_ENV=prod php bin/console app:db:migrate
+APP_ENV=prod php bin/console app:seed-sysadmin
+
+# Cache de production
+APP_ENV=prod php bin/console cache:clear
+APP_ENV=prod php bin/console cache:warmup
+
+# Permissions
+chown -R www-data:www-data /var/www/gestion-tchap/var/
+chmod -R 775 /var/www/gestion-tchap/var/
+```
+
+### 8. Bridge Tchap (service systemd)
+
+```bash
+# Copier le service
+cp -r /var/www/gestion-tchap/tchap-service /opt/tchap-bridge
+
+cd /opt/tchap-bridge
+npm install --omit=dev
+mkdir -p data
+chown -R www-data:www-data /opt/tchap-bridge
+chmod 750 data
+```
+
+Configurer `/opt/tchap-bridge/.env` :
+
+```dotenv
+PORT=3000
+HOST=127.0.0.1
+# Doit correspondre à TCHAP_SERVICE_KEY dans le .env PHP
+API_KEY=<cle_api_bridge>
+TCHAP_HOMESERVER=https://matrix.agent.interieur.tchap.gouv.fr
+```
+
+Créer `/etc/systemd/system/tchap-bridge.service` :
+
+```ini
+[Unit]
+Description=Tchap Bridge E2EE
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/tchap-bridge
+ExecStart=/usr/bin/node src/index.js
+Restart=always
+RestartSec=5
+EnvironmentFile=/opt/tchap-bridge/.env
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+systemctl daemon-reload
+systemctl enable tchap-bridge
+systemctl start tchap-bridge
+
+# Vérifier
+curl http://127.0.0.1:3000/health
+```
+
+### 9. Pare-feu
+
+```bash
+ufw default deny incoming
+ufw default allow outgoing
+ufw allow ssh
+ufw allow 80/tcp
+ufw allow 443/tcp
+ufw enable
+```
+
+### 10. HTTPS avec Certbot
+
+```bash
+apt install -y certbot python3-certbot-nginx
 certbot --nginx -d gestion-tchap.votre-domaine.fr
 ```
 
----
+Certbot modifie automatiquement la config Nginx et programme le renouvellement automatique.
 
-## 10. Vérification du déploiement
+### 11. Vérification finale
 
 ```bash
-# Test PHP-FPM / accès HTTP
-curl -I http://gestion-tchap.votre-domaine.fr/login
+# Services actifs
+systemctl status php8.3-fpm nginx postgresql tchap-bridge
 
-# Vérifier les logs en cas d'erreur
+# Test HTTP
+curl -I http://localhost/login
+
+# Logs applicatifs
 tail -f /var/www/gestion-tchap/var/log/prod.log
-tail -f /var/log/apache2/gestion-tchap-error.log   # ou nginx
 ```
 
-La page de connexion doit s'afficher à l'adresse configurée. Se connecter avec `Sic` / `SicGestionTchap`.
+Accéder à l'application sur `https://gestion-tchap.votre-domaine.fr` avec les identifiants `Sic` / `SicGestionTchap`.
 
----
-
-## 11. Mise à jour
-
-En cas de nouvelle version de l'application :
+### Mise à jour
 
 ```bash
 cd /var/www/gestion-tchap
-
-# Récupérer les sources (git ou rsync)
-git pull   # ou rsync depuis le poste de développement
-
-# Mettre à jour les dépendances si composer.json a changé
+git pull
 composer install --no-dev --optimize-autoloader --no-interaction
-
-# Vider le cache
-APP_ENV=prod php bin/console cache:clear
-
-# Appliquer les éventuels nouveaux schémas SQL manuellement
-# (voir CHANGELOG pour les modifications de schéma)
+APP_ENV=prod php bin/console app:db:migrate
+APP_ENV=prod php bin/console cache:clear && APP_ENV=prod php bin/console cache:warmup
+systemctl reload nginx
 ```
 
 ---
 
-## Récapitulatif des commandes essentielles
+## Ports réseau
 
-```bash
-# Ordre d'exécution pour un premier déploiement
-
-# 1. Application PHP
-composer install --no-dev --optimize-autoloader
-cp .env.example .env && nano .env          # renseigner APP_SECRET, DATABASE_URL, TCHAP_SERVICE_KEY
-psql -U <user> -d <base> -f schema.sql
-php bin/console app:seed-sysadmin
-APP_ENV=prod php bin/console cache:clear
-
-# 2. Bridge Tchap E2EE
-cp -r tchap-service /opt/tchap-bridge
-cd /opt/tchap-bridge && npm install --omit=dev
-mkdir -p data && chown -R www-data:www-data /opt/tchap-bridge
-cp .env.example .env && nano .env          # renseigner API_KEY (= TCHAP_SERVICE_KEY du PHP)
-cp tchap-bridge.service /etc/systemd/system/
-systemctl daemon-reload && systemctl enable --now tchap-bridge
-
-# 3. Serveur web
-# → configurer vhost Apache/Nginx (sections 8)
-```
+| Port | Service | Direction |
+|------|---------|-----------|
+| 22 | SSH | Entrant (administration) |
+| 80 | HTTP → redirection HTTPS | Entrant |
+| 443 | HTTPS | Entrant |
+| 3000 | Tchap bridge | Loopback uniquement |
+| 5432 | PostgreSQL | Loopback uniquement |
+| 443 | Vers matrix.agent.interieur.tchap.gouv.fr | Sortant |

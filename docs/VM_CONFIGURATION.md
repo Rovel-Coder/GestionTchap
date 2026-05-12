@@ -1,180 +1,69 @@
-# Configuration de la VM — Gestion Personnel Tchap
+# Configuration avancée de la VM — Ubuntu 24.04 LTS
 
-## Dimensionnement recommandé
-
-| Ressource | Minimum | Recommandé |
-|-----------|---------|------------|
-| vCPU | 2 | 4 |
-| RAM | 2 Go | 4 Go |
-| Disque OS | 20 Go | 40 Go |
-| Disque données (PostgreSQL) | 10 Go | 50 Go |
-| OS | Debian 12 / Ubuntu 22.04 LTS | Debian 12 |
-
-> L'application est légère (pas de compilation JS, pas de Node.js). Le dimensionnement peut être revu à la baisse pour un usage interne limité (< 50 utilisateurs simultanés).
+Ce document couvre les réglages complémentaires à l'installation de base décrite dans [DEPLOIEMENT.md](DEPLOIEMENT.md).
 
 ---
 
-## 1. Système d'exploitation
+## PHP-FPM — pool de processus
 
-```bash
-# Mise à jour système
-apt update && apt upgrade -y
-
-# Paquets de base
-apt install -y curl wget git unzip vim htop net-tools
-```
-
----
-
-## 2. PHP 8.3
-
-### Installation via les dépôts officiels Sury (Debian/Ubuntu)
-
-```bash
-apt install -y lsb-release ca-certificates apt-transport-https software-properties-common gnupg2
-
-curl -sSLo /tmp/debsuryorg-archive-keyring.gpg \
-    https://packages.sury.org/php/apt.gpg
-install -D -m 0644 /tmp/debsuryorg-archive-keyring.gpg \
-    /etc/apt/keyrings/debsuryorg-archive-keyring.gpg
-
-echo "deb [signed-by=/etc/apt/keyrings/debsuryorg-archive-keyring.gpg] \
-    https://packages.sury.org/php/ $(lsb_release -sc) main" \
-    > /etc/apt/sources.list.d/php.list
-
-apt update
-```
-
-### Installer PHP 8.3 et les extensions requises
-
-```bash
-apt install -y \
-    php8.3 \
-    php8.3-fpm \
-    php8.3-pgsql \
-    php8.3-pdo \
-    php8.3-mbstring \
-    php8.3-xml \
-    php8.3-intl \
-    php8.3-ctype \
-    php8.3-curl \
-    php8.3-opcache \
-    php8.3-readline
-```
-
-### Configuration PHP (production)
-
-Éditer `/etc/php/8.3/fpm/php.ini` et `/etc/php/8.3/cli/php.ini` :
-
-```ini
-; Performance
-opcache.enable=1
-opcache.memory_consumption=128
-opcache.interned_strings_buffer=16
-opcache.max_accelerated_files=10000
-opcache.validate_timestamps=0   ; mettre à 1 en développement
-
-; Sécurité
-expose_php = Off
-display_errors = Off
-log_errors = On
-error_log = /var/log/php8.3-errors.log
-
-; Limites
-memory_limit = 256M
-upload_max_filesize = 16M
-post_max_size = 20M
-max_execution_time = 60
-max_input_time = 60
-
-; Sessions
-session.cookie_httponly = On
-session.cookie_secure = On      ; activer uniquement si HTTPS
-session.use_strict_mode = On
-session.gc_maxlifetime = 86400
-```
-
-### Configuration PHP-FPM
-
-Éditer `/etc/php/8.3/fpm/pool.d/www.conf` :
+Éditer `/etc/php/8.3/fpm/pool.d/www.conf` pour adapter aux ressources disponibles :
 
 ```ini
 [www]
-user = www-data
+user  = www-data
 group = www-data
 listen = /run/php/php8.3-fpm.sock
 listen.owner = www-data
 listen.group = www-data
 
+; Gestion dynamique des processus
 pm = dynamic
-pm.max_children = 20
-pm.start_servers = 5
+pm.max_children    = 20   ; augmenter si la RAM le permet
+pm.start_servers   = 5
 pm.min_spare_servers = 3
 pm.max_spare_servers = 10
-pm.max_requests = 500
+pm.max_requests    = 500  ; recycler les processus pour éviter les fuites mémoire
 
-; Logs
+; Log des requêtes lentes
 slowlog = /var/log/php8.3-fpm-slow.log
 request_slowlog_timeout = 5s
 ```
 
 ```bash
-systemctl enable php8.3-fpm
 systemctl restart php8.3-fpm
 ```
 
 ---
 
-## 3. PostgreSQL 14+
+## PostgreSQL — réglages performance
 
-```bash
-# Installation
-apt install -y postgresql postgresql-contrib
-
-# Activer et démarrer
-systemctl enable postgresql
-systemctl start postgresql
-```
-
-### Créer l'utilisateur et la base
-
-```bash
-sudo -u postgres psql <<EOF
-CREATE USER tchap_user WITH PASSWORD 'mot_de_passe_fort';
-CREATE DATABASE gestion_tchap OWNER tchap_user;
-GRANT ALL PRIVILEGES ON DATABASE gestion_tchap TO tchap_user;
-EOF
-```
-
-### Configuration PostgreSQL (performance)
-
-Éditer `/etc/postgresql/<version>/main/postgresql.conf` :
+Adapter à la RAM disponible dans `/etc/postgresql/16/main/postgresql.conf` :
 
 ```conf
-# Mémoire (adapter selon la RAM disponible)
-shared_buffers = 512MB           # 25% de la RAM
-effective_cache_size = 1536MB    # 75% de la RAM
-work_mem = 16MB
+# Mémoire — règle générale : shared_buffers = 25 % de la RAM
+shared_buffers      = 512MB       # pour 2 Go de RAM
+effective_cache_size = 1536MB     # 75 % de la RAM
+work_mem            = 16MB
 maintenance_work_mem = 128MB
 
 # Connexions
-max_connections = 50             # limiter selon le nb d'utilisateurs
+max_connections = 50              # suffisant pour une instance PHP-FPM < 20 workers
 
-# Logging
-log_min_duration_statement = 1000   # log des requêtes > 1s
-log_line_prefix = '%t [%p]: [%l-1] '
+# Journalisation — utile pour détecter des requêtes lentes
+log_min_duration_statement = 1000    # ms
+log_line_prefix = '%t [%p]: '
 
-# Sécurité réseau (écouter uniquement en local)
+# Sécurité réseau
 listen_addresses = 'localhost'
 ```
 
-Éditer `/etc/postgresql/<version>/main/pg_hba.conf` pour l'accès local :
+Accès autorisés dans `/etc/postgresql/16/main/pg_hba.conf` :
 
 ```
-# TYPE  DATABASE        USER            ADDRESS         METHOD
-local   all             postgres                        peer
-local   gestion_tchap   tchap_user                      md5
-host    gestion_tchap   tchap_user      127.0.0.1/32    md5
+# TYPE  DATABASE        USER         ADDRESS        METHOD
+local   all             postgres                    peer
+local   gestion_tchap   tchap_user                  scram-sha-256
+host    gestion_tchap   tchap_user   127.0.0.1/32   scram-sha-256
 ```
 
 ```bash
@@ -183,132 +72,121 @@ systemctl restart postgresql
 
 ---
 
-## 4. Composer
+## Sauvegarde de la base de données
+
+### Dump manuel
 
 ```bash
-curl -sS https://getcomposer.org/installer | php
-mv composer.phar /usr/local/bin/composer
-chmod +x /usr/local/bin/composer
+sudo -u postgres pg_dump gestion_tchap \
+    --format=custom \
+    --file=/var/backups/gestion_tchap_$(date +%Y%m%d_%H%M).dump
+```
 
-# Vérifier
-composer --version
+### Sauvegarde automatique via cron
+
+```bash
+cat > /etc/cron.d/gestion-tchap-backup << 'EOF'
+# Dump quotidien à 2h du matin, conservation 30 jours
+0 2 * * *  postgres  pg_dump gestion_tchap --format=custom \
+              --file=/var/backups/gestion_tchap_$(date +\%Y\%m\%d).dump \
+              && find /var/backups -name 'gestion_tchap_*.dump' -mtime +30 -delete
+EOF
+```
+
+### Restauration
+
+```bash
+sudo -u postgres pg_restore \
+    --dbname=gestion_tchap \
+    --clean \
+    /var/backups/gestion_tchap_20260101_020000.dump
 ```
 
 ---
 
-## 5. Serveur web
+## Nginx — optimisations supplémentaires
 
-### Apache 2.4
+Ajouter dans le bloc `server` ou dans `/etc/nginx/nginx.conf` :
 
-```bash
-apt install -y apache2
+```nginx
+# Compression gzip
+gzip on;
+gzip_types text/plain text/css application/json application/javascript text/xml;
+gzip_min_length 1024;
 
-a2enmod rewrite headers proxy_fcgi setenvif
-a2enconf php8.3-fpm
+# Cache navigateur pour les assets statiques
+location ~* \.(css|js|png|jpg|svg|woff2?)$ {
+    expires 30d;
+    add_header Cache-Control "public, immutable";
+}
 
-systemctl enable apache2
-systemctl restart apache2
-```
+# Masquer la version Nginx
+server_tokens off;
 
-### Nginx (alternative)
-
-```bash
-apt install -y nginx
-
-systemctl enable nginx
-systemctl start nginx
-```
-
----
-
-## 6. Permissions et répertoires
-
-```bash
-# Répertoire de l'application
-mkdir -p /var/www/gestion-tchap
-chown -R www-data:www-data /var/www/gestion-tchap
-
-# Permettre au compte de déploiement d'écrire dans le projet
-usermod -aG www-data votre_utilisateur
-
-# Permissions standard Symfony
-find /var/www/gestion-tchap -type f -exec chmod 644 {} \;
-find /var/www/gestion-tchap -type d -exec chmod 755 {} \;
-chmod -R 775 /var/www/gestion-tchap/var/
-chmod -R 775 /var/www/gestion-tchap/public/
+# Limiter la taille des requêtes
+client_max_body_size 20M;
 ```
 
 ---
 
-## 7. Pare-feu
+## Supervision avec systemd
+
+Toutes les unités systemd pertinentes :
 
 ```bash
-apt install -y ufw
+# État de tous les services d'un coup
+systemctl status php8.3-fpm nginx postgresql tchap-bridge
 
-# Politique par défaut
-ufw default deny incoming
-ufw default allow outgoing
+# Logs en temps réel (toutes unités)
+journalctl -u php8.3-fpm -u nginx -u postgresql -u tchap-bridge -f
 
-# Autoriser SSH, HTTP, HTTPS
-ufw allow ssh
-ufw allow 80/tcp
-ufw allow 443/tcp
-
-ufw enable
-ufw status
+# Relancer automatiquement en cas d'échec
+systemctl edit tchap-bridge
 ```
 
-> Si la VM est derrière un pare-feu réseau (recommandé), restreindre l'accès HTTP/HTTPS aux seules plages IP autorisées.
+Dans l'éditeur (ajout d'un override) :
 
----
-
-## 8. Accès réseau sortant (requis pour Tchap)
-
-L'application doit pouvoir joindre le serveur Matrix/Tchap en HTTPS depuis la VM :
-
-```bash
-# Tester la connectivité vers le homeserver Tchap
-curl -v https://matrix.agent.interieur.tchap.gouv.fr/_matrix/client/v3/login
-```
-
-Si la VM est derrière un proxy d'entreprise, configurer dans `.env` :
-
-```dotenv
-# Variables standard pour Symfony HttpClient
-http_proxy=http://proxy.intranet:3128
-https_proxy=http://proxy.intranet:3128
-no_proxy=localhost,127.0.0.1
+```ini
+[Service]
+Restart=always
+RestartSec=10
+StartLimitIntervalSec=60
+StartLimitBurst=5
 ```
 
 ---
 
-## 9. Sécurisation complémentaire
+## Sécurisation
 
-### Fail2ban (protection anti-brute force SSH)
+### Fail2ban — protection SSH et applicative
 
 ```bash
 apt install -y fail2ban
-
-cat > /etc/fail2ban/jail.d/ssh.conf <<EOF
-[sshd]
-enabled = true
-port    = ssh
-filter  = sshd
-logpath = /var/log/auth.log
-maxretry = 5
-bantime  = 3600
-EOF
-
-systemctl enable fail2ban
-systemctl restart fail2ban
 ```
 
-> L'application gère elle-même la limitation des tentatives de connexion via Symfony `login_throttling` (10 tentatives / 15 minutes par IP).
+Créer `/etc/fail2ban/jail.d/local.conf` :
+
+```ini
+[sshd]
+enabled  = true
+port     = ssh
+maxretry = 5
+bantime  = 3600
+
+[nginx-http-auth]
+enabled = true
+```
+
+```bash
+systemctl enable --now fail2ban
+```
+
+> L'application implémente déjà un rate-limiting natif via Symfony (`login_throttling`) : 10 tentatives par IP par 15 minutes.
 
 ### Désactiver les services inutiles
 
 ```bash
-systemctl disable --now bluetooth avahi-daemon cups 2>/dev/null || true
+systemctl disable --now bluetooth avahi-daemon cups snapd 2>/dev/null || true
 ```
 
 ### Mises à jour automatiques de sécurité
@@ -320,10 +198,36 @@ dpkg-reconfigure --priority=low unattended-upgrades
 
 ---
 
-## 10. Vérification finale
+## Proxy d'entreprise
+
+Si la VM est derrière un proxy, ajouter dans `/var/www/gestion-tchap/.env` :
+
+```dotenv
+# Utilisés par Symfony HttpClient (appels vers le bridge et Tchap)
+http_proxy=http://proxy.intranet:3128
+https_proxy=http://proxy.intranet:3128
+no_proxy=localhost,127.0.0.1
+```
+
+Et dans `/opt/tchap-bridge/.env` pour Node.js :
+
+```dotenv
+HTTPS_PROXY=http://proxy.intranet:3128
+NO_PROXY=localhost,127.0.0.1
+```
+
+Tester la connectivité sortante :
 
 ```bash
-# PHP
+curl -v https://matrix.agent.interieur.tchap.gouv.fr/_matrix/client/v3/login
+```
+
+---
+
+## Vérifications post-installation
+
+```bash
+# PHP et extensions
 php -v
 php -m | grep -E 'pdo_pgsql|mbstring|intl|opcache'
 
@@ -331,25 +235,25 @@ php -m | grep -E 'pdo_pgsql|mbstring|intl|opcache'
 sudo -u postgres psql -c "SELECT version();"
 psql -U tchap_user -d gestion_tchap -c "\dt"
 
-# Composer
-composer --version
+# Bridge Tchap
+curl -s http://127.0.0.1:3000/health | python3 -m json.tool
 
-# PHP-FPM
-systemctl status php8.3-fpm
+# Application
+curl -I http://localhost/login
 
-# Serveur web
-systemctl status apache2   # ou nginx
-curl -I http://localhost/
+# Logs applicatifs
+tail -20 /var/www/gestion-tchap/var/log/prod.log
 ```
 
 ---
 
 ## Récapitulatif des ports
 
-| Port | Service | Sens |
-|------|---------|------|
-| 22 | SSH | Entrant (admin) |
-| 80 | HTTP (redirection HTTPS) | Entrant |
-| 443 | HTTPS | Entrant |
-| 5432 | PostgreSQL | Local uniquement |
-| 443 | HTTPS vers Tchap/Matrix | Sortant |
+| Port | Service | Direction | Remarque |
+|------|---------|-----------|----------|
+| 22 | SSH | Entrant | Administration |
+| 80 | HTTP | Entrant | Redirection vers HTTPS |
+| 443 | HTTPS | Entrant | Application |
+| 3000 | Tchap bridge | Loopback | Jamais exposé |
+| 5432 | PostgreSQL | Loopback | Jamais exposé |
+| 443 | Matrix/Tchap | Sortant | `matrix.agent.interieur.tchap.gouv.fr` |
