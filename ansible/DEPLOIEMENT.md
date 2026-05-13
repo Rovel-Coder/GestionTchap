@@ -102,7 +102,8 @@ gestion-tchap:
 Ouvrir `inventory/group_vars/all.yml` et adapter :
 
 ```yaml
-app_repo:         git@github.com:VOTRE_ORG/gestion-personnel-tchap-PHP.git
+git_host:         gitlab.votre-societe.fr      # ← hostname du GitLab interne
+app_repo:         git@gitlab.votre-societe.fr:VOTRE_GROUPE/gestion-personnel-tchap-PHP.git
 app_branch:       main
 app_port:         8088                         # port exposé sur la VM
 app_default_uri:  https://votre-domaine.fr     # URL publique de l'app
@@ -276,22 +277,25 @@ Si la VM est accessible en SSH depuis internet, le déploiement peut se déclenc
 
 ---
 
-#### Clé SSH de déploiement GitHub (nécessaire pour `git pull`)
+#### Clé SSH de déploiement GitLab (nécessaire pour `git pull`)
 
 Lors du premier `ansible-playbook playbooks/deploy.yml`, Ansible génère une clé SSH pour l'utilisateur `deploy` et affiche la clé publique en fin d'exécution :
 
 ```
 =======================================================
 ACTION REQUISE : Ajoutez cette clé comme Deploy Key
-sur GitHub → Settings → Deploy keys (lecture seule)
+sur GitLab → Settings → Repository → Deploy keys
+(cocher 'Grant read permissions to this key')
 =======================================================
 ssh-ed25519 AAAA... gestion-tchap-deploy@votre-vm
 =======================================================
 ```
 
-Copier cette clé et l'ajouter sur GitHub → **Settings → Deploy keys → Add deploy key** (cocher *Read-only*).
+Copier cette clé et l'ajouter sur GitLab → **Settings → Repository → Deploy keys**.
 
 Sans cette étape, le `git pull` automatique échouera.
+
+> **Note GitHub Actions** : le fichier `.github/workflows/deploy.yml` est prévu pour GitHub. Sur un GitLab interne, il n'a aucun effet (GitLab n'en tient pas compte). Si vous souhaitez l'équivalent GitLab CI/CD (déploiement immédiat sur push), il faudrait créer un `.gitlab-ci.yml` — le timer systemd toutes les heures est suffisant pour la plupart des besoins.
 
 ---
 

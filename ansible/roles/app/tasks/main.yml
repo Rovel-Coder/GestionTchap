@@ -1,5 +1,5 @@
 ---
-# ── Clé SSH pour GitHub (git pull depuis la VM) ─────────────────────────────
+# ── Clé SSH pour Git (git pull depuis la VM) ────────────────────────────────
 
 - name: Création du répertoire .ssh pour deploy
   ansible.builtin.file:
@@ -9,9 +9,9 @@
     group: "{{ deploy_group }}"
     mode: "0700"
 
-- name: Génération d'une clé SSH Ed25519 pour l'accès GitHub
+- name: Génération d'une clé SSH Ed25519 pour l'accès Git
   community.crypto.openssh_keypair:
-    path: "{{ deploy_home }}/.ssh/id_ed25519_github"
+    path: "{{ deploy_home }}/.ssh/id_ed25519_git"
     type: ed25519
     comment: "gestion-tchap-deploy@{{ inventory_hostname }}"
     owner: "{{ deploy_user }}"
@@ -19,34 +19,35 @@
     mode: "0600"
   register: deploy_ssh_key
 
-- name: Ajout de github.com aux known_hosts
+- name: Ajout du serveur Git aux known_hosts
   ansible.builtin.known_hosts:
-    name: github.com
-    key: "{{ lookup('pipe', 'ssh-keyscan github.com 2>/dev/null') }}"
+    name: "{{ git_host }}"
+    key: "{{ lookup('pipe', 'ssh-keyscan ' + git_host + ' 2>/dev/null') }}"
     path: "{{ deploy_home }}/.ssh/known_hosts"
     state: present
   become_user: "{{ deploy_user }}"
 
-- name: Configuration SSH pour utiliser la clé de déploiement sur GitHub
+- name: Configuration SSH pour utiliser la clé de déploiement
   ansible.builtin.blockinfile:
     path: "{{ deploy_home }}/.ssh/config"
     create: true
     owner: "{{ deploy_user }}"
     group: "{{ deploy_group }}"
     mode: "0600"
-    marker: "# {mark} ANSIBLE MANAGED — GitHub deploy key"
+    marker: "# {mark} ANSIBLE MANAGED — Git deploy key"
     block: |
-      Host github.com
-        IdentityFile {{ deploy_home }}/.ssh/id_ed25519_github
+      Host {{ git_host }}
+        IdentityFile {{ deploy_home }}/.ssh/id_ed25519_git
         IdentitiesOnly yes
         StrictHostKeyChecking yes
 
-- name: Affichage de la clé publique GitHub (à ajouter comme Deploy Key)
+- name: Affichage de la clé publique (à ajouter comme Deploy Key sur GitLab)
   ansible.builtin.debug:
     msg:
       - "======================================================="
       - "ACTION REQUISE : Ajoutez cette clé comme Deploy Key"
-      - "sur GitHub → Settings → Deploy keys (lecture seule)"
+      - "sur GitLab → Settings → Repository → Deploy keys"
+      - "(cocher 'Grant read permissions to this key')"
       - "======================================================="
       - "{{ deploy_ssh_key.public_key }}"
       - "======================================================="
