@@ -268,19 +268,28 @@ Si vous voyez le prompt de la VM, tout est bon. Taper `exit` pour revenir sur vo
 
 ### Étape 1 — Prérequis sur votre poste
 
-Ansible doit être installé sur **votre poste** (pas sur la VM).
+Ansible doit être installé sur **votre poste** (pas sur la VM). Il tourne nativement sur Linux et macOS. Sur Windows, il faut passer par WSL.
 
-**Vérifier Python** (requis par Ansible) :
+| Système | Ce qu'il faut faire |
+|---------|---------------------|
+| **Ubuntu / Linux** | Installer directement (voir ci-dessous) |
+| **macOS** | Installer directement (voir ci-dessous) |
+| **Windows** | Activer WSL d'abord (voir ci-dessous) |
 
-```bash
-python3 --version   # doit afficher 3.10 ou supérieur
+**Sur Windows — activer WSL** (à faire une seule fois) :
+
+Ouvrir PowerShell en administrateur et taper :
+```powershell
+wsl --install
 ```
+Redémarrer, puis ouvrir Ubuntu depuis le menu Démarrer. Toutes les commandes suivantes se tapent dans ce terminal Ubuntu.
 
-**Installer Ansible** :
+**Installer Ansible** (Linux, macOS ou WSL) :
 
 ```bash
+python3 --version        # doit afficher 3.10+, sinon : sudo apt install python3
 pip3 install ansible
-ansible --version   # doit afficher [core 2.15+]
+ansible --version        # doit afficher [core 2.15+]
 ```
 
 **Installer les modules Ansible nécessaires** (depuis le dossier du projet) :

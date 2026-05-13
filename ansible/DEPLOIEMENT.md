@@ -142,6 +142,30 @@ ssh root@192.168.1.XX
 
 Ansible tourne sur **votre poste** (pas sur la VM). Il se connecte à la VM via SSH et pilote tout à distance.
 
+### Compatibilité selon votre système
+
+| Système | Support Ansible | Ce qu'il faut faire |
+|---------|----------------|---------------------|
+| **Ubuntu / Linux** | ✅ Natif | Installer directement avec `pip3` |
+| **macOS** | ✅ Natif | Installer directement avec `pip3` |
+| **Windows** | ⚠️ Via WSL | Installer WSL puis Ubuntu dedans (voir ci-dessous) |
+
+> Ansible ne fonctionne **pas** directement sous Windows. Si vous êtes sur Windows, deux options : utiliser **WSL** (Windows Subsystem for Linux), ou lancer Ansible depuis une VM Ubuntu.
+
+### Sur Windows — activer WSL
+
+WSL permet de faire tourner Ubuntu directement dans Windows, sans machine virtuelle séparée.
+
+1. Ouvrir **PowerShell en administrateur** et taper :
+   ```powershell
+   wsl --install
+   ```
+2. Redémarrer le PC quand demandé
+3. Ubuntu s'ouvre automatiquement → choisir un nom d'utilisateur et un mot de passe
+4. Toutes les commandes suivantes sont à taper **dans ce terminal Ubuntu WSL**
+
+### Installer Ansible (Linux, macOS ou WSL)
+
 **Vérifier Python** (requis par Ansible) :
 
 ```bash
