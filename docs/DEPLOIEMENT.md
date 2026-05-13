@@ -2,11 +2,11 @@
 
 Trois modes d'installation sont disponibles :
 
-| Mode | Recommandé pour |
-|------|----------------|
-| **[Docker](#docker)** | Mise en route rapide, poste de développement |
-| **[Ansible (automatisé)](#ansible-automatisé)** | **Production recommandée** — VM configurée et mise à jour automatiquement |
-| **[VM manuelle Ubuntu 24.04 LTS](#vm-ubuntu-2404-lts)** | Production sans Ansible, intégration infrastructure existante |
+| Mode | Technologie sur le serveur | Recommandé pour |
+|------|---------------------------|----------------|
+| **[Docker local](#docker)** | Docker sur votre poste | Mise en route rapide, développement |
+| **[Ansible (automatisé)](#ansible-automatisé)** | Docker sur la VM, géré par Ansible | **Production recommandée** — provisioning et mises à jour automatiques |
+| **[VM manuelle Ubuntu 24.04 LTS](#vm-ubuntu-2404-lts)** | PHP/Nginx/PostgreSQL natifs, sans Docker | Production sur infrastructure existante contrainte |
 
 ---
 
@@ -131,7 +131,7 @@ Les migrations sont automatiquement appliquées au redémarrage du conteneur PHP
 
 ## Ansible (automatisé)
 
-Le déploiement Ansible est **le mode recommandé pour la production**. Il provisionne la VM, déploie l'application via Docker et met en place une **mise à jour automatique toutes les heures** dès qu'un nouveau commit est poussé sur le dépôt.
+Le déploiement Ansible est **le mode recommandé pour la production**. Il installe Docker sur la VM, déploie tous les services dans des containers (`docker-compose.prod.yml`) et met en place une **mise à jour automatique toutes les heures** dès qu'un nouveau commit est poussé sur le dépôt.
 
 Le guide complet est dans [`ansible/DEPLOIEMENT.md`](../ansible/DEPLOIEMENT.md).
 
@@ -176,7 +176,7 @@ Sans cette étape, la mise à jour automatique toutes les heures ne fonctionnera
 
 ---
 
-## VM Ubuntu 24.04 LTS
+## VM Ubuntu 24.04 LTS (sans Docker)
 
 ### Dimensionnement recommandé
 
