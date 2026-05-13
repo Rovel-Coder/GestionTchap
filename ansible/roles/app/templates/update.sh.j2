@@ -1,0 +1,34 @@
+#!/bin/bash
+# Script de mise à jour automatique — Gestion Personnel Tchap
+# Lancé par le timer systemd gestion-tchap-update.timer
+# Logs disponibles via : journalctl -u gestion-tchap-update.service
+
+set -euo pipefail
+
+APP_DIR="{{ app_dir }}"
+COMPOSE_FILE="{{ compose_file }}"
+BRANCH="{{ app_branch }}"
+LOGPREFIX="[gestion-tchap-update]"
+
+cd "$APP_DIR"
+
+echo "$LOGPREFIX Vérification des mises à jour sur la branche $BRANCH..."
+git fetch origin "$BRANCH" --quiet
+
+LOCAL=$(git rev-parse HEAD)
+REMOTE=$(git rev-parse "origin/$BRANCH")
+
+if [ "$LOCAL" = "$REMOTE" ]; then
+    echo "$LOGPREFIX Déjà à jour (commit $LOCAL)."
+    exit 0
+fi
+
+echo "$LOGPREFIX Nouvelle version détectée : $LOCAL → $REMOTE"
+echo "$LOGPREFIX Mise à jour en cours..."
+
+git pull origin "$BRANCH" --ff-only
+
+echo "$LOGPREFIX Build et redémarrage des containers..."
+docker compose -f "$COMPOSE_FILE" up -d --build
+
+echo "$LOGPREFIX Mise à jour terminée avec succès. Commit déployé : $REMOTE"

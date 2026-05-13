@@ -20,6 +20,10 @@ ufw_rules:
   - { port: 22,   proto: tcp, rule: allow, comment: SSH }
   - { port: "{{ app_port }}", proto: tcp, rule: allow, comment: App }
 
+# ── Mise à jour automatique ──────────────────────────────────────────────────
+# Intervalle du timer systemd — format systemd : 5min, 10min, 1h…
+update_interval: 5min
+
 # ── Variables .env de l'application (secrets dans vault.yml) ────────────────
 app_env: prod
 app_default_uri: https://votre-domaine.fr      # À adapter

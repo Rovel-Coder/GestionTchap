@@ -1,4 +1,59 @@
 ---
+# ── Clé SSH pour GitHub (git pull depuis la VM) ─────────────────────────────
+
+- name: Création du répertoire .ssh pour deploy
+  ansible.builtin.file:
+    path: "{{ deploy_home }}/.ssh"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_group }}"
+    mode: "0700"
+
+- name: Génération d'une clé SSH Ed25519 pour l'accès GitHub
+  community.crypto.openssh_keypair:
+    path: "{{ deploy_home }}/.ssh/id_ed25519_github"
+    type: ed25519
+    comment: "gestion-tchap-deploy@{{ inventory_hostname }}"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_group }}"
+    mode: "0600"
+  register: deploy_ssh_key
+
+- name: Ajout de github.com aux known_hosts
+  ansible.builtin.known_hosts:
+    name: github.com
+    key: "{{ lookup('pipe', 'ssh-keyscan github.com 2>/dev/null') }}"
+    path: "{{ deploy_home }}/.ssh/known_hosts"
+    state: present
+  become_user: "{{ deploy_user }}"
+
+- name: Configuration SSH pour utiliser la clé de déploiement sur GitHub
+  ansible.builtin.blockinfile:
+    path: "{{ deploy_home }}/.ssh/config"
+    create: true
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_group }}"
+    mode: "0600"
+    marker: "# {mark} ANSIBLE MANAGED — GitHub deploy key"
+    block: |
+      Host github.com
+        IdentityFile {{ deploy_home }}/.ssh/id_ed25519_github
+        IdentitiesOnly yes
+        StrictHostKeyChecking yes
+
+- name: Affichage de la clé publique GitHub (à ajouter comme Deploy Key)
+  ansible.builtin.debug:
+    msg:
+      - "======================================================="
+      - "ACTION REQUISE : Ajoutez cette clé comme Deploy Key"
+      - "sur GitHub → Settings → Deploy keys (lecture seule)"
+      - "======================================================="
+      - "{{ deploy_ssh_key.public_key }}"
+      - "======================================================="
+  when: deploy_ssh_key.changed
+
+# ── Création du répertoire de l'application ─────────────────────────────────
+
 - name: Création du répertoire de l'application
   ansible.builtin.file:
     path: "{{ app_dir }}"
@@ -52,3 +107,35 @@
   delay: 5
   register: health
   until: health.status in [200, 302, 401]
+
+# ── Timer systemd de mise à jour automatique ────────────────────────────────
+
+- name: Déploiement du script de mise à jour
+  ansible.builtin.template:
+    src: update.sh.j2
+    dest: /opt/gestion-tchap-update.sh
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_group }}"
+    mode: "0750"
+  notify: Reload systemd
+
+- name: Déploiement du service systemd
+  ansible.builtin.template:
+    src: gestion-tchap-update.service.j2
+    dest: /etc/systemd/system/gestion-tchap-update.service
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Déploiement du timer systemd
+  ansible.builtin.template:
+    src: gestion-tchap-update.timer.j2
+    dest: /etc/systemd/system/gestion-tchap-update.timer
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Activation et démarrage du timer de mise à jour
+  ansible.builtin.systemd:
+    name: gestion-tchap-update.timer
+    enabled: true
+    state: started
+    daemon_reload: true

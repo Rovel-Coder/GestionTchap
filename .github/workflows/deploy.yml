@@ -1,0 +1,35 @@
+name: Deploy to VM
+
+# Déclenché automatiquement après un push sur main
+# Nécessite 3 secrets GitHub (voir ansible/DEPLOIEMENT.md section "Auto-déploiement") :
+#   VM_SSH_HOST  — IP ou hostname de la VM
+#   VM_SSH_USER  — utilisateur SSH (ex: deploy)
+#   VM_SSH_KEY   — clé privée SSH (contenu du fichier ~/.ssh/id_ed25519)
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    name: Déploiement sur la VM
+    runs-on: ubuntu-latest
+
+    # Ne se lance que si les secrets SSH sont configurés
+    # (évite les erreurs sur les forks ou les environnements sans VM)
+    if: ${{ vars.VM_AUTODEPLOY == 'true' }}
+
+    steps:
+      - name: Déploiement via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VM_SSH_HOST }}
+          username: ${{ secrets.VM_SSH_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          port: 22
+          timeout: 10m
+          script: |
+            set -euo pipefail
+            echo "[deploy] Déclenchement depuis GitHub Actions — commit ${{ github.sha }}"
+            /opt/gestion-tchap-update.sh
+            echo "[deploy] Déploiement terminé."

@@ -227,15 +227,83 @@ Pour que les autres appareils Tchap fassent confiance au bot et lui transfèrent
 
 ## 6. Mises à jour
 
-Pour déployer une nouvelle version du code :
+### 6.1 Mise à jour automatique (recommandé)
+
+Après le déploiement initial, la VM **se met à jour toute seule** à chaque nouveau commit sur `main`. Deux mécanismes complémentaires sont en place :
+
+#### Timer systemd (toutes les 5 min — installé par Ansible)
+
+Un timer systemd vérifie en permanence si de nouveaux commits sont disponibles sur GitHub. Dès qu'il en détecte, il lance automatiquement `git pull` + `docker compose up -d --build`.
+
+Suivre les logs du timer :
+```bash
+journalctl -u gestion-tchap-update.service -f
+```
+
+Forcer une mise à jour immédiate depuis la VM :
+```bash
+sudo systemctl start gestion-tchap-update.service
+```
+
+Changer l'intervalle de vérification (défaut : `5min`) dans `inventory/group_vars/all.yml` :
+```yaml
+update_interval: 10min   # ou 1h, 30min…
+```
+
+#### GitHub Actions (immédiat — optionnel)
+
+Si la VM est accessible en SSH depuis internet, le déploiement peut se déclencher **immédiatement** après chaque push grâce au workflow `.github/workflows/deploy.yml`.
+
+**Configuration en 3 étapes :**
+
+1. Ajouter les secrets dans GitHub → *Settings → Secrets and variables → Actions* :
+
+   | Secret | Valeur |
+   |--------|--------|
+   | `VM_SSH_HOST` | IP ou hostname de la VM |
+   | `VM_SSH_USER` | `deploy` |
+   | `VM_SSH_KEY` | Contenu de votre clé privée `~/.ssh/id_ed25519` |
+
+2. Activer le déploiement automatique dans GitHub → *Settings → Variables* :
+
+   | Variable | Valeur |
+   |----------|--------|
+   | `VM_AUTODEPLOY` | `true` |
+
+3. C'est tout — le prochain push déclenche automatiquement le déploiement.
+
+> Si la VM n'est pas accessible depuis internet (réseau interne), laisser `VM_AUTODEPLOY` non défini. Le timer systemd prend le relais avec un délai max de 5 min.
+
+---
+
+#### Clé SSH de déploiement GitHub (nécessaire pour `git pull`)
+
+Lors du premier `ansible-playbook playbooks/deploy.yml`, Ansible génère une clé SSH pour l'utilisateur `deploy` et affiche la clé publique en fin d'exécution :
+
+```
+=======================================================
+ACTION REQUISE : Ajoutez cette clé comme Deploy Key
+sur GitHub → Settings → Deploy keys (lecture seule)
+=======================================================
+ssh-ed25519 AAAA... gestion-tchap-deploy@votre-vm
+=======================================================
+```
+
+Copier cette clé et l'ajouter sur GitHub → **Settings → Deploy keys → Add deploy key** (cocher *Read-only*).
+
+Sans cette étape, le `git pull` automatique échouera.
+
+---
+
+### 6.2 Mise à jour manuelle
+
+Si vous souhaitez mettre à jour manuellement depuis votre poste :
 
 ```bash
 ansible-playbook playbooks/update.yml --ask-vault-pass
 ```
 
-Ce playbook effectue un `git pull` et ne rebuilde les images que si des fichiers ont changé.
-
-Pour un rebuild complet (mise à jour des dépendances, changement de Dockerfile) :
+Pour un rebuild complet (changement de Dockerfile, mise à jour des dépendances) :
 
 ```bash
 ansible-playbook playbooks/deploy.yml --ask-vault-pass
@@ -334,20 +402,25 @@ Puis recréer un vault avec ces valeurs et un nouveau mot de passe.
 
 ```
 ansible/
-├── ansible.cfg                    Configuration Ansible (user SSH, clé, etc.)
-├── requirements.yml               Collections Ansible à installer
+├── ansible.cfg                         Configuration Ansible (user SSH, clé, etc.)
+├── requirements.yml                    Collections Ansible à installer
 ├── inventory/
-│   ├── hosts.yml                  ← IP de la VM (à modifier)
+│   ├── hosts.yml                       ← IP de la VM (à modifier)
 │   └── group_vars/
-│       ├── all.yml                ← Variables de l'application (à modifier)
-│       └── vault.yml              ← Secrets chiffrés (à modifier + chiffrer)
+│       ├── all.yml                     ← Variables de l'application (à modifier)
+│       └── vault.yml                   ← Secrets chiffrés (à modifier + chiffrer)
 ├── roles/
-│   ├── common/                    Provisioning système (UFW, fail2ban, SSH…)
-│   ├── docker/                    Installation Docker
-│   └── app/                       Déploiement de l'application
-│       └── templates/env.j2       Template .env généré depuis vault
+│   ├── common/                         Provisioning système (UFW, fail2ban, SSH…)
+│   ├── docker/                         Installation Docker
+│   └── app/                            Déploiement de l'application
+│       ├── handlers/main.yml           Reload systemd
+│       └── templates/
+│           ├── env.j2                  Template .env généré depuis vault
+│           ├── update.sh.j2            Script de mise à jour automatique
+│           ├── gestion-tchap-update.service.j2   Service systemd
+│           └── gestion-tchap-update.timer.j2     Timer systemd (toutes les 5 min)
 └── playbooks/
-    ├── setup.yml                  Initialisation VM (une seule fois)
-    ├── deploy.yml                  Déploiement complet
-    └── update.yml                  Mise à jour rapide
+    ├── setup.yml                       Initialisation VM (une seule fois)
+    ├── deploy.yml                      Déploiement complet
+    └── update.yml                      Mise à jour manuelle rapide
 ```

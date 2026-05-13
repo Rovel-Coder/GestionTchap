@@ -1,0 +1,13 @@
+[Unit]
+Description=Mise à jour automatique de Gestion Personnel Tchap
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User={{ deploy_user }}
+Group={{ deploy_group }}
+ExecStart=/opt/gestion-tchap-update.sh
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=gestion-tchap-update
