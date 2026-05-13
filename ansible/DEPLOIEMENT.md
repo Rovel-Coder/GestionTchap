@@ -218,37 +218,21 @@ app_default_uri:  https://votre-domaine.fr     # URL publique de l'app
 app_cors_origin:  https://votre-domaine.fr     # même valeur
 ```
 
-### 3.5 Configurer les secrets (vault)
+### 3.5 Générer les secrets (vault)
 
 > ⚠ **Ne jamais committer `vault.yml` non chiffré dans Git.**
 
-Générer des secrets forts et les renseigner dans `inventory/group_vars/vault.yml` :
+Un playbook dédié génère automatiquement les secrets cryptographiques et chiffre le vault en une seule commande. Il vous demande uniquement deux choses :
+- Le **mot de passe PostgreSQL** (vous le choisissez librement)
+- Un **mot de passe vault** (protège le fichier vault.yml — à retenir)
 
 ```bash
-# Générer APP_SECRET
-openssl rand -base64 32
-
-# Générer TCHAP_SERVICE_KEY
-openssl rand -hex 32
-
-# Choisir un mot de passe PostgreSQL fort (ex: diceware 6 mots)
+ansible-playbook playbooks/init-secrets.yml
 ```
 
-Éditer le fichier vault :
+`APP_SECRET` et `TCHAP_SERVICE_KEY` sont générés automatiquement. Vous n'avez rien à calculer.
 
-```yaml
-# inventory/group_vars/vault.yml
-vault_db_password:       "votre_mot_de_passe_postgres"
-vault_app_secret:        "résultat_de_openssl_rand_base64_32"
-vault_tchap_service_key: "résultat_de_openssl_rand_hex_32"
-```
-
-Chiffrer le vault :
-
-```bash
-ansible-vault encrypt inventory/group_vars/vault.yml
-# Saisir et retenir le mot de passe vault — il sera demandé à chaque déploiement
-```
+> **⚠ Ne relancez ce playbook qu'une seule fois.** Si vous le relancez après un premier déploiement, les secrets seront régénérés et les sessions utilisateurs ainsi que la connexion Tchap du bot seront invalidées.
 
 ---
 
@@ -520,7 +504,7 @@ ansible/
 │   ├── hosts.yml                       ← IP de la VM (à modifier)
 │   └── group_vars/
 │       ├── all.yml                     ← Variables de l'application (à modifier)
-│       └── vault.yml                   ← Secrets chiffrés (à modifier + chiffrer)
+│       └── vault.yml                   ← Secrets chiffrés (généré par init-secrets.yml)
 ├── roles/
 │   ├── common/                         Provisioning système (UFW, fail2ban, SSH…)
 │   ├── docker/                         Installation Docker
@@ -530,8 +514,9 @@ ansible/
 │           ├── env.j2                  Template .env généré depuis vault
 │           ├── update.sh.j2            Script de mise à jour automatique
 │           ├── gestion-tchap-update.service.j2   Service systemd
-│           └── gestion-tchap-update.timer.j2     Timer systemd (toutes les 5 min)
+│           └── gestion-tchap-update.timer.j2     Timer systemd (toutes les heures)
 └── playbooks/
+    ├── init-secrets.yml                Génération automatique des secrets (1 fois)
     ├── setup.yml                       Initialisation VM (une seule fois)
     ├── deploy.yml                      Déploiement complet
     └── update.yml                      Mise à jour manuelle rapide

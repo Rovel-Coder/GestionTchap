@@ -319,27 +319,19 @@ app_repo:        git@gitlab.votre-societe.fr:VOTRE_GROUPE/gestion-personnel-tcha
 app_default_uri: http://192.168.1.XX:8088   # URL d'accès à l'application
 ```
 
-**`ansible/inventory/group_vars/vault.yml`** — les mots de passe et secrets :
-
-```yaml
-vault_db_password:       "mot_de_passe_fort"
-vault_app_secret:        "secret_32_caracteres"
-vault_tchap_service_key: "cle_bridge_64_caracteres"
-```
-
-Pour générer des valeurs sécurisées :
+**Générer les secrets automatiquement** — un seul playbook s'occupe de tout :
 
 ```bash
-openssl rand -base64 32   # pour vault_app_secret
-openssl rand -hex 32      # pour vault_tchap_service_key et vault_db_password
+ansible-playbook ansible/playbooks/init-secrets.yml
 ```
 
-**Chiffrer le fichier de secrets** (protège les mots de passe si le dépôt est partagé) :
+Ce playbook vous demande uniquement :
+- Le **mot de passe PostgreSQL** (vous le choisissez librement)
+- Un **mot de passe vault** (protège le fichier de secrets — à retenir)
 
-```bash
-ansible-vault encrypt ansible/inventory/group_vars/vault.yml
-# Choisir un mot de passe vault — il sera demandé à chaque déploiement
-```
+`APP_SECRET` et `TCHAP_SERVICE_KEY` sont générés automatiquement. Le fichier `vault.yml` est écrit et chiffré sans intervention supplémentaire.
+
+> **⚠ À lancer une seule fois.** Si vous le relancez après un déploiement existant, les secrets seront régénérés et les sessions utilisateurs seront invalidées.
 
 ---
 
