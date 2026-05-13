@@ -1,11 +1,12 @@
 # Déploiement — Gestion Personnel Tchap
 
-Deux modes d'installation sont disponibles :
+Trois modes d'installation sont disponibles :
 
 | Mode | Recommandé pour |
 |------|----------------|
-| **[Docker](#docker)** | Mise en route rapide, poste de développement, serveur isolé |
-| **[VM Ubuntu 24.04 LTS](#vm-ubuntu-2404-lts)** | Production, intégration dans une infrastructure existante |
+| **[Docker](#docker)** | Mise en route rapide, poste de développement |
+| **[Ansible (automatisé)](#ansible-automatisé)** | **Production recommandée** — VM configurée et mise à jour automatiquement |
+| **[VM manuelle Ubuntu 24.04 LTS](#vm-ubuntu-2404-lts)** | Production sans Ansible, intégration infrastructure existante |
 
 ---
 
@@ -125,6 +126,53 @@ Les migrations sont automatiquement appliquées au redémarrage du conteneur PHP
 | `tchap_data` | Clés E2EE et session Matrix du bridge |
 
 > **Sauvegarder `postgres_data` régulièrement.** Les clés E2EE dans `tchap_data` ne sont pas critiques (reconnexion possible via l'interface) mais leur perte provoque une interruption temporaire du bot.
+
+---
+
+## Ansible (automatisé)
+
+Le déploiement Ansible est **le mode recommandé pour la production**. Il provisionne la VM, déploie l'application via Docker et met en place une **mise à jour automatique toutes les heures** dès qu'un nouveau commit est poussé sur le dépôt.
+
+Le guide complet est dans [`ansible/DEPLOIEMENT.md`](../ansible/DEPLOIEMENT.md).
+
+### Séquence résumée
+
+```bash
+# 1. Installer les collections Ansible
+ansible-galaxy collection install -r ansible/requirements.yml
+
+# 2. Remplir les 3 fichiers de configuration (IP, URL dépôt, secrets)
+#    ansible/inventory/hosts.yml
+#    ansible/inventory/group_vars/all.yml
+#    ansible/inventory/group_vars/vault.yml
+
+# 3. Chiffrer les secrets
+ansible-vault encrypt ansible/inventory/group_vars/vault.yml
+
+# 4. Provisionner la VM (une seule fois)
+ansible-playbook ansible/playbooks/setup.yml --ask-vault-pass
+
+# 5. Déployer l'application
+ansible-playbook ansible/playbooks/deploy.yml --ask-vault-pass
+```
+
+### ⚠ Action manuelle requise après l'étape 5
+
+À la fin du playbook `deploy.yml`, Ansible affiche une clé SSH publique dans les logs :
+
+```
+=======================================================
+ACTION REQUISE : Ajoutez cette clé comme Deploy Key
+sur GitLab → Settings → Repository → Deploy keys
+(cocher 'Grant read permissions to this key')
+=======================================================
+ssh-ed25519 AAAA... gestion-tchap-deploy@votre-vm
+=======================================================
+```
+
+**Copier cette clé et l'ajouter sur GitLab** → Settings → Repository → Deploy keys.
+
+Sans cette étape, la mise à jour automatique toutes les heures ne fonctionnera pas (le `git pull` sera rejeté par GitLab).
 
 ---
 
