@@ -19,9 +19,9 @@ L'ensemble tourne sur une seule VM via Docker Compose. Le bridge Node.js maintie
 
 ---
 
-## 1. Spécifications de la VM
+## 1. Préparer la VM
 
-### Configuration minimale
+### 1.1 Ressources nécessaires
 
 | Ressource | Minimum | Recommandé |
 |-----------|---------|------------|
@@ -31,7 +31,7 @@ L'ensemble tourne sur une seule VM via Docker Compose. Le bridge Node.js maintie
 | OS | Ubuntu 24.04 LTS | Ubuntu 24.04 LTS |
 | Réseau | Accès internet sortant | Accès internet sortant |
 
-### Accès réseau requis
+### 1.2 Accès réseau requis
 
 La VM doit pouvoir joindre en sortie :
 
@@ -40,36 +40,120 @@ La VM doit pouvoir joindre en sortie :
 - `download.docker.com` — port 443 (installation Docker)
 - `registry.npmjs.org` — port 443 (dépendances Node.js, build Docker)
 - `packagist.org` — port 443 (dépendances PHP, build Docker)
+- `gitlab.votre-societe.fr` — port 22 ou 443 (récupération du code source)
 
 En entrée, seuls ces ports doivent être accessibles :
 
 - Port **22** (TCP) — SSH depuis le poste de l'administrateur
 - Port **8088** (TCP) — Interface web de l'application
 
-### Prérequis sur la VM avant Ansible
+### 1.3 Créer la VM avec VirtualBox
 
-La VM doit être une installation Ubuntu 24.04 LTS **vierge** avec :
-- Accès SSH en `root` via clé publique depuis le poste de déploiement
-- Pas d'autre logiciel installé (Ansible s'en charge)
+> Si vous déployez sur un serveur physique ou une VM déjà existante avec Ubuntu 24.04 installé et SSH accessible, passez directement à la [section 2](#2-prérequis-sur-le-poste-de-déploiement).
+
+**VirtualBox** est un logiciel gratuit qui permet de créer des machines virtuelles — c'est-à-dire des ordinateurs simulés qui tournent à l'intérieur de votre vrai poste. Pratique pour héberger l'application sur un poste dédié ou pour tester avant un déploiement sur un vrai serveur.
+
+#### Installer VirtualBox
+
+Télécharger et installer VirtualBox depuis **[virtualbox.org](https://www.virtualbox.org/wiki/Downloads)** (version Windows, macOS ou Linux selon votre poste).
+
+#### Télécharger Ubuntu Server 24.04 LTS
+
+Télécharger le fichier `.iso` depuis **[ubuntu.com/download/server](https://ubuntu.com/download/server)**.
+
+> Choisir **Ubuntu Server 24.04 LTS** (pas la version Desktop) — plus légère et adaptée à un serveur.
+
+#### Créer la VM dans VirtualBox
+
+1. Ouvrir VirtualBox → **Nouvelle**
+2. Renseigner :
+   - **Nom** : `gestion-tchap`
+   - **Type** : Linux / Ubuntu (64-bit)
+3. **RAM** : 4096 Mo minimum
+4. **Processeurs** : 2 minimum
+5. **Disque dur** : nouveau disque virtuel de 40 Go minimum
+6. Cliquer sur **Terminer**
+
+#### Configurer le réseau (important)
+
+Dans VirtualBox, sélectionner la VM → **Configuration → Réseau** :
+- **Mode d'accès réseau** : **Réseau par pont (Bridged Adapter)**
+- **Nom** : sélectionner votre carte réseau principale
+
+> Ce mode donne à la VM une vraie adresse IP sur votre réseau, comme si c'était un ordinateur branché sur le même switch. Sans ça, Ansible ne pourra pas s'y connecter et l'application ne sera pas accessible depuis un navigateur.
+
+#### Installer Ubuntu sur la VM
+
+1. Dans VirtualBox → **Configuration → Stockage** → cliquer sur le lecteur optique vide → **Choisir un fichier de disque** → sélectionner le `.iso` Ubuntu
+2. Démarrer la VM
+3. Suivre l'assistant d'installation :
+   - Langue, clavier : selon vos préférences
+   - Type d'installation : **Ubuntu Server (minimized)**
+   - Réseau : laisser par défaut (DHCP)
+   - Stockage : **utiliser le disque entier**
+   - **Activer OpenSSH : ✅ cocher cette case** — indispensable pour qu'Ansible puisse se connecter
+   - Identifiant : `root` ou ce que vous souhaitez
+4. Attendre la fin et redémarrer
+
+#### Trouver l'adresse IP de la VM
+
+Une fois la VM redémarrée, se connecter avec le compte créé et taper :
+
+```bash
+ip a
+```
+
+Repérer une ligne du type `inet 192.168.1.XX/24`. **Noter cette IP** — elle sera utilisée dans toutes les étapes suivantes.
+
+### 1.4 Configurer l'accès SSH par clé
+
+Ansible se connecte à la VM via **SSH avec une clé** (plus sécurisé qu'un mot de passe). Une clé SSH est une paire de fichiers : une **clé privée** sur votre poste et une **clé publique** sur la VM. Elles fonctionnent comme une clé et une serrure — la VM reconnaît votre poste sans demander de mot de passe.
+
+**Sur votre poste**, vérifier si une clé SSH existe déjà :
+
+```bash
+ls ~/.ssh/id_ed25519.pub
+```
+
+Si le fichier n'existe pas, en créer une :
+
+```bash
+ssh-keygen -t ed25519 -C "deploiement-gestion-tchap"
+# Appuyer sur Entrée 3 fois pour accepter les valeurs par défaut
+```
+
+**Copier la clé publique sur la VM** :
+
+```bash
+ssh-copy-id root@192.168.1.XX   # remplacer par l'IP de votre VM
+# Saisir le mot de passe root de la VM quand demandé
+```
+
+**Vérifier que ça fonctionne** (doit se connecter sans demander de mot de passe) :
+
+```bash
+ssh root@192.168.1.XX
+# Si vous voyez le prompt de la VM, tout est bon — taper "exit" pour revenir
+```
 
 ---
 
 ## 2. Prérequis sur le poste de déploiement
 
-Le poste depuis lequel vous lancez Ansible doit avoir :
+Ansible tourne sur **votre poste** (pas sur la VM). Il se connecte à la VM via SSH et pilote tout à distance.
+
+**Vérifier Python** (requis par Ansible) :
 
 ```bash
-# Python 3.10+ et pip
-python3 --version   # doit afficher 3.10+
-
-# Ansible 2.15+
-ansible --version   # doit afficher [core 2.15+]
-
-# Installation si absent
-pip3 install ansible
+python3 --version   # doit afficher 3.10 ou supérieur
 ```
 
-Vérifier également que votre clé SSH `~/.ssh/id_ed25519` (ou `id_rsa`) est configurée et que la clé publique correspondante est autorisée sur la VM.
+**Installer Ansible** si absent :
+
+```bash
+pip3 install ansible
+ansible --version   # doit afficher [core 2.15+]
+```
 
 ---
 
@@ -232,9 +316,9 @@ Pour que les autres appareils Tchap fassent confiance au bot et lui transfèrent
 
 Après le déploiement initial, la VM **se met à jour toute seule** à chaque nouveau commit sur `main`. Deux mécanismes complémentaires sont en place :
 
-#### Timer systemd (toutes les 5 min — installé par Ansible)
+#### Timer systemd (toutes les heures — installé par Ansible)
 
-Un timer systemd vérifie en permanence si de nouveaux commits sont disponibles sur GitHub. Dès qu'il en détecte, il lance automatiquement `git pull` + `docker compose up -d --build`.
+Un timer systemd vérifie toutes les heures si de nouveaux commits sont disponibles sur GitLab. Dès qu'il en détecte, il lance automatiquement `git pull` + `docker compose up -d --build`.
 
 Suivre les logs du timer :
 ```bash
@@ -246,9 +330,9 @@ Forcer une mise à jour immédiate depuis la VM :
 sudo systemctl start gestion-tchap-update.service
 ```
 
-Changer l'intervalle de vérification (défaut : `5min`) dans `inventory/group_vars/all.yml` :
+Changer l'intervalle de vérification (défaut : `1h`) dans `inventory/group_vars/all.yml` :
 ```yaml
-update_interval: 10min   # ou 1h, 30min…
+update_interval: 30min   # ou 2h, 15min…
 ```
 
 #### GitHub Actions (immédiat — optionnel)
