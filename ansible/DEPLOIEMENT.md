@@ -307,7 +307,7 @@ Ou ouvrir `http://<IP_VM>:8088` dans un navigateur.
 Accéder à l'interface web (`http://<IP>:8088`) et se connecter avec le compte administrateur par défaut :
 
 - **Identifiant** : `Sic`
-- **Mot de passe** : `Sic` (à changer immédiatement)
+- **Mot de passe** : `SicGestionTchap` (à changer immédiatement)
 
 Pour changer le mot de passe : **Configuration → Administrateurs système → Réinitialiser le mot de passe**.
 

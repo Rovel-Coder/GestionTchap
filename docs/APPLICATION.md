@@ -13,7 +13,7 @@ Elle permet de maintenir un annuaire du personnel, de gérer les salons Tchap et
 | Couche | Technologie |
 |--------|------------|
 | Backend | PHP 8.3 / Symfony 7.3 |
-| Base de données | PostgreSQL 14+ |
+| Base de données | PostgreSQL 16 |
 | Accès BDD | Doctrine DBAL (requêtes SQL directes) |
 | Frontend | Twig (templates serveur) + Alpine.js 3 (réactivité) |
 | Icônes | Font Awesome 6.5 (CDN) |
