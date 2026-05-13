@@ -120,6 +120,14 @@ location ~* \.(css|js|png|jpg|svg|woff2?)$ {
     add_header Cache-Control "public, immutable";
 }
 
+# Headers de sécurité HTTP
+add_header X-Frame-Options "DENY" always;
+add_header X-Content-Type-Options "nosniff" always;
+add_header X-XSS-Protection "1; mode=block" always;
+add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+# Activer HSTS si HTTPS est configuré :
+# add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
 # Masquer la version Nginx
 server_tokens off;
 

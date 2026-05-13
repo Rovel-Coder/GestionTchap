@@ -268,6 +268,50 @@
                     </div>
                 </details>
 
+                {# ── Import de clés Megolm ── #}
+                {% if permissions.canAdmin %}
+                <details style="margin-top:14px;">
+                    <summary style="font-size:11px;color:var(--text-muted);cursor:pointer;user-select:none;">
+                        Importer un fichier de clés Megolm (<code>tchap-keys.txt</code>)
+                    </summary>
+                    <div style="margin-top:10px;padding:10px 14px;background:rgba(45,108,223,.05);border:1px solid rgba(45,108,223,.2);border-radius:var(--radius-sm);">
+                        <p style="font-size:11px;color:var(--text-secondary);line-height:1.6;margin-bottom:10px;">
+                            Permet au bot de déchiffrer des messages historiques en important les clés de sessions Megolm
+                            exportées depuis votre application Tchap/Element
+                            (<strong>Paramètres → Sécurité → Exporter les clés E2EE</strong>).
+                        </p>
+                        <div style="display:flex;flex-direction:column;gap:8px;">
+                            <label style="display:block;cursor:pointer;border:1px dashed rgba(45,108,223,.4);border-radius:4px;padding:8px 12px;font-size:12px;text-align:center;color:var(--text-muted);transition:border-color .15s;"
+                                :style="keyFileContent ? 'border-color:rgba(45,108,223,.8);color:var(--blue-light);' : ''"
+                                @dragover.prevent @drop.prevent="onKeyFileChange({target:{files:$event.dataTransfer.files}})">
+                                <i class="fa-solid fa-file-arrow-up" style="margin-right:5px;"></i>
+                                <span x-text="keyFileContent ? '✓ Fichier chargé' : 'Choisir tchap-keys.txt (ou glisser-déposer)'"></span>
+                                <input type="file" accept=".txt" style="display:none;" @change="onKeyFileChange($event)">
+                            </label>
+                            <div style="display:flex;gap:8px;align-items:center;">
+                                <input :type="showKeyPassphrase ? 'text' : 'password'"
+                                    x-model="keyPassphrase"
+                                    placeholder="Passphrase utilisée lors de l'export"
+                                    style="flex:1;font-size:12px;" autocomplete="off">
+                                <button class="btn-ghost" style="font-size:11px;padding:4px 8px;flex-shrink:0;"
+                                    @click="showKeyPassphrase = !showKeyPassphrase"
+                                    :title="showKeyPassphrase ? 'Masquer' : 'Afficher'">
+                                    <i :class="showKeyPassphrase ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye'"></i>
+                                </button>
+                                <button class="btn-primary" style="font-size:11px;padding:6px 12px;flex-shrink:0;"
+                                    :disabled="keyImportLoading || !keyFileContent || !keyPassphrase.trim()"
+                                    @click="doImportKeys()">
+                                    <i x-show="keyImportLoading" class="fa-solid fa-spinner fa-spin"></i>
+                                    <span x-show="!keyImportLoading"><i class="fa-solid fa-key"></i> Importer</span>
+                                </button>
+                            </div>
+                            <div x-show="keyImportResult" style="font-size:11px;padding:6px 10px;border-radius:3px;background:var(--bg-elevated);"
+                                :style="{ color: keyImportResultColor }" x-text="keyImportResult"></div>
+                        </div>
+                    </div>
+                </details>
+                {% endif %}
+
                 {# ── Vérification SAS ── #}
                 {% if permissions.isSysAdmin %}
                 <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border);">
@@ -342,6 +386,38 @@
                          style="font-size:12px;color:var(--red-light);padding:10px 12px;background:rgba(192,57,43,.07);border:1px solid rgba(192,57,43,.25);border-radius:var(--radius-sm);">
                         <span x-text="'✗ ' + (verifError || 'Erreur inconnue')"></span>
                         <button class="btn-ghost" style="margin-left:8px;font-size:11px;" @click="verifState = null">Réessayer</button>
+                    </div>
+
+                    {# ── Vérification par clé de sécurité (alternative au SAS) ── #}
+                    <div style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--border);">
+                        <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+                            <i class="fa-solid fa-key" style="opacity:.7;"></i>
+                            Alternative : vérifier via la clé de sécurité du compte bot
+                        </div>
+                        <p style="font-size:11px;color:var(--text-muted);margin-bottom:10px;line-height:1.6;">
+                            Entrez les 12 groupes de 4 caractères affichés dans
+                            <strong>Tchap → Clés Tchap → Changer le code de vérification</strong>.
+                        </p>
+                        <div style="display:flex;gap:8px;align-items:stretch;">
+                            <input
+                                type="text"
+                                x-model="verifKeyInput"
+                                placeholder="xxxx xxxx xxxx xxxx xxxx xxxx xxxx xxxx xxxx xxxx xxxx xxxx"
+                                style="flex:1;font-size:11px;font-family:monospace;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-input, var(--bg));color:var(--text-primary);"
+                                :disabled="verifKeyLoading"
+                                @keydown.enter="verifyWithKey()"
+                            >
+                            <button class="btn-primary" style="font-size:11px;padding:5px 12px;white-space:nowrap;"
+                                :disabled="verifKeyLoading || !verifKeyInput.trim()"
+                                @click="verifyWithKey()">
+                                <i class="fa-solid fa-spinner fa-spin" x-show="verifKeyLoading" style="margin-right:4px;"></i>
+                                <i class="fa-solid fa-shield-halved" x-show="!verifKeyLoading" style="margin-right:4px;"></i>
+                                Vérifier
+                            </button>
+                        </div>
+                        <div x-show="verifError && !verifState"
+                             style="margin-top:6px;font-size:11px;color:var(--red-light);"
+                             x-text="'✗ ' + verifError"></div>
                     </div>
                 </div>
                 {% endif %}

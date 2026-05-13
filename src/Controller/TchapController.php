@@ -126,13 +126,37 @@ class TchapController extends AbstractController
         ], 400);
     }
 
-    // POST /api/tchap/e2ee/import-keys — non applicable en mode bridge Rust
+    // POST /api/tchap/e2ee/import-keys — import d'un export Megolm (-----BEGIN MEGOLM SESSION DATA-----)
     #[Route('/e2ee/import-keys', name: 'e2ee_import_keys', methods: ['POST'])]
-    public function e2eeImportKeys(): JsonResponse
+    public function e2eeImportKeys(Request $request): JsonResponse
     {
-        return $this->json([
-            'error' => 'L\'import de clés n\'est pas nécessaire en mode bridge : le RustSdkCryptoStorageProvider gère les clés automatiquement.',
-        ], 400);
+        /** @var AppUser $user */
+        $user = $this->getUser();
+        if (!$this->roles->canAdmin($user)) {
+            return $this->json(['error' => 'Accès réservé aux administrateurs'], 403);
+        }
+
+        $data       = json_decode($request->getContent(), true) ?? [];
+        $keys       = trim($data['keys']       ?? '');
+        $passphrase = $data['passphrase'] ?? '';
+
+        if (!$keys || !$passphrase) {
+            return $this->json(['error' => 'keys (contenu du fichier) et passphrase requis'], 400);
+        }
+
+        if (!str_contains($keys, 'BEGIN MEGOLM SESSION DATA')) {
+            return $this->json(['error' => 'Format invalide — le fichier doit commencer par -----BEGIN MEGOLM SESSION DATA-----'], 400);
+        }
+
+        try {
+            $result = $this->tchap->callBridge('POST', '/import-keys', [
+                'keys'       => $keys,
+                'passphrase' => $passphrase,
+            ]);
+            return $this->json($result);
+        } catch (\Throwable $e) {
+            return $this->json(['error' => $e->getMessage()], 500);
+        }
     }
 
     // GET /api/tchap/e2ee/verif-status — état courant de la vérification SAS dans le bridge
@@ -205,6 +229,28 @@ class TchapController extends AbstractController
         }
         try {
             $this->tchap->callBridge('POST', '/verif/cancel');
+            return $this->json(['ok' => true]);
+        } catch (\Throwable $e) {
+            return $this->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    // POST /api/tchap/e2ee/verif-security-key — vérifier le device via la clé de sécurité SSSS
+    #[Route('/e2ee/verif-security-key', name: 'e2ee_verif_security_key', methods: ['POST'])]
+    public function e2eeVerifSecurityKey(Request $request): JsonResponse
+    {
+        /** @var AppUser $user */
+        $user = $this->getUser();
+        if (!$this->roles->canAdmin($user)) {
+            return $this->json(['error' => 'Accès réservé aux administrateurs'], 403);
+        }
+        $body = json_decode($request->getContent(), true) ?? [];
+        $key  = trim($body['key'] ?? '');
+        if (!$key) {
+            return $this->json(['error' => 'Clé de sécurité manquante'], 400);
+        }
+        try {
+            $this->tchap->callBridge('POST', '/verif/security-key', ['key' => $key]);
             return $this->json(['ok' => true]);
         } catch (\Throwable $e) {
             return $this->json(['error' => $e->getMessage()], 500);

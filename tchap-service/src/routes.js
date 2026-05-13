@@ -3,6 +3,7 @@
 const express = require('express');
 const bot     = require('./client');
 const verif   = require('./verif');
+const ssss    = require('./ssss');
 
 const router = express.Router();
 
@@ -24,6 +25,20 @@ router.use((req, res, next) => {
         return res.status(401).json({ error: 'Clé API invalide' });
     }
     next();
+});
+
+// POST /import-keys — import d'un export de clés Megolm (format -----BEGIN MEGOLM SESSION DATA-----)
+router.post('/import-keys', async (req, res) => {
+    const { keys, passphrase } = req.body ?? {};
+    if (!keys || !passphrase) {
+        return res.status(400).json({ error: 'keys (contenu du fichier) et passphrase requis' });
+    }
+    try {
+        const result = await bot.importMegolmKeys(keys, passphrase);
+        res.json(result);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 // POST /login — authentifie le bot et démarre/redémarre la session E2EE
@@ -283,6 +298,20 @@ router.post('/verif/cancel', async (_req, res) => {
     await verif.cancelVerif(cfg);
     res.json({ ok: true });
   } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// POST /verif/security-key — vérifier le device via la clé de sécurité SSSS (12×4 chars)
+router.post('/verif/security-key', async (req, res) => {
+  const { key } = req.body ?? {};
+  if (!key) return res.status(400).json({ error: 'Clé de sécurité manquante' });
+  try {
+    const cfg = bot.getBotConfig();
+    await ssss.verifyWithSecurityKey(cfg, key);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[SSSS] Erreur vérification clé:', e.message);
     res.status(400).json({ error: e.message });
   }
 });

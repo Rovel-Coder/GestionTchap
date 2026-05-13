@@ -1,0 +1,82 @@
+---
+- name: Mise à jour des paquets système
+  ansible.builtin.apt:
+    update_cache: true
+    upgrade: dist
+    cache_valid_time: 3600
+
+- name: Installation des paquets de base
+  ansible.builtin.apt:
+    name:
+      - curl
+      - wget
+      - git
+      - unzip
+      - ca-certificates
+      - gnupg
+      - lsb-release
+      - ufw
+      - fail2ban
+      - logrotate
+      - htop
+    state: present
+
+- name: Création de l'utilisateur deploy
+  ansible.builtin.user:
+    name: "{{ deploy_user }}"
+    group: "{{ deploy_group }}"
+    groups: sudo,docker
+    home: "{{ deploy_home }}"
+    shell: /bin/bash
+    create_home: true
+    state: present
+
+- name: Autoriser la clé SSH pour deploy
+  ansible.posix.authorized_key:
+    user: "{{ deploy_user }}"
+    key: "{{ lookup('file', '~/.ssh/id_ed25519.pub') }}"
+    state: present
+
+- name: Sudoers sans mot de passe pour deploy
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/deploy
+    content: "deploy ALL=(ALL) NOPASSWD: ALL\n"
+    mode: "0440"
+    validate: visudo -cf %s
+
+- name: Durcissement SSH — désactiver auth par mot de passe
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?{{ item.key }}"
+    line: "{{ item.key }} {{ item.value }}"
+    state: present
+  loop:
+    - { key: PasswordAuthentication, value: "no" }
+    - { key: PermitRootLogin, value: "no" }
+    - { key: X11Forwarding, value: "no" }
+    - { key: MaxAuthTries, value: "3" }
+  notify: Restart sshd
+
+- name: Configuration UFW — politique par défaut
+  community.general.ufw:
+    state: enabled
+    policy: deny
+    direction: incoming
+
+- name: Configuration UFW — règles entrantes
+  community.general.ufw:
+    rule: "{{ item.rule }}"
+    port: "{{ item.port | string }}"
+    proto: "{{ item.proto }}"
+    comment: "{{ item.comment }}"
+  loop: "{{ ufw_rules }}"
+
+- name: Fail2ban — activer le service
+  ansible.builtin.systemd:
+    name: fail2ban
+    enabled: true
+    state: started
+
+- name: Timezone Europe/Paris
+  community.general.timezone:
+    name: Europe/Paris

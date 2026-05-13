@@ -80,7 +80,7 @@ class SalonController extends AbstractController
         );
 
         $this->db->executeStatement("INSERT INTO salons ($cols) VALUES ($phs)", $vals);
-        $id  = $this->db->lastInsertId();
+        $id  = (int) $this->db->lastInsertId();
         $row = $this->db->fetchAssociative('SELECT * FROM salons WHERE id = :id', ['id' => $id]);
 
         return $this->json($row, 201);

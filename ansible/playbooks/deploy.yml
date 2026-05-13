@@ -1,0 +1,34 @@
+---
+# Playbook de déploiement (à lancer à chaque mise à jour)
+# Usage : ansible-playbook ansible/playbooks/deploy.yml --ask-vault-pass
+
+- name: Déploiement de l'application Gestion Tchap
+  hosts: prod
+  become: true
+
+  pre_tasks:
+    - name: Vérification de la connectivité
+      ansible.builtin.ping:
+
+    - name: Vérification que Docker est actif
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+      register: docker_status
+      failed_when: docker_status.status.ActiveState != 'active'
+
+  roles:
+    - app
+
+  post_tasks:
+    - name: Statut des containers Docker
+      ansible.builtin.command:
+        cmd: docker compose -f {{ compose_file }} ps
+        chdir: "{{ app_dir }}"
+      become_user: "{{ deploy_user }}"
+      register: compose_ps
+      changed_when: false
+
+    - name: Affichage du statut
+      ansible.builtin.debug:
+        msg: "{{ compose_ps.stdout_lines }}"

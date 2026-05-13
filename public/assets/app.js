@@ -1672,6 +1672,8 @@ function configView() {
     verifEmoji:      [],
     verifUserId:     '',
     verifError:      '',
+    verifKeyInput:   '',
+    verifKeyLoading: false,
     keyPassphrase:   '',
     keyFileContent:  null,
     showKeyPassphrase: false,
@@ -2019,10 +2021,16 @@ function configView() {
           method: 'POST',
           body: JSON.stringify({ keys: this.keyFileContent, passphrase: this.keyPassphrase }),
         });
-        this.keyImportResult      = '✓ ' + (r.imported || 0) + ' clés importées';
-        this.keyImportResultColor = '#6ec38a';
-        this.keyPassphrase        = '';
-        toast(this.keyImportResult, 'success');
+        if (r.info) {
+          this.keyImportResult      = 'ℹ ' + r.info;
+          this.keyImportResultColor = 'var(--text-secondary)';
+          toast(`${r.decoded} sessions déchiffrées — voir détail`, 'info');
+        } else {
+          this.keyImportResult      = '✓ ' + (r.imported || 0) + ' clés importées';
+          this.keyImportResultColor = '#6ec38a';
+          toast(this.keyImportResult, 'success');
+        }
+        this.keyPassphrase = '';
       } catch (e) {
         this.keyImportResult      = '✗ ' + e.message;
         this.keyImportResultColor = 'var(--red-light)';
@@ -2106,6 +2114,27 @@ function configView() {
       try { await apiFetch('/api/tchap/e2ee/verif-mismatch', { method: 'POST' }); } catch (_) {}
       this.verifState = 'error';
       this.verifError = 'Les emojis ne correspondaient pas — vérification annulée.';
+    },
+
+    async verifyWithKey() {
+      const key = this.verifKeyInput.trim();
+      if (!key) return;
+      this.verifKeyLoading = true;
+      this.verifError = '';
+      try {
+        await apiFetch('/api/tchap/e2ee/verif-security-key', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key }),
+        });
+        this.verifState    = 'done';
+        this.verifKeyInput = '';
+        toast('Appareil vérifié via la clé de sécurité ✓', 'success');
+      } catch (e) {
+        this.verifError = e.message;
+      } finally {
+        this.verifKeyLoading = false;
+      }
     },
 
     openResetPassword(admin) { this.resetTarget = admin; this.resetPassword = ''; this.resetError = null; this.resetPasswordModal = true; },

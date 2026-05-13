@@ -118,7 +118,7 @@ class NiveauxController extends AbstractController
                 'INSERT INTO niveaux (nom, slug, ordre) VALUES (:nom, :slug, :ordre)',
                 ['nom' => trim($data['nom']), 'slug' => trim($data['slug']), 'ordre' => $ordre]
             );
-            $id = $this->db->lastInsertId();
+            $id = (int) $this->db->lastInsertId();
             $this->db->commit();
         } catch (\Exception $e) {
             $this->db->rollBack();

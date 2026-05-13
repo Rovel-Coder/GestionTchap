@@ -1,0 +1,31 @@
+---
+# Mise à jour de l'application sans rebuild complet
+# Usage : ansible-playbook ansible/playbooks/update.yml --ask-vault-pass
+
+- name: Mise à jour rapide (git pull + restart)
+  hosts: prod
+  become: true
+
+  tasks:
+    - name: Git pull
+      ansible.builtin.git:
+        repo: "{{ app_repo }}"
+        dest: "{{ app_dir }}"
+        version: "{{ app_branch }}"
+        force: false
+      become_user: "{{ deploy_user }}"
+      register: git_result
+
+    - name: Rebuild et restart si code modifié
+      community.docker.docker_compose_v2:
+        project_src: "{{ app_dir }}"
+        files: ["{{ compose_file }}"]
+        build: always
+        state: present
+      become_user: "{{ deploy_user }}"
+      when: git_result.changed
+
+    - name: Aucune modification détectée
+      ansible.builtin.debug:
+        msg: "Déjà à jour sur la branche {{ app_branch }}"
+      when: not git_result.changed

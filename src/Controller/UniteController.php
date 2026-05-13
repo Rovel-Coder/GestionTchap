@@ -105,7 +105,7 @@ class UniteController extends AbstractController
         [$cols, $vals, $phs] = $this->buildInsert($fields);
         $this->db->executeStatement("INSERT INTO unites ($cols) VALUES ($phs)", $vals);
 
-        $id  = $this->db->lastInsertId();
+        $id  = (int) $this->db->lastInsertId();
         $row = $this->db->fetchAssociative(
             'SELECT u.*, n.nom AS niveau_nom, n.ordre AS niveau_ordre
              FROM unites u LEFT JOIN niveaux n ON n.id = u.niveau_id

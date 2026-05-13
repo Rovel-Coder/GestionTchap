@@ -339,6 +339,42 @@ async function loginAndRestart(homeserver, username, password) {
   };
 }
 
+async function importMegolmKeys(keysContent, passphrase) {
+  if (!matrixClient || !_ready) throw new Error('Bot non connecté — démarrez le bridge avant d\'importer des clés');
+
+  const { decryptMegolmKeyExport } = require('./megolm-import');
+  const sessions = await decryptMegolmKeyExport(keysContent, passphrase);
+  console.log(`[E2EE] Import : ${sessions.length} session(s) Megolm déchiffrée(s)`);
+
+  // Accès au OlmMachine via la chaîne de propriétés privées (TS 'private' = JS ordinaire)
+  const cryptoClient = matrixClient.crypto;
+  const engine       = cryptoClient?.engine;
+  const machine      = engine?.machine;
+
+  const tryImport = machine?.importDecryptedRoomKeys
+    ?? machine?.importRoomKeys
+    ?? cryptoClient?.importRoomKeys
+    ?? cryptoClient?.importDecryptedRoomKeys;
+
+  if (typeof tryImport === 'function') {
+    const target = machine ?? cryptoClient;
+    try {
+      await tryImport.call(target, sessions);
+      console.log(`[E2EE] ✓ ${sessions.length} session(s) importée(s) via SDK`);
+      return { imported: sessions.length, method: 'sdk' };
+    } catch (e) {
+      console.warn('[E2EE] Échec import SDK :', e.message);
+    }
+  }
+
+  console.warn(`[E2EE] ⚠ ${sessions.length} session(s) déchiffrées, import SDK non supporté.`);
+  return {
+    imported:  0,
+    decoded:   sessions.length,
+    info: `${sessions.length} sessions déchiffrées avec succès. Le Rust SDK (matrix-sdk-crypto-nodejs) ne supporte pas l'injection de sessions depuis un export Element — utilisez la Vérification SAS pour que vos appareils Tchap transfèrent automatiquement les clés au bot.`,
+  };
+}
+
 function get() {
   if (!matrixClient || !_ready) throw new Error('Client Matrix non prêt — bot non configuré ou démarrage en cours');
   return matrixClient;
@@ -347,4 +383,4 @@ function get() {
 function isReady() { return _ready; }
 function getBotConfig() { return loadBotConfig(); }
 
-module.exports = { start, loginAndRestart, get, isReady, getBotConfig };
+module.exports = { start, loginAndRestart, importMegolmKeys, get, isReady, getBotConfig };

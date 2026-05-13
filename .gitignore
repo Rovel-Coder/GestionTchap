@@ -17,3 +17,6 @@
 
 # Docker secrets locaux
 /docker-compose.override.yml
+
+# Worktrees Claude Code (internes à l'outil)
+/.claude/worktrees/

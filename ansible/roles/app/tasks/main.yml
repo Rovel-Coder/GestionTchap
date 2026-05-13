@@ -1,0 +1,54 @@
+---
+- name: Création du répertoire de l'application
+  ansible.builtin.file:
+    path: "{{ app_dir }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_group }}"
+    mode: "0750"
+
+- name: Clonage / mise à jour du dépôt Git
+  ansible.builtin.git:
+    repo: "{{ app_repo }}"
+    dest: "{{ app_dir }}"
+    version: "{{ app_branch }}"
+    force: false
+  become_user: "{{ deploy_user }}"
+  register: git_result
+
+- name: Déploiement du fichier .env
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ app_dir }}/.env"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_group }}"
+    mode: "0640"
+  register: env_changed
+
+- name: Construction des images Docker
+  community.docker.docker_compose_v2:
+    project_src: "{{ app_dir }}"
+    files: ["{{ compose_file }}"]
+    build: always
+    state: present
+  become_user: "{{ deploy_user }}"
+  when: git_result.changed or env_changed.changed
+
+- name: Démarrage / mise à jour des services
+  community.docker.docker_compose_v2:
+    project_src: "{{ app_dir }}"
+    files: ["{{ compose_file }}"]
+    state: present
+    pull: policy
+  become_user: "{{ deploy_user }}"
+
+- name: Attendre que l'application réponde
+  ansible.builtin.uri:
+    url: "http://localhost:{{ app_port }}"
+    method: GET
+    status_code: [200, 302, 401]
+    timeout: 5
+  retries: 12
+  delay: 5
+  register: health
+  until: health.status in [200, 302, 401]

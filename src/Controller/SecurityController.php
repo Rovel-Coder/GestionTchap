@@ -251,7 +251,7 @@ class SecurityController extends AbstractController
 
         try {
             $this->db->insert('system_admins', ['username' => $username, 'password_hash' => $hash]);
-            $id  = $this->db->lastInsertId();
+            $id  = (int) $this->db->lastInsertId();
             $row = $this->db->fetchAssociative(
                 'SELECT id, username, created_at FROM system_admins WHERE id = :id',
                 ['id' => $id]

@@ -141,7 +141,7 @@ class PersonnelController extends AbstractController
             "INSERT INTO personnel ($cols) VALUES ($phs)",
             $vals
         );
-        $id  = $this->db->lastInsertId();
+        $id  = (int) $this->db->lastInsertId();
         $row = $this->db->fetchAssociative('SELECT * FROM personnel WHERE id = :id', ['id' => $id]);
 
         return $this->json($this->formatRow($row), 201);

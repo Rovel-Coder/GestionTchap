@@ -1,0 +1,27 @@
+---
+# ── Utilisateur de déploiement ──────────────────────────────────────────────
+deploy_user: deploy
+deploy_group: deploy
+deploy_home: /home/deploy
+
+# ── Répertoire de l'application ─────────────────────────────────────────────
+app_dir: /opt/gestion-tchap
+app_repo: git@github.com:VOTRE_ORG/gestion-personnel-tchap-PHP.git
+app_branch: main
+
+# ── Port exposé par Nginx ────────────────────────────────────────────────────
+app_port: 8088
+
+# ── Docker Compose file à utiliser en prod ──────────────────────────────────
+compose_file: docker-compose.prod.yml
+
+# ── Firewall : ports ouverts ─────────────────────────────────────────────────
+ufw_rules:
+  - { port: 22,   proto: tcp, rule: allow, comment: SSH }
+  - { port: "{{ app_port }}", proto: tcp, rule: allow, comment: App }
+
+# ── Variables .env de l'application (secrets dans vault.yml) ────────────────
+app_env: prod
+app_default_uri: https://votre-domaine.fr      # À adapter
+app_cors_origin: https://votre-domaine.fr      # À adapter
+tchap_homeserver: https://matrix.agent.interieur.tchap.gouv.fr
