@@ -2,12 +2,14 @@
 
 namespace App\Service;
 
+use Psr\Log\LoggerInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 class TchapService
 {
     public function __construct(
         private readonly HttpClientInterface $httpClient,
+        private readonly LoggerInterface $logger,
         private readonly string $bridgeUrl = '',
         private readonly string $bridgeKey = '',
     ) {
@@ -148,7 +150,7 @@ class TchapService
             try {
                 $data = $this->callBridge('GET', '/rooms/' . rawurlencode($roomId) . '/members');
             } catch (\Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface $e) {
-                error_log('[TchapService] Bridge injoignable pour getMembers, fallback direct : ' . $e->getMessage());
+                $this->logger->warning('[TchapService] Bridge injoignable pour getMembers, fallback direct', ['exception' => $e->getMessage()]);
                 $path = '/rooms/' . rawurlencode($roomId) . '/members?membership=join';
                 $data = $this->call('GET', $path, $config);
             }
@@ -169,7 +171,7 @@ class TchapService
             try {
                 return $this->callBridge('POST', '/rooms/' . rawurlencode($roomId) . '/invite', ['userId' => $userId]);
             } catch (\Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface $e) {
-                error_log('[TchapService] Bridge injoignable pour invite, fallback direct : ' . $e->getMessage());
+                $this->logger->warning('[TchapService] Bridge injoignable pour invite, fallback direct', ['exception' => $e->getMessage()]);
             }
         }
 
@@ -187,7 +189,7 @@ class TchapService
             try {
                 return $this->callBridge('POST', '/rooms/' . rawurlencode($roomId) . '/kick', ['userId' => $userId, 'reason' => $reason]);
             } catch (\Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface $e) {
-                error_log('[TchapService] Bridge injoignable pour kick, fallback direct : ' . $e->getMessage());
+                $this->logger->warning('[TchapService] Bridge injoignable pour kick, fallback direct', ['exception' => $e->getMessage()]);
             }
         }
 
@@ -205,7 +207,7 @@ class TchapService
             try {
                 return $this->callBridge('POST', '/rooms/' . rawurlencode($roomId) . '/leave');
             } catch (\Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface $e) {
-                error_log('[TchapService] Bridge injoignable pour leaveRoom, fallback direct : ' . $e->getMessage());
+                $this->logger->warning('[TchapService] Bridge injoignable pour leaveRoom, fallback direct', ['exception' => $e->getMessage()]);
             }
         }
 
@@ -220,7 +222,7 @@ class TchapService
                 return $this->callBridge('POST', '/rooms', ['name' => $name, 'topic' => $topic, 'preset' => $preset]);
             } catch (\Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface $e) {
                 // Bridge injoignable → fallback direct API (sans E2EE)
-                error_log('[TchapService] Bridge injoignable pour createRoom, fallback direct : ' . $e->getMessage());
+                $this->logger->warning('[TchapService] Bridge injoignable pour createRoom, fallback direct', ['exception' => $e->getMessage()]);
             }
         }
 

@@ -208,6 +208,7 @@
 window.CURRENT_USER = {{ user|json_encode|raw }};
 window.PERMISSIONS  = {{ permissions|json_encode|raw }};
 window.UI_CONFIG    = {{ uiConfig|json_encode|raw }};
+window.CSRF_TOKEN   = {{ csrf_token('api')|json_encode|raw }};
 </script>
 
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js"></script>

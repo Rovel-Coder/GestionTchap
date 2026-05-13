@@ -46,9 +46,13 @@ const ALL_GRADES = [
 
 // ── Utilitaires API ────────────────────────────────────────
 async function apiFetch(url, options = {}) {
+  const method = (options.method || 'GET').toUpperCase();
+  const csrfHeaders = !['GET', 'HEAD', 'OPTIONS'].includes(method) && window.CSRF_TOKEN
+    ? { 'X-CSRF-Token': window.CSRF_TOKEN }
+    : {};
   const res = await fetch(url, {
     ...options,
-    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', ...(options.headers || {}) },
+    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', ...csrfHeaders, ...(options.headers || {}) },
   });
   if (res.status === 204) return null;
   let data;
