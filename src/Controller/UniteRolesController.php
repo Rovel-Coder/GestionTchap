@@ -161,11 +161,21 @@ class UniteRolesController extends AbstractController
         }
 
         try {
-            $this->db->executeStatement(
-                'INSERT INTO personnel_unite (personnel_id, unite_id, type) VALUES (:pid, :uid, :type)
-                 ON CONFLICT DO NOTHING',
-                ['pid' => $id, 'uid' => $uniteId, 'type' => $type]
-            );
+            if ($type === 'reel') {
+                // UPSERT : met à jour l'unité si l'agent a déjà une affectation réelle
+                $this->db->executeStatement(
+                    "INSERT INTO personnel_unite (personnel_id, unite_id, type) VALUES (:pid, :uid, :type)
+                     ON CONFLICT (personnel_id) WHERE type = 'reel'
+                     DO UPDATE SET unite_id = EXCLUDED.unite_id",
+                    ['pid' => $id, 'uid' => $uniteId, 'type' => $type]
+                );
+            } else {
+                $this->db->executeStatement(
+                    'INSERT INTO personnel_unite (personnel_id, unite_id, type) VALUES (:pid, :uid, :type)
+                     ON CONFLICT DO NOTHING',
+                    ['pid' => $id, 'uid' => $uniteId, 'type' => $type]
+                );
+            }
         } catch (\Exception $e) {
             throw $e;
         }
