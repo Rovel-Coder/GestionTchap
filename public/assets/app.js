@@ -69,14 +69,14 @@ function toast(message, type = 'info') {
   window.dispatchEvent(new CustomEvent('toast', { detail: { message, type } }));
 }
 
-function parseCsvLine(line) {
+function parseCsvLine(line, sep) {
   const result = [];
   let field = '';
   let inQuotes = false;
   for (let i = 0; i < line.length; i++) {
     const ch = line[i];
     if (ch === '"') { inQuotes = !inQuotes; continue; }
-    if (ch === ',' && !inQuotes) { result.push(field.trim()); field = ''; continue; }
+    if (ch === sep && !inQuotes) { result.push(field.trim()); field = ''; continue; }
     field += ch;
   }
   result.push(field.trim());
@@ -84,11 +84,16 @@ function parseCsvLine(line) {
 }
 
 function parseCsv(text) {
-  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  // Supprimer le BOM UTF-8 éventuel
+  const clean = text.replace(/^﻿/, '');
+  const lines = clean.split(/\r?\n/).filter(l => l.trim());
   if (lines.length < 2) return [];
-  const headers = parseCsvLine(lines[0]).map(h => h.trim());
+  // Détection automatique du séparateur : ';' si plus fréquent que ',' sur la première ligne
+  const firstLine = lines[0];
+  const sep = (firstLine.split(';').length > firstLine.split(',').length) ? ';' : ',';
+  const headers = parseCsvLine(firstLine, sep).map(h => h.trim());
   return lines.slice(1).map(line => {
-    const vals = parseCsvLine(line);
+    const vals = parseCsvLine(line, sep);
     const obj = {};
     headers.forEach((h, i) => { obj[h] = vals[i] || ''; });
     return obj;
@@ -504,22 +509,23 @@ function personnelView() {
 
     async confirmCsvImport() {
       this.csvImporting = true;
-      let ok = 0, errors = 0;
+      let ok = 0, errors = 0, firstError = null;
       for (const row of this.csvRows.filter(r => r.valid && !r.existingAgent)) {
         try {
           const { valid, existingAgent, ...data } = row;
           await apiFetch('/api/personnel', { method: 'POST', body: JSON.stringify(data) });
           ok++;
-        } catch (e) { errors++; }
+        } catch (e) { errors++; firstError = firstError || e.message; }
       }
       for (const row of this.csvRows.filter(r => r.valid && r.existingAgent)) {
         try {
           const { valid, existingAgent, ...data } = row;
           await apiFetch(`/api/personnel/${existingAgent.id}`, { method: 'PATCH', body: JSON.stringify(data) });
           ok++;
-        } catch (e) { errors++; }
+        } catch (e) { errors++; firstError = firstError || e.message; }
       }
-      toast(`Import terminé : ${ok} traité(s)${errors ? ', ' + errors + ' erreur(s)' : ''}`, errors ? 'error' : 'success');
+      const msg = `Import terminé : ${ok} traité(s)${errors ? ', ' + errors + ' erreur(s)' : ''}`;
+      toast(errors ? `${msg} — ${firstError}` : msg, errors ? 'error' : 'success');
       this.csvImporting = false;
       this.closeCsvModal();
       await this.load();

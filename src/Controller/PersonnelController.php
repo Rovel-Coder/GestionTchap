@@ -137,10 +137,14 @@ class PersonnelController extends AbstractController
 
         [$cols, $vals, $phs] = $this->buildInsert($fields);
 
-        $this->db->executeStatement(
-            "INSERT INTO personnel ($cols) VALUES ($phs)",
-            $vals
-        );
+        try {
+            $this->db->executeStatement(
+                "INSERT INTO personnel ($cols) VALUES ($phs)",
+                $vals
+            );
+        } catch (\Throwable $e) {
+            return $this->json(['error' => 'Erreur base de données : ' . $e->getMessage()], 500);
+        }
         $id  = (int) $this->db->lastInsertId();
         $row = $this->db->fetchAssociative('SELECT * FROM personnel WHERE id = :id', ['id' => $id]);
 
@@ -174,10 +178,14 @@ class PersonnelController extends AbstractController
 
         [$sets, $vals] = $this->buildUpdate($fields, $id);
 
-        $count = $this->db->executeStatement(
-            "UPDATE personnel SET $sets WHERE id = :__id",
-            $vals
-        );
+        try {
+            $count = $this->db->executeStatement(
+                "UPDATE personnel SET $sets WHERE id = :__id",
+                $vals
+            );
+        } catch (\Throwable $e) {
+            return $this->json(['error' => 'Erreur base de données : ' . $e->getMessage()], 500);
+        }
 
         if (!$count) {
             return $this->json(['error' => 'Agent introuvable'], 404);
@@ -339,17 +347,11 @@ class PersonnelController extends AbstractController
     private function validateFields(array $fields): ?string
     {
         if (isset($fields['NiGend'])) {
-    $n = trim((string) $fields['NiGend']);
-
-    // Autoriser vide
-    if ($n !== '') {
-
-        // Vérification uniquement si renseigné
-        if (!preg_match('/^\d{6}$/', $n) || (int)$n < 100000 || (int)$n > 999999) {
-            return 'Le NiGend doit être un nombre à 6 chiffres (100000–999999)';
+            $n = trim((string) $fields['NiGend']);
+            if ($n !== '' && !preg_match('/^\d{6}$/', $n)) {
+                return 'Le NiGend doit être un nombre à 6 chiffres';
+            }
         }
-    }
-}
         foreach (self::LIMITS as $key => $limit) {
             if (isset($fields[$key]) && is_string($fields[$key]) && strlen($fields[$key]) > $limit) {
                 return sprintf('Le champ "%s" dépasse la limite de %d caractères', $key, $limit);
