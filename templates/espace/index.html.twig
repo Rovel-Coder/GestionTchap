@@ -301,8 +301,8 @@ function espaceView() {
             this.loading = true;
             try {
                 const [espR, salR] = await Promise.all([
-                    fetch('/api/espaces').then(r => r.json()),
-                    fetch('/api/salons').then(r => r.json()),
+                    apiFetch('/api/espaces'),
+                    apiFetch('/api/salons'),
                 ]);
                 this.espaces   = espR;
                 this.allSalons = salR;
@@ -334,14 +334,10 @@ function espaceView() {
             try {
                 const url    = this.modalMode === 'create' ? '/api/espaces' : `/api/espaces/${this.form.id}`;
                 const method = this.modalMode === 'create' ? 'POST' : 'PATCH';
-                const resp   = await fetch(url, {
+                const data   = await apiFetch(url, {
                     method,
-                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ Nom: this.form.Nom, Description: this.form.Description }),
                 });
-                const data = await resp.json();
-                if (!resp.ok) { this.modalError = data.error ?? 'Erreur inconnue'; return; }
-
                 if (this.modalMode === 'create') {
                     this.espaces.push(data);
                 } else {
@@ -362,9 +358,7 @@ function espaceView() {
             espace._loading = true;
             espace._error   = null;
             try {
-                const resp = await fetch(`/api/espaces/${espace.id}/create-space`, { method: 'POST' });
-                const data = await resp.json();
-                if (!resp.ok) { espace._error = data.error ?? 'Erreur'; return; }
+                const data = await apiFetch(`/api/espaces/${espace.id}/create-space`, { method: 'POST' });
                 Object.assign(espace, data);
             } catch (e) {
                 espace._error = e.message;
@@ -399,13 +393,10 @@ function espaceView() {
             espace._loading    = true;
             this.addSalonError = null;
             try {
-                const resp = await fetch(`/api/espaces/${espace.id}/salons`, {
+                const data = await apiFetch(`/api/espaces/${espace.id}/salons`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ salonId: salon.id }),
                 });
-                const data = await resp.json();
-                if (!resp.ok) { this.addSalonError = data.error ?? 'Erreur'; return; }
                 espace._salons = data._salons;
                 if (data._tchap_warning) this.addSalonError = data._tchap_warning;
             } catch (e) {
@@ -419,9 +410,7 @@ function espaceView() {
             espace._loading = true;
             espace._error   = null;
             try {
-                const resp = await fetch(`/api/espaces/${espace.id}/salons/${salon.id}`, { method: 'DELETE' });
-                const data = await resp.json();
-                if (!resp.ok) { espace._error = data.error ?? 'Erreur'; return; }
+                const data = await apiFetch(`/api/espaces/${espace.id}/salons/${salon.id}`, { method: 'DELETE' });
                 espace._salons = data._salons;
                 if (data._tchap_warning) espace._error = data._tchap_warning;
             } catch (e) {
@@ -450,13 +439,10 @@ function espaceView() {
             this.inviteSuccess = null;
             this.saving        = true;
             try {
-                const resp = await fetch(`/api/espaces/${this.inviteTarget.id}/invite`, {
+                await apiFetch(`/api/espaces/${this.inviteTarget.id}/invite`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ userId: this.inviteUserId.trim() }),
                 });
-                const data = await resp.json();
-                if (!resp.ok) { this.inviteError = data.error ?? 'Erreur'; return; }
                 this.inviteSuccess = `✓ ${this.inviteUserId} invité dans l'espace`;
                 this.inviteUserId  = '';
             } catch (e) {
@@ -481,20 +467,12 @@ function espaceView() {
             this.deleteError = null;
             this.saving      = true;
             try {
-                // Si l'espace existe sur Tchap, faire partir le bot d'abord
                 if (this.deleteTarget.space_id) {
-                    await fetch(`/api/salons/${encodeURIComponent(this.deleteTarget.space_id)}/leave`, { method: 'POST' })
-                        .catch(() => {}); // non bloquant
+                    await apiFetch(`/api/salons/${encodeURIComponent(this.deleteTarget.space_id)}/leave`, { method: 'POST' })
+                        .catch(() => {});
                 }
-
-                const resp = await fetch(`/api/espaces/${this.deleteTarget.id}`, { method: 'DELETE' });
-                if (!resp.ok) {
-                    const data = await resp.json().catch(() => ({}));
-                    this.deleteError = data.error ?? `Erreur HTTP ${resp.status}`;
-                    return;
-                }
-
-                this.espaces    = this.espaces.filter(e => e.id !== this.deleteTarget.id);
+                await apiFetch(`/api/espaces/${this.deleteTarget.id}`, { method: 'DELETE' });
+                this.espaces      = this.espaces.filter(e => e.id !== this.deleteTarget.id);
                 this.deleteTarget = null;
             } catch (e) {
                 this.deleteError = e.message;
