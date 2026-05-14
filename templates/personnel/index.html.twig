@@ -615,8 +615,8 @@
                         Invalides — ignorés (<span x-text="csvInvalid.length"></span>)
                     </div>
                     <div style="display:flex;flex-wrap:wrap;gap:6px;">
-                        <template x-for="row in csvInvalid" :key="row.raw">
-                            <span style="font-family:var(--font-display);font-size:10px;padding:2px 8px;border-radius:3px;background:var(--bg-elevated);color:var(--text-muted);border:1px solid var(--border);opacity:.7;" x-text="row.raw"></span>
+                        <template x-for="(row, i) in csvInvalid" :key="'inv-' + i">
+                            <span style="font-family:var(--font-display);font-size:10px;padding:2px 8px;border-radius:3px;background:var(--bg-elevated);color:var(--text-muted);border:1px solid var(--border);opacity:.7;" x-text="row.raw || '(vide)'"></span>
                         </template>
                     </div>
                 </div>

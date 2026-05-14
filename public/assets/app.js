@@ -502,9 +502,10 @@ function personnelView() {
           const matchedSalonIds = matchedSalons.map(s => s.id);
           const valid = !!email;
           const existingAgent = valid ? (this.personnel.find(a => (a.Mail || '').toLowerCase() === email) || null) : null;
+          const raw = [r.NiGend, r['Prénom'] || r.Prenom, r.Nom, r.Mail || r.Email].filter(Boolean).join(' ') || Object.values(r).find(v => v) || '(vide)';
           return {
             ...r,
-            Mail: email, Prenom: prenom, Nom: nom, Grade: grade || r.Grade || '', user_id: userId,
+            Mail: email, Prenom: prenom, Nom: nom, Grade: grade || r.Grade || '', user_id: userId, raw,
             Salons_Extra: matchedSalonIds,
             _uniteId:    matchedUnite?.id || null,
             _uniteNom:   uniteNom,
