@@ -288,6 +288,8 @@ class PersonnelController extends AbstractController
             }
             if ($key === 'Unite' || $key === 'Salons_Extra') {
                 $fields[$key] = $this->toIntArray($data[$key]);
+            } elseif ($key === 'grist_user_id') {
+                $fields[$key] = (int) ($data[$key] ?? 0);
             } elseif ($key === 'user_id') {
                 $fields[$key] = $this->normalizeMatrixId($data[$key]);
             } else {
