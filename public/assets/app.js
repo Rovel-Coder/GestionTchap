@@ -544,6 +544,22 @@ function personnelView() {
     async confirmCsvImport() {
       this.csvImporting = true;
       let ok = 0, errors = 0, firstError = null;
+
+      // Étape 1 : créer les unités manquantes (noms du CSV absents de this.unites)
+      const uniteNomsManquants = [...new Set(
+        this.csvRows.filter(r => r.valid && r._uniteNom && !r._uniteId).map(r => r._uniteNom)
+      )];
+      for (const nom of uniteNomsManquants) {
+        try {
+          const unite = await apiFetch('/api/unites', { method: 'POST', body: JSON.stringify({ Nom: nom }) });
+          if (unite?.id) {
+            this.unites.push(unite);
+            this.csvRows.forEach(r => { if (r._uniteNom === nom) r._uniteId = unite.id; });
+          }
+        } catch (_) { /* non sysadmin ou autre erreur : on continue sans unité */ }
+      }
+
+      // Étape 2 : importer les agents
       for (const row of this.csvRows.filter(r => r.valid && !r.existingAgent)) {
         try {
           const { valid, existingAgent, _uniteId, _uniteNom, _salonNom, _salonFound, _salonTotal, ...data } = row;
@@ -552,7 +568,7 @@ function personnelView() {
             await apiFetch(`/api/personnel/${created.id}/unites`, {
               method: 'POST',
               body: JSON.stringify({ unite_id: _uniteId, type: 'reel' }),
-            }).catch(() => {});
+            }).catch(e => { firstError = firstError || `Unité : ${e.message}`; });
           }
           ok++;
         } catch (e) { errors++; firstError = firstError || e.message; }
@@ -565,7 +581,7 @@ function personnelView() {
             await apiFetch(`/api/personnel/${existingAgent.id}/unites`, {
               method: 'POST',
               body: JSON.stringify({ unite_id: _uniteId, type: 'reel' }),
-            }).catch(() => {});
+            }).catch(e => { firstError = firstError || `Unité : ${e.message}`; });
           }
           ok++;
         } catch (e) { errors++; firstError = firstError || e.message; }
