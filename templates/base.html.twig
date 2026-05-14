@@ -40,6 +40,10 @@
                 <i class="fa-solid fa-comments"></i>
                 <span class="nav-label">Salons</span>
             </a>
+            <a href="{{ path('app_espaces') }}" class="nav-btn {% if app.request.attributes.get('_route') starts with 'app_espaces' %}active{% endif %}">
+                <i class="fa-solid fa-layer-group"></i>
+                <span class="nav-label">Espaces</span>
+            </a>
             <a href="{{ path('app_unites') }}" class="nav-btn {% if app.request.attributes.get('_route') starts with 'app_unites' %}active{% endif %}">
                 <i class="fa-solid fa-sitemap"></i>
                 <span class="nav-label">Unités</span>

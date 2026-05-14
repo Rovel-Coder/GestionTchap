@@ -254,6 +254,101 @@ router.post('/rooms/:roomId/send', async (req, res) => {
     }
 });
 
+// ── Espaces (Matrix Spaces) ───────────────────────────────────────────────
+
+// POST /spaces — créer un espace (room de type m.space)
+router.post('/spaces', async (req, res) => {
+    const { name, topic } = req.body ?? {};
+    if (!name) return res.status(400).json({ error: 'name requis' });
+    try {
+        const spaceId = await bot.get().createRoom({
+            name,
+            topic:            topic ?? '',
+            preset:           'private_chat',
+            creation_content: { 'm.federate': false, type: 'm.space' },
+        });
+        res.json({ space_id: spaceId });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST /spaces/:spaceId/children — ajouter un salon/espace enfant
+router.post('/spaces/:spaceId/children', async (req, res) => {
+    const { roomId } = req.body ?? {};
+    if (!roomId) return res.status(400).json({ error: 'roomId requis' });
+
+    const spaceId = req.params.spaceId;
+    const cfg     = bot.getBotConfig();
+
+    if (!cfg.homeserver || !cfg.accessToken) {
+        return res.status(503).json({ error: 'Bot non configuré' });
+    }
+
+    try {
+        const via = new URL(cfg.homeserver).hostname;
+        await bot.get().sendStateEvent(spaceId, 'm.space.child', roomId, {
+            via:       [via],
+            suggested: false,
+        });
+        res.json({ ok: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// DELETE /spaces/:spaceId/children/:roomId — retirer un salon de l'espace
+router.delete('/spaces/:spaceId/children/:roomId', async (req, res) => {
+    const spaceId = req.params.spaceId;
+    const roomId  = decodeURIComponent(req.params.roomId);
+    try {
+        // m.space.child vide = retrait du lien
+        await bot.get().sendStateEvent(spaceId, 'm.space.child', roomId, {});
+        res.json({ ok: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST /spaces/:spaceId/invite — inviter un membre dans l'espace
+// Identique à /rooms/:roomId/invite (un espace est une room Matrix)
+router.post('/spaces/:spaceId/invite', async (req, res) => {
+    const { userId } = req.body ?? {};
+    if (!userId) return res.status(400).json({ error: 'userId requis' });
+
+    if (typeof userId !== 'string' || !userId.startsWith('@') || !userId.includes(':')) {
+        return res.status(400).json({ error: `userId invalide : "${userId}" — format attendu @utilisateur:homeserver` });
+    }
+
+    const spaceId = req.params.spaceId;
+    const cfg     = bot.getBotConfig();
+
+    if (!cfg.homeserver || !cfg.accessToken) {
+        return res.status(503).json({ error: 'Bot non configuré' });
+    }
+
+    const url = `${cfg.homeserver.replace(/\/$/, '')}/_matrix/client/v3/rooms/${encodeURIComponent(spaceId)}/invite`;
+    console.log(`[space-invite] ${userId} → ${spaceId}`);
+
+    try {
+        const resp = await fetch(url, {
+            method:  'POST',
+            headers: { 'Authorization': `Bearer ${cfg.accessToken}`, 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ user_id: userId }),
+        });
+        const data = await resp.json().catch(() => ({}));
+
+        if (!resp.ok) {
+            const errMsg = data.error ?? data.errcode ?? `HTTP ${resp.status}`;
+            return res.status(resp.status === 403 ? 403 : 500).json({ error: errMsg });
+        }
+
+        res.json({ ok: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // ── Vérification SAS ──────────────────────────────────────────────────────
 
 // GET /verif — poll les événements to-device puis retourne l'état

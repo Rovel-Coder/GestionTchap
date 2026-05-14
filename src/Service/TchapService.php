@@ -329,6 +329,61 @@ class TchapService
         return $this->call('GET', '/profile/' . rawurlencode($userId), $config);
     }
 
+    public function createSpace(string $name, string $topic, array $config): array
+    {
+        if ($this->bridgeEnabled() && empty($config['bypass_bridge'])) {
+            try {
+                return $this->callBridge('POST', '/spaces', ['name' => $name, 'topic' => $topic]);
+            } catch (\Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface $e) {
+                $this->logger->warning('[TchapService] Bridge injoignable pour createSpace, fallback direct', ['exception' => $e->getMessage()]);
+            }
+        }
+
+        return $this->call('POST', '/createRoom', $config, [
+            'name'             => $name,
+            'topic'            => $topic,
+            'preset'           => 'private_chat',
+            'creation_content' => ['m.federate' => false, 'type' => 'm.space'],
+        ]);
+    }
+
+    public function addChildToSpace(string $spaceId, string $roomId, array $config): array
+    {
+        if ($this->bridgeEnabled() && empty($config['bypass_bridge'])) {
+            return $this->callBridge(
+                'POST',
+                '/spaces/' . rawurlencode($spaceId) . '/children',
+                ['roomId' => $roomId]
+            );
+        }
+
+        $via = parse_url(rtrim($config['homeserver'] ?? '', '/'), PHP_URL_HOST) ?? '';
+
+        return $this->call(
+            'PUT',
+            '/rooms/' . rawurlencode($spaceId) . '/state/m.space.child/' . rawurlencode($roomId),
+            $config,
+            ['via' => [$via], 'suggested' => false]
+        );
+    }
+
+    public function removeChildFromSpace(string $spaceId, string $roomId, array $config): array
+    {
+        if ($this->bridgeEnabled() && empty($config['bypass_bridge'])) {
+            return $this->callBridge(
+                'DELETE',
+                '/spaces/' . rawurlencode($spaceId) . '/children/' . rawurlencode($roomId)
+            );
+        }
+
+        return $this->call(
+            'PUT',
+            '/rooms/' . rawurlencode($spaceId) . '/state/m.space.child/' . rawurlencode($roomId),
+            $config,
+            []
+        );
+    }
+
     public function mailToTchapId(string $mail): string
     {
         $mail = strtolower(trim($mail));

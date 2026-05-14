@@ -1,0 +1,508 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Espaces — Gestion Tchap{% endblock %}
+
+{% block content %}
+<div class="view" x-data="espaceView()" x-init="load()">
+
+    {# ── Toolbar ── #}
+    <div class="view-toolbar">
+        <div class="toolbar-left">
+            <span class="view-title">ESPACES TCHAP</span>
+            <span class="badge" x-text="espaces.length + ' espace' + (espaces.length > 1 ? 's' : '')"></span>
+        </div>
+        <div class="toolbar-right">
+            {% if permissions.canManage %}
+            <button class="btn-primary" @click="openModal('create')">
+                <i class="fa-solid fa-plus"></i> Créer un espace
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    {# ── Spinner ── #}
+    <div x-show="loading" style="flex:1;display:flex;align-items:center;justify-content:center;">
+        <div class="spinner"></div>
+    </div>
+
+    {# ── Grille de cartes ── #}
+    <div class="cards-grid" x-show="!loading">
+        <div x-show="espaces.length === 0" class="empty-state" style="grid-column:1/-1;">
+            Aucun espace — créez-en un pour regrouper vos salons Tchap.
+        </div>
+
+        <template x-for="espace in espaces" :key="espace.id">
+            <div class="card">
+                <div class="card-header">
+                    <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+                        <i class="fa-solid fa-layer-group" style="color:var(--gold);flex-shrink:0;"></i>
+                        <span class="card-name" x-text="espace.Nom"></span>
+                    </div>
+                    <span class="card-type-badge" x-show="espace.space_id"
+                        style="background:rgba(110,195,138,.15);color:#6ec38a;border-color:rgba(110,195,138,.3);">
+                        Tchap ✓
+                    </span>
+                    <span class="card-type-badge" x-show="!espace.space_id"
+                        style="background:rgba(192,57,43,.08);color:var(--red-light);border-color:rgba(192,57,43,.2);">
+                        Non créé
+                    </span>
+                </div>
+
+                <div x-show="espace.space_id" class="card-meta"
+                    style="font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace;"
+                    x-text="espace.space_id"></div>
+
+                <div x-show="espace.Description" class="card-desc" x-text="espace.Description"></div>
+
+                {# ── Salons liés ── #}
+                <div style="margin-top:8px;">
+                    <div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:4px;display:flex;align-items:center;gap:6px;">
+                        <i class="fa-solid fa-comments" style="font-size:10px;"></i>
+                        <span x-text="espace._salons.length + ' salon' + (espace._salons.length > 1 ? 's' : '')"></span>
+                    </div>
+                    <div x-show="espace._salons.length > 0"
+                        style="display:flex;flex-wrap:wrap;gap:4px;max-height:80px;overflow-y:auto;">
+                        <template x-for="salon in espace._salons" :key="salon.id">
+                            <span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:4px;padding:2px 7px;">
+                                <span x-text="salon.Nom"></span>
+                                {% if permissions.canManage %}
+                                <button @click.stop="removeSalon(espace, salon)"
+                                    style="background:none;border:none;cursor:pointer;color:var(--text-muted);padding:0;line-height:1;font-size:10px;"
+                                    :disabled="espace._loading"
+                                    title="Retirer ce salon">
+                                    <i class="fa-solid fa-xmark"></i>
+                                </button>
+                                {% endif %}
+                            </span>
+                        </template>
+                    </div>
+                    <div x-show="espace._salons.length === 0"
+                        style="font-size:11px;color:var(--text-muted);font-style:italic;">
+                        Aucun salon associé
+                    </div>
+                </div>
+
+                <div x-show="espace._error"
+                    style="margin-top:6px;font-size:11px;color:var(--red-light);white-space:pre-wrap;"
+                    x-text="espace._error"></div>
+
+                {# ── Actions ── #}
+                <div class="card-actions" style="margin-top:10px;">
+                    {% if permissions.canManage %}
+                    <button class="btn-icon" x-show="!espace.space_id"
+                        @click="createTchapSpace(espace)"
+                        :disabled="espace._loading"
+                        title="Créer l'espace sur Tchap"
+                        style="color:var(--gold);">
+                        <i class="fa-solid fa-plus" :class="{ 'fa-spin': espace._loading }"></i>
+                    </button>
+                    <button class="btn-icon" x-show="espace.space_id"
+                        @click="openInviteModal(espace)"
+                        title="Inviter un membre dans l'espace"
+                        style="color:var(--blue-light);">
+                        <i class="fa-solid fa-user-plus"></i>
+                    </button>
+                    <button class="btn-icon"
+                        @click="openAddSalonModal(espace)"
+                        :disabled="espace._loading"
+                        title="Gérer les salons de l'espace">
+                        <i class="fa-solid fa-sliders"></i>
+                    </button>
+                    <button class="btn-icon" @click="openModal('edit', espace)" title="Modifier">
+                        <i class="fa-solid fa-pen"></i>
+                    </button>
+                    {% endif %}
+                    {% if permissions.canAdmin %}
+                    <button class="btn-icon" @click="startDelete(espace)"
+                        title="Supprimer l'espace" style="color:var(--red-light);">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </template>
+    </div>
+
+    {# ── Modal Créer / Modifier ── #}
+    <div class="modal-overlay" x-show="modalOpen" x-cloak @click.self="closeModal()">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 x-text="modalMode === 'create' ? 'Créer un espace' : 'Modifier l\'espace'"></h3>
+                <button class="btn-icon" @click="closeModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div x-show="modalError" class="alert-error" x-text="modalError"></div>
+                <div class="form-grid">
+                    <div class="form-group form-full">
+                        <label>Nom *</label>
+                        <input type="text" x-model="form.Nom" maxlength="200" placeholder="Nom de l'espace">
+                    </div>
+                    <div class="form-group form-full">
+                        <label>Description</label>
+                        <textarea x-model="form.Description" maxlength="500" rows="3"
+                            placeholder="Description visible dans Tchap"></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-ghost" @click="closeModal()">Annuler</button>
+                <button class="btn-primary" :disabled="saving" @click="save()">
+                    <i x-show="saving" class="fa-solid fa-spinner fa-spin"></i>
+                    <span x-show="!saving" x-text="modalMode === 'create' ? 'Créer' : 'Enregistrer'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {# ── Modal Gérer les salons ── #}
+    <div class="modal-overlay" x-show="addSalonTarget !== null" x-cloak @click.self="closeAddSalonModal()">
+        <div class="modal" style="max-width:560px;">
+            <div class="modal-header">
+                <div>
+                    <h3 style="margin:0;"><i class="fa-solid fa-sliders" style="color:var(--gold);margin-right:8px;"></i> Gérer les salons</h3>
+                    <div style="font-size:12px;color:var(--text-muted);margin-top:3px;" x-text="addSalonTarget ? addSalonTarget.Nom : ''"></div>
+                </div>
+                <button class="btn-icon" @click="closeAddSalonModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div x-show="addSalonError" class="alert-error" x-text="addSalonError" style="margin-bottom:10px;"></div>
+
+                <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">
+                    Sélectionnez les salons à ajouter. Seuls les salons ayant un <code style="font-family:monospace;">room_id</code> peuvent être liés sur Tchap.
+                </p>
+
+                <input type="text" x-model="addSalonSearch" placeholder="Filtrer les salons…"
+                    style="width:100%;margin-bottom:10px;font-size:12px;padding:6px 10px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);">
+
+                <div style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);">
+                    <template x-if="availableSalons().length === 0">
+                        <div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px;">
+                            Tous les salons sont déjà dans cet espace, ou aucun salon n'existe.
+                        </div>
+                    </template>
+                    <template x-for="salon in availableSalons()" :key="salon.id">
+                        <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border);">
+                            <i class="fa-solid fa-comments" style="color:var(--text-muted);font-size:12px;flex-shrink:0;"></i>
+                            <div style="flex:1;min-width:0;">
+                                <div style="font-size:13px;font-weight:600;" x-text="salon.Nom"></div>
+                                <div style="font-size:10px;color:var(--text-muted);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+                                    x-text="salon.room_id || '— pas de room_id'"></div>
+                            </div>
+                            <span x-show="!salon.room_id && addSalonTarget && addSalonTarget.space_id"
+                                style="font-size:10px;color:var(--text-muted);">lien Tchap impossible</span>
+                            <button class="btn-ghost" style="font-size:11px;padding:4px 10px;flex-shrink:0;"
+                                :disabled="addSalonTarget && addSalonTarget._loading"
+                                @click="doAddSalon(salon)">
+                                <i class="fa-solid fa-plus"></i> Ajouter
+                            </button>
+                        </div>
+                    </template>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-ghost" @click="closeAddSalonModal()">Fermer</button>
+            </div>
+        </div>
+    </div>
+
+    {# ── Modal Inviter un membre ── #}
+    <div class="modal-overlay" x-show="inviteTarget !== null" x-cloak @click.self="closeInviteModal()">
+        <div class="modal modal-sm">
+            <div class="modal-header">
+                <div>
+                    <h3 style="margin:0;"><i class="fa-solid fa-user-plus" style="color:var(--blue-light);margin-right:8px;"></i> Inviter dans l'espace</h3>
+                    <div style="font-size:12px;color:var(--text-muted);margin-top:3px;" x-text="inviteTarget ? inviteTarget.Nom : ''"></div>
+                </div>
+                <button class="btn-icon" @click="closeInviteModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div x-show="inviteError" class="alert-error" x-text="inviteError" style="margin-bottom:10px;"></div>
+                <div x-show="inviteSuccess"
+                    style="margin-bottom:10px;padding:8px 12px;background:rgba(110,195,138,.08);border:1px solid rgba(110,195,138,.3);border-radius:var(--radius-sm);font-size:13px;color:#6ec38a;"
+                    x-text="inviteSuccess"></div>
+                <div class="form-group">
+                    <label>Identifiant Matrix</label>
+                    <input type="text" x-model="inviteUserId"
+                        placeholder="@prenom.nom:agent.interieur.tchap.gouv.fr"
+                        style="font-family:monospace;font-size:12px;"
+                        @keydown.enter="doInvite()">
+                    <small style="color:var(--text-muted);">Format : @prenom.nom-domaine.tld:agent.interieur.tchap.gouv.fr</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-ghost" @click="closeInviteModal()">Fermer</button>
+                <button class="btn-primary" :disabled="saving || !inviteUserId.trim()" @click="doInvite()">
+                    <i x-show="saving" class="fa-solid fa-spinner fa-spin"></i>
+                    <span x-show="!saving"><i class="fa-solid fa-paper-plane"></i> Inviter</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {# ── Modal Suppression ── #}
+    <div class="modal-overlay" x-show="deleteTarget !== null" x-cloak>
+        <div class="modal modal-sm">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-triangle-exclamation" style="color:var(--red-light);"></i> Supprimer l'espace</h3>
+            </div>
+            <div class="modal-body">
+                <p>Supprimer l'espace <strong x-text="deleteTarget ? deleteTarget.Nom : ''"></strong> de l'application ?</p>
+                <p style="margin-top:8px;font-size:12px;color:var(--text-secondary);">
+                    <i class="fa-solid fa-circle-info"></i>
+                    L'espace Tchap ne sera <strong>pas supprimé</strong> sur le serveur — le bot le quittera simplement.
+                    Les salons liés restent intacts.
+                </p>
+                <div x-show="deleteError" class="alert-error" style="margin-top:10px;" x-text="deleteError"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-ghost" @click="cancelDelete()">Annuler</button>
+                <button class="btn-danger" :disabled="saving" @click="doDelete()">
+                    <i x-show="saving" class="fa-solid fa-spinner fa-spin"></i>
+                    <span x-show="!saving">Supprimer</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block head_extra %}
+<script>
+function espaceView() {
+    return {
+        espaces:        [],
+        allSalons:      [],
+        loading:        true,
+
+        // Modal créer/modifier
+        modalOpen:  false,
+        modalMode:  'create',
+        modalError: null,
+        saving:     false,
+        form:       { id: null, Nom: '', Description: '' },
+
+        // Modal gérer salons
+        addSalonTarget: null,
+        addSalonSearch: '',
+        addSalonError:  null,
+
+        // Modal inviter
+        inviteTarget:  null,
+        inviteUserId:  '',
+        inviteError:   null,
+        inviteSuccess: null,
+
+        // Suppression
+        deleteTarget: null,
+        deleteError:  null,
+
+        async load() {
+            this.loading = true;
+            try {
+                const [espR, salR] = await Promise.all([
+                    fetch('/api/espaces').then(r => r.json()),
+                    fetch('/api/salons').then(r => r.json()),
+                ]);
+                this.espaces   = espR;
+                this.allSalons = salR;
+            } catch (e) {
+                console.error(e);
+            }
+            this.loading = false;
+        },
+
+        // ── Créer / Modifier ──
+
+        openModal(mode, espace = null) {
+            this.modalMode  = mode;
+            this.modalError = null;
+            this.form       = espace
+                ? { id: espace.id, Nom: espace.Nom, Description: espace.Description }
+                : { id: null, Nom: '', Description: '' };
+            this.modalOpen = true;
+        },
+
+        closeModal() {
+            this.modalOpen = false;
+        },
+
+        async save() {
+            this.modalError = null;
+            if (!this.form.Nom.trim()) { this.modalError = 'Le nom est obligatoire'; return; }
+            this.saving = true;
+            try {
+                const url    = this.modalMode === 'create' ? '/api/espaces' : `/api/espaces/${this.form.id}`;
+                const method = this.modalMode === 'create' ? 'POST' : 'PATCH';
+                const resp   = await fetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ Nom: this.form.Nom, Description: this.form.Description }),
+                });
+                const data = await resp.json();
+                if (!resp.ok) { this.modalError = data.error ?? 'Erreur inconnue'; return; }
+
+                if (this.modalMode === 'create') {
+                    this.espaces.push(data);
+                } else {
+                    const idx = this.espaces.findIndex(e => e.id === data.id);
+                    if (idx >= 0) this.espaces[idx] = data;
+                }
+                this.closeModal();
+            } catch (e) {
+                this.modalError = e.message;
+            } finally {
+                this.saving = false;
+            }
+        },
+
+        // ── Créer sur Tchap ──
+
+        async createTchapSpace(espace) {
+            espace._loading = true;
+            espace._error   = null;
+            try {
+                const resp = await fetch(`/api/espaces/${espace.id}/create-space`, { method: 'POST' });
+                const data = await resp.json();
+                if (!resp.ok) { espace._error = data.error ?? 'Erreur'; return; }
+                Object.assign(espace, data);
+            } catch (e) {
+                espace._error = e.message;
+            } finally {
+                espace._loading = false;
+            }
+        },
+
+        // ── Gérer les salons ──
+
+        openAddSalonModal(espace) {
+            this.addSalonTarget = espace;
+            this.addSalonSearch = '';
+            this.addSalonError  = null;
+        },
+
+        closeAddSalonModal() {
+            this.addSalonTarget = null;
+        },
+
+        availableSalons() {
+            const linked = (this.addSalonTarget?._salons ?? []).map(s => s.id);
+            return this.allSalons.filter(s =>
+                !linked.includes(s.id) &&
+                (!this.addSalonSearch || s.Nom.toLowerCase().includes(this.addSalonSearch.toLowerCase()))
+            );
+        },
+
+        async doAddSalon(salon) {
+            const espace = this.addSalonTarget;
+            if (!espace) return;
+            espace._loading    = true;
+            this.addSalonError = null;
+            try {
+                const resp = await fetch(`/api/espaces/${espace.id}/salons`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ salonId: salon.id }),
+                });
+                const data = await resp.json();
+                if (!resp.ok) { this.addSalonError = data.error ?? 'Erreur'; return; }
+                espace._salons = data._salons;
+                if (data._tchap_warning) this.addSalonError = data._tchap_warning;
+            } catch (e) {
+                this.addSalonError = e.message;
+            } finally {
+                espace._loading = false;
+            }
+        },
+
+        async removeSalon(espace, salon) {
+            espace._loading = true;
+            espace._error   = null;
+            try {
+                const resp = await fetch(`/api/espaces/${espace.id}/salons/${salon.id}`, { method: 'DELETE' });
+                const data = await resp.json();
+                if (!resp.ok) { espace._error = data.error ?? 'Erreur'; return; }
+                espace._salons = data._salons;
+                if (data._tchap_warning) espace._error = data._tchap_warning;
+            } catch (e) {
+                espace._error = e.message;
+            } finally {
+                espace._loading = false;
+            }
+        },
+
+        // ── Inviter ──
+
+        openInviteModal(espace) {
+            this.inviteTarget  = espace;
+            this.inviteUserId  = '';
+            this.inviteError   = null;
+            this.inviteSuccess = null;
+        },
+
+        closeInviteModal() {
+            this.inviteTarget = null;
+        },
+
+        async doInvite() {
+            if (!this.inviteUserId.trim()) return;
+            this.inviteError   = null;
+            this.inviteSuccess = null;
+            this.saving        = true;
+            try {
+                const resp = await fetch(`/api/espaces/${this.inviteTarget.id}/invite`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: this.inviteUserId.trim() }),
+                });
+                const data = await resp.json();
+                if (!resp.ok) { this.inviteError = data.error ?? 'Erreur'; return; }
+                this.inviteSuccess = `✓ ${this.inviteUserId} invité dans l'espace`;
+                this.inviteUserId  = '';
+            } catch (e) {
+                this.inviteError = e.message;
+            } finally {
+                this.saving = false;
+            }
+        },
+
+        // ── Suppression ──
+
+        startDelete(espace) {
+            this.deleteTarget = espace;
+            this.deleteError  = null;
+        },
+
+        cancelDelete() {
+            this.deleteTarget = null;
+        },
+
+        async doDelete() {
+            this.deleteError = null;
+            this.saving      = true;
+            try {
+                // Si l'espace existe sur Tchap, faire partir le bot d'abord
+                if (this.deleteTarget.space_id) {
+                    await fetch(`/api/salons/${encodeURIComponent(this.deleteTarget.space_id)}/leave`, { method: 'POST' })
+                        .catch(() => {}); // non bloquant
+                }
+
+                const resp = await fetch(`/api/espaces/${this.deleteTarget.id}`, { method: 'DELETE' });
+                if (!resp.ok) {
+                    const data = await resp.json().catch(() => ({}));
+                    this.deleteError = data.error ?? `Erreur HTTP ${resp.status}`;
+                    return;
+                }
+
+                this.espaces    = this.espaces.filter(e => e.id !== this.deleteTarget.id);
+                this.deleteTarget = null;
+            } catch (e) {
+                this.deleteError = e.message;
+            } finally {
+                this.saving = false;
+            }
+        },
+    };
+}
+</script>
+{% endblock %}
