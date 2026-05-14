@@ -488,9 +488,26 @@ function personnelView() {
             const local = email.split('@')[0];
             userId = `@${local}:agent.interieur.tchap.gouv.fr`;
           }
+          // Matcher unité et salon par nom
+          const uniteNom = (r['Unité'] || r['Unité d\'affectation'] || r.Unite || r.unite || r.Groupe || '').trim();
+          const salonNom = (r['Salon'] || r['Salons'] || r['Salon assigné'] || r.salon || '').trim();
+          const matchedUnite = uniteNom
+            ? this.unites.find(u => u.Nom.toLowerCase() === uniteNom.toLowerCase() || (u.code && u.code.toLowerCase() === uniteNom.toLowerCase()))
+            : null;
+          const matchedSalon = salonNom
+            ? this.salons.find(s => s.Nom.toLowerCase() === salonNom.toLowerCase())
+            : null;
           const valid = !!email;
           const existingAgent = valid ? (this.personnel.find(a => (a.Mail || '').toLowerCase() === email) || null) : null;
-          return { ...r, Mail: email, Prenom: prenom, Nom: nom, Grade: grade || r.Grade || '', user_id: userId, valid, existingAgent };
+          return {
+            ...r,
+            Mail: email, Prenom: prenom, Nom: nom, Grade: grade || r.Grade || '', user_id: userId,
+            Salons_Extra: matchedSalon ? [matchedSalon.id] : [],
+            _uniteId:  matchedUnite?.id  || null,
+            _uniteNom: uniteNom,
+            _salonNom: salonNom,
+            valid, existingAgent,
+          };
         });
         this.importOpen = true;
       };
@@ -514,15 +531,27 @@ function personnelView() {
       let ok = 0, errors = 0, firstError = null;
       for (const row of this.csvRows.filter(r => r.valid && !r.existingAgent)) {
         try {
-          const { valid, existingAgent, ...data } = row;
-          await apiFetch('/api/personnel', { method: 'POST', body: JSON.stringify(data) });
+          const { valid, existingAgent, _uniteId, _uniteNom, _salonNom, ...data } = row;
+          const created = await apiFetch('/api/personnel', { method: 'POST', body: JSON.stringify(data) });
+          if (_uniteId && created?.id) {
+            await apiFetch(`/api/personnel/${created.id}/unites`, {
+              method: 'POST',
+              body: JSON.stringify({ unite_id: _uniteId, type: 'reel' }),
+            }).catch(() => {});
+          }
           ok++;
         } catch (e) { errors++; firstError = firstError || e.message; }
       }
       for (const row of this.csvRows.filter(r => r.valid && r.existingAgent)) {
         try {
-          const { valid, existingAgent, ...data } = row;
+          const { valid, existingAgent, _uniteId, _uniteNom, _salonNom, ...data } = row;
           await apiFetch(`/api/personnel/${existingAgent.id}`, { method: 'PATCH', body: JSON.stringify(data) });
+          if (_uniteId) {
+            await apiFetch(`/api/personnel/${existingAgent.id}/unites`, {
+              method: 'POST',
+              body: JSON.stringify({ unite_id: _uniteId, type: 'reel' }),
+            }).catch(() => {});
+          }
           ok++;
         } catch (e) { errors++; firstError = firstError || e.message; }
       }

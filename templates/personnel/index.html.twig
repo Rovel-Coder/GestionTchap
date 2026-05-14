@@ -505,9 +505,11 @@
                                 <tr>
                                     <th class="csv-th" style="width:30px;"></th>
                                     <th class="csv-th">EMAIL</th>
-                                    <th class="csv-th" style="width:140px;">PRÉNOM</th>
-                                    <th class="csv-th" style="width:160px;">NOM</th>
-                                    <th class="csv-th" style="width:220px;">TCHAP ID</th>
+                                    <th class="csv-th" style="width:120px;">PRÉNOM</th>
+                                    <th class="csv-th" style="width:140px;">NOM</th>
+                                    <th class="csv-th" style="width:160px;">TCHAP ID</th>
+                                    <th class="csv-th" style="width:130px;">UNITÉ</th>
+                                    <th class="csv-th" style="width:130px;">SALON</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -519,16 +521,26 @@
                                             </button>
                                         </td>
                                         <td class="csv-edit-td">
-                                            <span style="font-family:monospace;font-size:11px;color:var(--text-secondary);padding:0 4px;" x-text="row.mail"></span>
+                                            <span style="font-family:monospace;font-size:11px;color:var(--text-secondary);padding:0 4px;" x-text="row.Mail"></span>
                                         </td>
                                         <td class="csv-edit-td">
-                                            <input x-model="row.prenom" class="csv-cell-input" placeholder="Prénom">
+                                            <input x-model="row.Prenom" class="csv-cell-input" placeholder="Prénom">
                                         </td>
                                         <td class="csv-edit-td">
-                                            <input x-model="row.nom" class="csv-cell-input" placeholder="NOM">
+                                            <input x-model="row.Nom" class="csv-cell-input" placeholder="NOM">
                                         </td>
                                         <td class="csv-edit-td">
-                                            <input x-model="row.tchapId" class="csv-cell-input" style="font-family:monospace;font-size:11px;" placeholder="@prenom.nom:homeserver">
+                                            <input x-model="row.user_id" class="csv-cell-input" style="font-family:monospace;font-size:11px;" placeholder="@prenom.nom:homeserver">
+                                        </td>
+                                        <td class="csv-edit-td">
+                                            <span x-show="row._uniteId" style="font-size:11px;color:#6ec38a;" x-text="row._uniteNom"></span>
+                                            <span x-show="!row._uniteId && row._uniteNom" style="font-size:11px;color:var(--red-light);" :title="'Unité introuvable : ' + row._uniteNom">⚠ <span x-text="row._uniteNom"></span></span>
+                                            <span x-show="!row._uniteNom" style="font-size:11px;color:var(--text-muted);">—</span>
+                                        </td>
+                                        <td class="csv-edit-td">
+                                            <span x-show="row.Salons_Extra && row.Salons_Extra.length" style="font-size:11px;color:#6ec38a;" x-text="row._salonNom"></span>
+                                            <span x-show="!(row.Salons_Extra && row.Salons_Extra.length) && row._salonNom" style="font-size:11px;color:var(--red-light);" :title="'Salon introuvable : ' + row._salonNom">⚠ <span x-text="row._salonNom"></span></span>
+                                            <span x-show="!row._salonNom" style="font-size:11px;color:var(--text-muted);">—</span>
                                         </td>
                                     </tr>
                                 </template>
@@ -549,9 +561,11 @@
                                 <tr>
                                     <th class="csv-th" style="width:30px;"></th>
                                     <th class="csv-th">AGENT ACTUEL</th>
-                                    <th class="csv-th" style="width:140px;">PRÉNOM (nouveau)</th>
-                                    <th class="csv-th" style="width:160px;">NOM (nouveau)</th>
-                                    <th class="csv-th" style="width:220px;">TCHAP ID (nouveau)</th>
+                                    <th class="csv-th" style="width:120px;">PRÉNOM (nouveau)</th>
+                                    <th class="csv-th" style="width:140px;">NOM (nouveau)</th>
+                                    <th class="csv-th" style="width:160px;">TCHAP ID (nouveau)</th>
+                                    <th class="csv-th" style="width:130px;">UNITÉ</th>
+                                    <th class="csv-th" style="width:130px;">SALON</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -564,16 +578,26 @@
                                         </td>
                                         <td class="csv-edit-td">
                                             <span style="font-size:11px;color:var(--text-secondary);"
-                                                x-text="row.existingAgent ? ([row.existingAgent.Prenom, row.existingAgent.Nom].filter(Boolean).join(' ') || row.mail) : ''"></span>
+                                                x-text="row.existingAgent ? ([row.existingAgent.Prenom, row.existingAgent.Nom].filter(Boolean).join(' ') || row.Mail) : ''"></span>
                                         </td>
                                         <td class="csv-edit-td">
-                                            <input x-model="row.prenom" class="csv-cell-input" :placeholder="row.existingAgent ? (row.existingAgent.Prenom || '—') : ''">
+                                            <input x-model="row.Prenom" class="csv-cell-input" :placeholder="row.existingAgent ? (row.existingAgent.Prenom || '—') : ''">
                                         </td>
                                         <td class="csv-edit-td">
-                                            <input x-model="row.nom" class="csv-cell-input" :placeholder="row.existingAgent ? (row.existingAgent.Nom || '—') : ''">
+                                            <input x-model="row.Nom" class="csv-cell-input" :placeholder="row.existingAgent ? (row.existingAgent.Nom || '—') : ''">
                                         </td>
                                         <td class="csv-edit-td">
-                                            <input x-model="row.tchapId" class="csv-cell-input" style="font-family:monospace;font-size:11px;" :placeholder="row.existingAgent ? (row.existingAgent.user_id || '—') : ''">
+                                            <input x-model="row.user_id" class="csv-cell-input" style="font-family:monospace;font-size:11px;" :placeholder="row.existingAgent ? (row.existingAgent.user_id || '—') : ''">
+                                        </td>
+                                        <td class="csv-edit-td">
+                                            <span x-show="row._uniteId" style="font-size:11px;color:#6ec38a;" x-text="row._uniteNom"></span>
+                                            <span x-show="!row._uniteId && row._uniteNom" style="font-size:11px;color:var(--red-light);">⚠ <span x-text="row._uniteNom"></span></span>
+                                            <span x-show="!row._uniteNom" style="font-size:11px;color:var(--text-muted);">—</span>
+                                        </td>
+                                        <td class="csv-edit-td">
+                                            <span x-show="row.Salons_Extra && row.Salons_Extra.length" style="font-size:11px;color:#6ec38a;" x-text="row._salonNom"></span>
+                                            <span x-show="!(row.Salons_Extra && row.Salons_Extra.length) && row._salonNom" style="font-size:11px;color:var(--red-light);">⚠ <span x-text="row._salonNom"></span></span>
+                                            <span x-show="!row._salonNom" style="font-size:11px;color:var(--text-muted);">—</span>
                                         </td>
                                     </tr>
                                 </template>
