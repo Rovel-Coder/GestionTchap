@@ -24,6 +24,8 @@ services:
     volumes:
       - .:/var/www/html
       - vendor_cache:/var/www/html/vendor
+      - symfony_cache:/var/www/html/var/cache
+      - symfony_log:/var/www/html/var/log
     environment:
       APP_ENV: ${APP_ENV:-dev}
       APP_SECRET: ${APP_SECRET:-dev-secret-change-for-prod-32chars}
@@ -65,4 +67,6 @@ services:
 volumes:
   postgres_data:
   vendor_cache:
+  symfony_cache:
+  symfony_log:
   tchap_data:

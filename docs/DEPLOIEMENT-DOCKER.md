@@ -128,9 +128,31 @@ Les données ne sont **pas perdues** lors des redémarrages ou mises à jour. Do
 |--------|---------|
 | `postgres_data` | Base de données PostgreSQL (agents, salons, config) |
 | `vendor_cache` | Dépendances PHP (accélère les rebuilds) |
+| `symfony_cache` | Cache Symfony (droits `www-data` garantis) |
+| `symfony_log` | Logs Symfony (droits `www-data` garantis) |
 | `tchap_data` | Clés de chiffrement et session Matrix du bridge |
 
 > **Sauvegarder `postgres_data` régulièrement.** Les clés E2EE dans `tchap_data` ne sont pas critiques (reconnexion possible via l'interface) mais leur perte provoque une interruption temporaire du bot.
+
+### Dépannage
+
+#### Erreur `Permission denied` sur `var/cache/prod/`
+
+```
+IOException: Cannot rename "/tmp/url_matching_routes.phpXXXXXX"
+  to "/var/www/html/var/cache/prod/url_matching_routes.php": Permission denied
+```
+
+PHP-FPM (`www-data`) ne peut pas écrire dans le répertoire cache. Cause : le montage du répertoire hôte a écrasé les permissions définies à la construction de l'image.
+
+Correction : supprimer les containers **et** les volumes anonymes, puis reconstruire.
+
+```bash
+docker compose down -v
+docker compose up --build
+```
+
+> Les données PostgreSQL sont dans un volume **nommé** (`postgres_data`) et ne sont **pas** supprimées par `down -v`.
 
 ---
 
