@@ -103,17 +103,25 @@
                         <span class="stat-value" x-text="getAgentCount(salon.id)"></span>
                         <span class="stat-label">Agents</span>
                     </div>
-                    <div class="card-stat" x-show="salon._memberCount !== undefined">
-                        <span class="stat-value" :style="{ color: 'var(--blue-light)' }" x-text="salon._memberCount"></span>
+                    <div class="card-stat" x-show="!!salon.room_id">
+                        <span class="stat-value" :style="{ color: 'var(--blue-light)' }"
+                            x-text="salon._memberCount !== undefined ? salon._memberCount : '—'"></span>
                         <span class="stat-label">Tchap</span>
                     </div>
                 </div>
 
-                <div x-show="salon._botPresent !== undefined" style="margin-top:6px;">
-                    <span :style="{ color: salon._botPresent ? '#6ec38a' : 'var(--red-light)', fontSize: '10px' }"
-                        x-text="salon._botPresent ? '✓ Bot présent' : '✗ Bot absent'"></span>
-                    <div x-show="salon._botUserId" style="font-size:9px;color:var(--text-muted);font-family:monospace;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
-                        x-text="salon._botUserId"></div>
+                <div x-show="!!salon.room_id" style="margin-top:6px;min-height:28px;">
+                    <template x-if="salon._botPresent !== undefined">
+                        <div>
+                            <span :style="{ color: salon._botPresent ? '#6ec38a' : 'var(--red-light)', fontSize: '10px' }"
+                                x-text="salon._botPresent ? '✓ Bot présent' : '✗ Bot absent'"></span>
+                            <div x-show="salon._botUserId" style="font-size:9px;color:var(--text-muted);font-family:monospace;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+                                x-text="salon._botUserId"></div>
+                        </div>
+                    </template>
+                    <template x-if="salon._botPresent === undefined">
+                        <span style="font-size:10px;color:var(--text-muted);">— non synchronisé</span>
+                    </template>
                 </div>
 
                 <div class="card-actions" @click.stop>
