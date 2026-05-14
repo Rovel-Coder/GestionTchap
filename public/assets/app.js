@@ -2339,15 +2339,26 @@ function criseView() {
       this.creatingsalon   = true;
       this.createSalonMsg  = '';
       try {
-        await apiFetch('/api/salons', {
+        const salon = await apiFetch('/api/salons', {
           method: 'POST',
           body: JSON.stringify({ Nom: this.newSalonNom.trim(), Description: this.newSalonDesc, Type: 'crise' }),
         });
-        this.createSalonMsgColor = '#6ec38a';
-        this.createSalonMsgBg   = 'rgba(39,174,96,.08)';
-        this.createSalonMsg     = '✓ Salon créé avec succès';
+        // Créer automatiquement la room Tchap
+        this.createSalonMsg     = '⏳ Création de la room Tchap…';
+        this.createSalonMsgColor = 'var(--text-secondary)';
+        this.createSalonMsgBg   = 'var(--bg-elevated)';
+        try {
+          await apiFetch(`/api/salons/${salon.id}/create-room`, { method: 'POST' });
+          this.createSalonMsgColor = '#6ec38a';
+          this.createSalonMsgBg   = 'rgba(39,174,96,.08)';
+          this.createSalonMsg     = '✓ Salon créé et room Tchap ouverte';
+        } catch (e) {
+          this.createSalonMsgColor = 'var(--gold)';
+          this.createSalonMsgBg   = 'rgba(201,168,76,.08)';
+          this.createSalonMsg     = `✓ Salon créé — room Tchap échouée : ${e.message}`;
+        }
         await this.load();
-        setTimeout(() => { this.createSalonOpen = false; }, 1200);
+        setTimeout(() => { this.createSalonOpen = false; }, 2000);
       } catch (e) {
         this.createSalonMsgColor = 'var(--red-light)';
         this.createSalonMsgBg   = 'var(--red-dim)';
