@@ -470,11 +470,24 @@ function personnelView() {
         const rows = parseCsv(e.target.result);
         const emailDomain = 'gendarmerie.interieur.gouv.fr';
         this.csvRows = rows.map(r => {
-          const email = (r.Mail || r.Email || r.email || r['Adresse mail'] || r['Adresse e-mail'] || r['E-mail'] || '').trim().toLowerCase();
+          let email  = (r.Mail || r.Email || r.email || r['Adresse mail'] || r['Adresse e-mail'] || r['E-mail'] || '').trim().toLowerCase();
           let prenom = r.Prenom || r.prenom || r['Prénom'] || r['prénom'] || '';
           let nom    = r.Nom    || r.nom    || r['Nom de famille'] || '';
           let grade  = r.Grade  || r.grade  || r['Grade'] || '';
           let userId = r.user_id || r['Identifiant Matrix'] || r['ID Tchap'] || '';
+          // user_id → email : @prenom.nom-domain.tld:homeserver → prenom.nom@domain.tld
+          if (!email && userId && userId.startsWith('@') && userId.includes(':')) {
+            const localPart = userId.slice(1).split(':')[0];
+            const lastHyphen = localPart.lastIndexOf('-');
+            if (lastHyphen > 0) {
+              email = localPart.substring(0, lastHyphen) + '@' + localPart.substring(lastHyphen + 1);
+            }
+          }
+          // email → user_id
+          if (!userId && email) {
+            const local = email.split('@')[0];
+            userId = `@${local}:agent.interieur.tchap.gouv.fr`;
+          }
           // Extraire prénom depuis l'email si manquant (même si nom déjà connu)
           if (!prenom && email.includes('@')) {
             const local = email.split('@')[0];
@@ -483,10 +496,6 @@ function personnelView() {
               prenom = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
               if (!nom) nom = parts.slice(1).join(' ').toUpperCase();
             }
-          }
-          if (!userId && email) {
-            const local = email.split('@')[0];
-            userId = `@${local}:agent.interieur.tchap.gouv.fr`;
           }
           // Matcher unité par nom
           const uniteNom = (r['Unité'] || r["Unité d'affectation"] || r.Unite || r.unite || r.Groupe || '').trim();
