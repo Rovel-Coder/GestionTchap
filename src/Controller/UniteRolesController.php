@@ -162,14 +162,11 @@ class UniteRolesController extends AbstractController
 
         try {
             $this->db->executeStatement(
-                'INSERT INTO personnel_unite (personnel_id, unite_id, type) VALUES (:pid, :uid, :type)',
+                'INSERT INTO personnel_unite (personnel_id, unite_id, type) VALUES (:pid, :uid, :type)
+                 ON CONFLICT DO NOTHING',
                 ['pid' => $id, 'uid' => $uniteId, 'type' => $type]
             );
         } catch (\Exception $e) {
-            $msg = $e->getMessage();
-            if (str_contains($msg, 'unique') || str_contains($msg, 'duplicate')) {
-                return $this->json(['error' => "L'agent a déjà une affectation de type « $type » ou est déjà dans cette unité"], 409);
-            }
             throw $e;
         }
 
