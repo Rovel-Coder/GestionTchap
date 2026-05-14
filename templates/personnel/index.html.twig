@@ -538,9 +538,11 @@
                                             <span x-show="!row._uniteNom" style="font-size:11px;color:var(--text-muted);">—</span>
                                         </td>
                                         <td class="csv-edit-td">
-                                            <span x-show="row.Salons_Extra && row.Salons_Extra.length" style="font-size:11px;color:#6ec38a;" x-text="row._salonNom"></span>
-                                            <span x-show="!(row.Salons_Extra && row.Salons_Extra.length) && row._salonNom" style="font-size:11px;color:var(--red-light);" :title="'Salon introuvable : ' + row._salonNom">⚠ <span x-text="row._salonNom"></span></span>
-                                            <span x-show="!row._salonNom" style="font-size:11px;color:var(--text-muted);">—</span>
+                                            <span x-show="row._salonTotal > 0" style="font-size:11px;"
+                                                :style="row._salonFound === row._salonTotal ? 'color:#6ec38a' : 'color:var(--gold)'"
+                                                :title="row._salonNom"
+                                                x-text="row._salonFound + '/' + row._salonTotal + ' salon' + (row._salonTotal > 1 ? 's' : '')"></span>
+                                            <span x-show="!row._salonTotal" style="font-size:11px;color:var(--text-muted);">—</span>
                                         </td>
                                     </tr>
                                 </template>
