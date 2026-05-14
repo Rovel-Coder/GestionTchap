@@ -190,7 +190,7 @@
                     loading = true;
                     fetch('/api/auth/change-password', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': window.CSRF_TOKEN },
                         body: JSON.stringify({ currentPassword: form.currentPassword, newPassword: form.newPassword })
                     }).then(r => r.json()).then(d => {
                         loading = false;
