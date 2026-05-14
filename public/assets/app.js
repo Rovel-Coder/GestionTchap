@@ -563,6 +563,7 @@ function personnelView() {
       for (const row of this.csvRows.filter(r => r.valid && !r.existingAgent)) {
         try {
           const { valid, existingAgent, _uniteId, _uniteNom, _salonNom, _salonFound, _salonTotal, ...data } = row;
+          if (_uniteId) data.Unite = [_uniteId];
           const created = await apiFetch('/api/personnel', { method: 'POST', body: JSON.stringify(data) });
           if (_uniteId && created?.id) {
             await apiFetch(`/api/personnel/${created.id}/unites`, {
@@ -576,6 +577,7 @@ function personnelView() {
       for (const row of this.csvRows.filter(r => r.valid && r.existingAgent)) {
         try {
           const { valid, existingAgent, _uniteId, _uniteNom, _salonNom, _salonFound, _salonTotal, ...data } = row;
+          if (_uniteId) data.Unite = [_uniteId];
           await apiFetch(`/api/personnel/${existingAgent.id}`, { method: 'PATCH', body: JSON.stringify(data) });
           if (_uniteId) {
             await apiFetch(`/api/personnel/${existingAgent.id}/unites`, {
