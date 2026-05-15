@@ -61,6 +61,43 @@ class ConfigService
         return array_merge($defaults, is_array($stored) ? $stored : []);
     }
 
+    /**
+     * Retourne la liste des serveurs Tchap connus (homeserver + identity server par domaine email).
+     * Utilisée pour la résolution email → Matrix ID cross-administration.
+     */
+    public function getTchapServers(): array
+    {
+        $stored = $this->get('tchap_servers', null);
+        if (is_array($stored) && !empty($stored)) {
+            return $stored;
+        }
+
+        // Valeurs par défaut : administrations Tchap connues
+        return [
+            [
+                'id'             => 'interieur',
+                'name'           => "Ministère de l'Intérieur",
+                'domains'        => 'gendarmerie.interieur.gouv.fr, police.interieur.gouv.fr, interieur.gouv.fr',
+                'homeserver'     => 'https://matrix.agent.interieur.tchap.gouv.fr',
+                'identityServer' => '',
+            ],
+            [
+                'id'             => 'diplomatie',
+                'name'           => 'Ministère des Affaires étrangères',
+                'domains'        => 'diplomatie.gouv.fr',
+                'homeserver'     => 'https://matrix.agent.diplomatie.tchap.gouv.fr',
+                'identityServer' => '',
+            ],
+            [
+                'id'             => 'defense',
+                'name'           => 'Ministère des Armées',
+                'domains'        => 'defense.gouv.fr, intradef.gouv.fr',
+                'homeserver'     => 'https://matrix.agent.defense.tchap.gouv.fr',
+                'identityServer' => '',
+            ],
+        ];
+    }
+
     public function getUiConfig(): array
     {
         $defaults = [

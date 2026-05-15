@@ -51,6 +51,112 @@
                 </div>
             </div>
 
+            {# ── Serveurs Tchap connus ── #}
+            <div class="config-section">
+                <div class="config-section-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+                    </svg>
+                    Serveurs Tchap connus
+                </div>
+                <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;line-height:1.6;">
+                    Chaque entrée associe des domaines email à un <strong>serveur d'accueil</strong> (homeserver Matrix) et optionnellement un <strong>serveur d'identité</strong>.
+                    Utilisé pour convertir automatiquement les emails en identifiants Matrix multi-administration.
+                </p>
+
+                {# Liste des serveurs #}
+                <div style="margin-bottom:12px;">
+                    <template x-for="(srv, idx) in tchapServers" :key="srv.id">
+                        <div style="padding:10px 12px;margin-bottom:6px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-sm);">
+                            <div style="display:flex;align-items:flex-start;gap:10px;">
+                                <div style="flex:1;min-width:0;">
+                                    <div style="font-size:13px;font-weight:700;margin-bottom:3px;" x-text="srv.name"></div>
+                                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px;">
+                                        <span style="font-weight:600;color:var(--text-secondary);">Domaines :</span>
+                                        <span style="font-family:monospace;" x-text="srv.domains"></span>
+                                    </div>
+                                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:2px;">
+                                        <span style="font-weight:600;color:var(--text-secondary);">Serveur d'accueil :</span>
+                                        <span style="font-family:monospace;color:var(--blue-light);" x-text="srv.homeserver"></span>
+                                    </div>
+                                    <div x-show="srv.identityServer" style="font-size:11px;color:var(--text-muted);">
+                                        <span style="font-weight:600;color:var(--text-secondary);">Serveur d'identité :</span>
+                                        <span style="font-family:monospace;" x-text="srv.identityServer"></span>
+                                    </div>
+                                </div>
+                                <div style="display:flex;gap:4px;flex-shrink:0;">
+                                    <button class="btn-ghost" style="font-size:11px;padding:3px 8px;" @click="openServerForm(srv, idx)">
+                                        <i class="fa-solid fa-pen"></i>
+                                    </button>
+                                    <button class="btn-icon" style="color:var(--red-light);" @click="deleteServer(idx)">
+                                        <i class="fa-solid fa-trash" style="font-size:11px;"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                    <div x-show="tchapServers.length === 0" style="font-size:12px;color:var(--text-muted);padding:8px 0;">Aucun serveur configuré.</div>
+                </div>
+
+                {# Formulaire ajout / édition #}
+                <template x-if="serverFormOpen">
+                    <div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;background:var(--bg-elevated);margin-bottom:12px;">
+                        <div style="font-size:12px;font-weight:700;color:var(--text-primary);margin-bottom:12px;"
+                            x-text="serverFormIdx !== null ? 'Modifier le serveur' : 'Ajouter un serveur'"></div>
+                        <div class="form-grid">
+                            <div class="form-group form-full" style="margin:0;">
+                                <label>Nom *</label>
+                                <input type="text" x-model="serverForm.name" placeholder="Ex: Ministère des Affaires étrangères" autocomplete="off">
+                            </div>
+                            <div class="form-group form-full" style="margin:0;">
+                                <label>
+                                    Domaines email *
+                                    <small style="font-weight:400;color:var(--text-muted);">séparés par virgule</small>
+                                </label>
+                                <input type="text" x-model="serverForm.domains"
+                                    placeholder="diplomatie.gouv.fr, consulat.diplomatie.gouv.fr"
+                                    style="font-family:monospace;font-size:12px;" autocomplete="off">
+                            </div>
+                            <div class="form-group form-full" style="margin:0;">
+                                <label>
+                                    Serveur d'accueil *
+                                    <small style="font-weight:400;color:var(--text-muted);">URL du homeserver Matrix</small>
+                                </label>
+                                <input type="text" x-model="serverForm.homeserver"
+                                    placeholder="https://matrix.agent.diplomatie.tchap.gouv.fr"
+                                    style="font-family:monospace;font-size:12px;" autocomplete="off">
+                                <small x-show="serverForm.homeserver" style="color:var(--text-muted);margin-top:3px;display:block;">
+                                    ID Matrix généré :
+                                    <code style="color:var(--gold);">@prenom.nom-domaine.gouv.fr:<span x-text="(() => { try { const h = new URL(serverForm.homeserver).hostname; return h.startsWith('matrix.') ? h.slice(7) : h; } catch(_){return '?'} })()"></span></code>
+                                </small>
+                            </div>
+                            <div class="form-group form-full" style="margin:0;">
+                                <label>
+                                    Serveur d'identité
+                                    <small style="font-weight:400;color:var(--text-muted);">optionnel — pour la résolution email ↔ Matrix ID</small>
+                                </label>
+                                <input type="text" x-model="serverForm.identityServer"
+                                    placeholder="https://matrix.tchap.gouv.fr"
+                                    style="font-family:monospace;font-size:12px;" autocomplete="off">
+                            </div>
+                        </div>
+                        <div x-show="serverFormError" class="alert-error" x-text="serverFormError" style="margin-top:10px;margin-bottom:4px;"></div>
+                        <div style="display:flex;gap:8px;margin-top:12px;">
+                            <button class="btn-primary" @click="saveServerForm()">
+                                <i class="fa-solid fa-floppy-disk"></i>
+                                <span x-text="serverFormIdx !== null ? 'Mettre à jour' : 'Ajouter'"></span>
+                            </button>
+                            <button class="btn-ghost" @click="closeServerForm()">Annuler</button>
+                        </div>
+                    </div>
+                </template>
+
+                <button class="btn-ghost" style="font-size:12px;width:100%;justify-content:center;border-style:dashed;"
+                    @click="openServerForm()" x-show="!serverFormOpen">
+                    <i class="fa-solid fa-plus"></i> Ajouter un serveur
+                </button>
+            </div>
+
             {# ── Gestion des bots ── #}
             {% if permissions.canAdmin %}
             <div class="config-section">

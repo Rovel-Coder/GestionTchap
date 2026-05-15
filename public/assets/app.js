@@ -69,11 +69,30 @@ function toast(message, type = 'info') {
   window.dispatchEvent(new CustomEvent('toast', { detail: { message, type } }));
 }
 
-// Dérive le homeserver Tchap depuis un domaine email
+// Dérive le homeserver Tchap depuis un domaine email.
+// Vérifie d'abord la liste configurée (window.TCHAP_SERVERS), puis dérivation algorithmique.
 // ex: gendarmerie.interieur.gouv.fr → agent.interieur.tchap.gouv.fr
 //     diplomatie.gouv.fr            → agent.diplomatie.tchap.gouv.fr
 function domainToTchapHomeserver(domain) {
   domain = (domain || '').trim().toLowerCase();
+
+  // 1. Chercher dans la liste configurée (TCHAP_SERVERS injectée par le serveur)
+  const servers = window.TCHAP_SERVERS || [];
+  for (const srv of servers) {
+    const domains = (srv.domains || '').split(',').map(d => d.trim().toLowerCase()).filter(Boolean);
+    for (const d of domains) {
+      if (domain === d || domain.endsWith('.' + d)) {
+        // Extraire le server_name Matrix depuis l'URL homeserver
+        // ex: https://matrix.agent.diplomatie.tchap.gouv.fr → agent.diplomatie.tchap.gouv.fr
+        try {
+          const hn = new URL(srv.homeserver).hostname;
+          return hn.startsWith('matrix.') ? hn.slice('matrix.'.length) : hn;
+        } catch (_) { /* URL invalide, continuer */ }
+      }
+    }
+  }
+
+  // 2. Dérivation algorithmique pour les domaines .gouv.fr non configurés
   if (domain.endsWith('.gouv.fr')) {
     const withoutGouv = domain.slice(0, -'.gouv.fr'.length);
     const parts = withoutGouv.split('.');
@@ -1790,6 +1809,11 @@ function configView() {
       homeserver: 'https://matrix.agent.interieur.tchap.gouv.fr',
       token: '', botUserId: '', enabled: false, emailDomains: 'gendarmerie.interieur.gouv.fr',
     },
+    tchapServers:    window.TCHAP_SERVERS || [],
+    serverForm:      { id: null, name: '', domains: '', homeserver: '', identityServer: '' },
+    serverFormOpen:  false,
+    serverFormError: null,
+    serverFormIdx:   null,
     uiConfig:   { roleFeatures: {}, customRoles: [] },
     sysAdmins:   [],
     lockedUsers: [],
@@ -2027,6 +2051,52 @@ function configView() {
       try {
         await apiFetch('/api/config/tchap_config', { method: 'PUT', body: JSON.stringify(this.tchapConfig) });
         toast('Domaines sauvegardés', 'success');
+      } catch (e) {
+        toast(e.message, 'error');
+      }
+    },
+
+    // ── Serveurs Tchap ─────────────────────────────────────────────────────
+
+    openServerForm(srv = null, idx = null) {
+      this.serverFormIdx   = idx;
+      this.serverFormError = null;
+      this.serverForm = srv
+        ? { ...srv }
+        : { id: Date.now().toString(36), name: '', domains: '', homeserver: '', identityServer: '' };
+      this.serverFormOpen = true;
+    },
+
+    closeServerForm() { this.serverFormOpen = false; },
+
+    async saveServerForm() {
+      this.serverFormError = null;
+      const f = this.serverForm;
+      if (!f.name.trim())       { this.serverFormError = 'Le nom est requis'; return; }
+      if (!f.domains.trim())    { this.serverFormError = 'Au moins un domaine est requis'; return; }
+      if (!f.homeserver.trim()) { this.serverFormError = 'Le serveur d\'accueil est requis'; return; }
+      try { new URL(f.homeserver); } catch (_) { this.serverFormError = 'URL du serveur d\'accueil invalide'; return; }
+
+      if (this.serverFormIdx !== null) {
+        this.tchapServers[this.serverFormIdx] = { ...f };
+      } else {
+        this.tchapServers = [...this.tchapServers, { ...f }];
+      }
+      await this.saveTchapServers();
+      this.serverFormOpen = false;
+    },
+
+    async deleteServer(idx) {
+      if (!confirm('Supprimer ce serveur ?')) return;
+      this.tchapServers = this.tchapServers.filter((_, i) => i !== idx);
+      await this.saveTchapServers();
+    },
+
+    async saveTchapServers() {
+      try {
+        await apiFetch('/api/config/tchap_servers', { method: 'PUT', body: JSON.stringify(this.tchapServers) });
+        window.TCHAP_SERVERS = this.tchapServers;
+        toast('Serveurs sauvegardés', 'success');
       } catch (e) {
         toast(e.message, 'error');
       }
