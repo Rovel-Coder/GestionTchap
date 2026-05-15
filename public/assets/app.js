@@ -714,20 +714,47 @@ function salonView() {
       salon._loading = true;
       salon._error   = null;
       try {
-        const data     = await apiFetch(`/api/tchap/members/${encodeURIComponent(salon.room_id)}`);
-        // L'API retourne { members: [...], botUserId: '...' } (bot effectif selon l'unité)
-        const members  = Array.isArray(data) ? data : (data.members || []);
-        const botId    = (Array.isArray(data) ? '' : data.botUserId) || '';
-        salon._memberCount = members.length;
+        const data    = await apiFetch(`/api/tchap/members/${encodeURIComponent(salon.room_id)}`);
+        const raw     = Array.isArray(data) ? data : (data.members || []);
+        const botId   = (Array.isArray(data) ? '' : data.botUserId) || '';
+        // Stocker {userId, status} pour distinguer join / invite
+        salon._members     = raw.map(m => ({
+          userId: (m.state_key || m.userId || m.user_id || '').toLowerCase(),
+          status: m.content?.membership ?? m.membership ?? 'join',
+        })).filter(m => m.userId);
+        salon._memberCount = salon._members.filter(m => m.status === 'join').length;
+        salon._inviteCount = salon._members.filter(m => m.status === 'invite').length;
+        salon._memberIds   = salon._members.map(m => m.userId);
         salon._botUserId   = botId || null;
-        salon._memberIds   = members.map(m => (m.state_key || m.userId || m.user_id || '').toLowerCase()).filter(Boolean);
-        salon._botPresent  = botId
-          ? salon._memberIds.includes(botId.toLowerCase())
-          : undefined;
+        salon._botPresent  = botId ? salon._memberIds.includes(botId.toLowerCase()) : undefined;
       } catch (e) {
         salon._error = e.message;
       }
       salon._loading = false;
+    },
+
+    getMemberStatus(person) {
+      const uid = (person.user_id || '').toLowerCase();
+      if (!uid || !this.addMembersTarget?._members) return null;
+      const found = this.addMembersTarget._members.find(m => m.userId === uid);
+      return found ? found.status : null;
+    },
+
+    async kickMember(salon, userId) {
+      if (!confirm(`Expulser ${userId} du salon ?`)) return;
+      try {
+        await apiFetch(`/api/tchap/kick`, {
+          method: 'POST',
+          body: JSON.stringify({ roomId: salon.room_id, userId, reason: 'Expulsion depuis la gestion' }),
+        });
+        salon._members     = (salon._members || []).filter(m => m.userId !== userId.toLowerCase());
+        salon._memberIds   = salon._members.map(m => m.userId);
+        salon._memberCount = salon._members.filter(m => m.status === 'join').length;
+        salon._inviteCount = salon._members.filter(m => m.status === 'invite').length;
+        toast(`${userId} expulsé`, 'success');
+      } catch (e) {
+        toast(e.message, 'error');
+      }
     },
 
     getUniteIdsForSalon(salonId) {
@@ -1229,6 +1256,13 @@ function uniteView() {
         .filter(Boolean);
     },
 
+    get detailSalonsClassificationList() {
+      if (!this.detailUnite || !this.detailForm.Salons_Classification) return [];
+      return this.detailForm.Salons_Classification
+        .map(sid => this.salons.find(s => s.id === Number(sid)))
+        .filter(Boolean);
+    },
+
     get filtered() {
       const src = this.activeTypeTab === 'reel'
         ? this.unites.filter(u => u.type !== 'virtuel')
@@ -1527,17 +1561,18 @@ function uniteView() {
       this.detailTab   = 'fiche';
       this.detailError = null;
       this.salonSearch = '';
-      this.quickSalon  = { Nom: '', Type: 'operationnel', Description: '' };
+      this.quickSalon  = { Nom: '', Type: 'operationnel', Description: '', assocType: 'commun' };
       this.detailForm  = {
-        Nom:       unite.Nom       || '',
-        code:      unite.code      || '',
-        numero:    unite.numero    || '',
-        adresse:   unite.adresse   || '',
-        bot_id:    unite.bot_id    ?? null,
-        parent_id: unite.parent_id ?? null,
-        niveau_id: unite.niveau_id ?? null,
-        type:      unite.type      || 'virtuel',
-        Salons:    [...(unite.Salons || [])],
+        Nom:                    unite.Nom       || '',
+        code:                   unite.code      || '',
+        numero:                 unite.numero    || '',
+        adresse:                unite.adresse   || '',
+        bot_id:                 unite.bot_id    ?? null,
+        parent_id:              unite.parent_id ?? null,
+        niveau_id:              unite.niveau_id ?? null,
+        type:                   unite.type      || 'virtuel',
+        Salons:                 [...(unite.Salons || [])],
+        Salons_Classification:  [...(unite.Salons_Classification || [])],
       };
       this.detailOpen = true;
     },
@@ -1577,12 +1612,22 @@ function uniteView() {
       else         this.detailForm.Salons = this.detailForm.Salons.filter(i => i !== id);
     },
 
+    toggleDetailSalonClassification(salonId, checked) {
+      if (!this.detailForm.Salons_Classification) this.detailForm.Salons_Classification = [];
+      const id = Number(salonId);
+      if (checked) this.detailForm.Salons_Classification = [...new Set([...this.detailForm.Salons_Classification, id])];
+      else         this.detailForm.Salons_Classification = this.detailForm.Salons_Classification.filter(i => i !== id);
+    },
+
     async saveDetailSalons() {
       this.detailSaving = true;
       try {
         const updated = await apiFetch(`/api/unites/${this.detailUnite.id}`, {
           method: 'PATCH',
-          body: JSON.stringify({ Salons: this.detailForm.Salons }),
+          body: JSON.stringify({
+            Salons:                this.detailForm.Salons,
+            Salons_Classification: this.detailForm.Salons_Classification,
+          }),
         });
         const idx = this.unites.findIndex(u => u.id === this.detailUnite.id);
         if (idx >= 0) { this.unites[idx] = { ...this.unites[idx], ...updated }; this.detailUnite = this.unites[idx]; }
@@ -1608,19 +1653,26 @@ function uniteView() {
             toast(`Salon créé dans l'app mais room Tchap échouée : ${e.message}`, 'error');
           }
         }
-        const newSalons = [...new Set([...(this.detailForm.Salons || []), Number(salon.id)])];
+        const isClassement      = this.quickSalon.assocType === 'classement';
+        const newSalonsCommuns  = isClassement
+          ? [...(this.detailForm.Salons || [])]
+          : [...new Set([...(this.detailForm.Salons || []), Number(salon.id)])];
+        const newSalonsClassif  = isClassement
+          ? [...new Set([...(this.detailForm.Salons_Classification || []), Number(salon.id)])]
+          : [...(this.detailForm.Salons_Classification || [])];
         const updated   = await apiFetch(`/api/unites/${this.detailUnite.id}`, {
           method: 'PATCH',
-          body: JSON.stringify({ Salons: newSalons }),
+          body: JSON.stringify({ Salons: newSalonsCommuns, Salons_Classification: newSalonsClassif }),
         });
         const idx = this.unites.findIndex(u => u.id === this.detailUnite.id);
         if (idx >= 0) { this.unites[idx] = { ...this.unites[idx], ...updated }; this.detailUnite = this.unites[idx]; }
-        this.detailForm.Salons = updated.Salons || newSalons;
+        this.detailForm.Salons                = updated.Salons                || newSalonsCommuns;
+        this.detailForm.Salons_Classification = updated.Salons_Classification || newSalonsClassif;
         this.salons = [...this.salons, { ...salon, _memberCount: undefined, _loading: false }];
-        this.quickSalon = { Nom: '', Type: 'operationnel', Description: '' };
-        toast(`Salon "${salon.Nom}" créé et associé`, 'success');
-        // Inviter automatiquement les membres de l'unité dans le nouveau salon
-        apiFetch('/api/tchap/apply', {
+        this.quickSalon = { Nom: '', Type: 'operationnel', Description: '', assocType: 'commun' };
+        toast(`Salon "${salon.Nom}" créé et associé (${isClassement ? 'classement' : 'commun'})`, 'success');
+        // Auto-inviter les membres de l'unité seulement pour les salons communs
+        if (!isClassement) apiFetch('/api/tchap/apply', {
           method: 'POST',
           body: JSON.stringify({ salonIds: [Number(salon.id)] }),
         }).then(r => {

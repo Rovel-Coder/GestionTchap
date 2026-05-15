@@ -68,7 +68,8 @@ router.get('/whoami', async (_req, res) => {
 // GET /rooms/:roomId/members — membres d'un salon (format compatible avec TchapService PHP)
 router.get('/rooms/:roomId/members', async (req, res) => {
     try {
-        const members = await bot.get().getRoomMembers(req.params.roomId, undefined, ['join']);
+        const statuses = ['join', 'invite'];
+        const members  = await bot.get().getRoomMembers(req.params.roomId, undefined, statuses);
         const chunk   = members.map(m => ({
             state_key: m.membershipFor,
             content:   { membership: m.content?.membership ?? 'join' },

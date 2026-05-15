@@ -574,7 +574,7 @@
                 </button>
                 <button class="import-tab-btn" :class="{ active: detailTab === 'salons' }" @click="detailTab = 'salons'">
                     <i class="fa-solid fa-comments" style="margin-right:5px;"></i> Salons
-                    <span style="margin-left:5px;background:var(--bg-hover);border-radius:10px;padding:1px 7px;font-size:10px;" x-text="detailSalonsList.length"></span>
+                    <span style="margin-left:5px;background:var(--bg-hover);border-radius:10px;padding:1px 7px;font-size:10px;" x-text="detailSalonsList.length + detailSalonsClassificationList.length"></span>
                 </button>
             </div>
 
@@ -686,10 +686,15 @@
             {# ── Onglet Salons ── #}
             <div x-show="detailTab === 'salons'" style="flex:1;overflow-y:auto;padding:20px 24px;">
 
-                {# Salons actuellement associés #}
-                <div style="margin-bottom:24px;">
-                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-                        <div style="font-family:var(--font-display);font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--text-muted);">SALONS ASSOCIÉS</div>
+                {# ── Salons communs ── #}
+                <div style="margin-bottom:20px;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                        <div>
+                            <div style="font-family:var(--font-display);font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--blue-light);">
+                                <i class="fa-solid fa-users" style="margin-right:5px;font-size:10px;"></i>SALONS COMMUNS
+                            </div>
+                            <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Accessibles à tous les membres — synchronisation automatique</div>
+                        </div>
                         <button x-show="detailSalonsList.length > 0"
                             class="btn-ghost" style="padding:4px 12px;font-size:11px;"
                             :disabled="detailUnite && detailUnite._syncing"
@@ -698,12 +703,30 @@
                             Synchroniser vers Tchap
                         </button>
                     </div>
-                    <div x-show="detailSalonsList.length === 0" style="font-size:12px;color:var(--text-muted);">Aucun salon associé à cette unité.</div>
+                    <div x-show="detailSalonsList.length === 0" style="font-size:12px;color:var(--text-muted);padding:6px 0;">Aucun salon commun associé.</div>
                     <div style="display:flex;flex-wrap:wrap;gap:8px;">
                         <template x-for="salon in detailSalonsList" :key="salon.id">
                             <span class="salon-tag" :class="'type-' + salon.Type">
                                 <span x-text="salon.Nom"></span>
                                 <span x-show="!salon.room_id" style="margin-left:4px;color:var(--red-light);font-size:9px;">⚠ sans room</span>
+                            </span>
+                        </template>
+                    </div>
+                </div>
+
+                {# ── Salons de classement ── #}
+                <div style="margin-bottom:20px;padding-top:16px;border-top:1px solid var(--border);">
+                    <div style="margin-bottom:6px;">
+                        <div style="font-family:var(--font-display);font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--gold);">
+                            <i class="fa-solid fa-folder" style="margin-right:5px;font-size:10px;"></i>SALONS DE CLASSEMENT
+                        </div>
+                        <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Rattachés pour classement uniquement — accès accordé manuellement</div>
+                    </div>
+                    <div x-show="detailSalonsClassificationList.length === 0" style="font-size:12px;color:var(--text-muted);padding:6px 0;">Aucun salon de classement associé.</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                        <template x-for="salon in detailSalonsClassificationList" :key="salon.id">
+                            <span class="salon-tag" :class="'type-' + salon.Type" style="border-color:rgba(var(--gold-rgb,201,161,60),.4);color:var(--gold);">
+                                <span x-text="salon.Nom"></span>
                             </span>
                         </template>
                     </div>
@@ -719,12 +742,19 @@
                             <input type="text" x-model="quickSalon.Nom" maxlength="200" placeholder="Nom du salon">
                         </div>
                         <div class="form-group">
-                            <label>Type</label>
+                            <label>Type de salon</label>
                             <select x-model="quickSalon.Type">
                                 <option value="operationnel">Opérationnel</option>
                                 <option value="information">Information</option>
                                 <option value="crise">Crise</option>
                                 <option value="admin">Admin</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Association</label>
+                            <select x-model="quickSalon.assocType">
+                                <option value="commun">Salon commun (sync auto)</option>
+                                <option value="classement">Classement uniquement</option>
                             </select>
                         </div>
                         <div class="form-group form-full">
@@ -742,18 +772,28 @@
 
                 {# Associer des salons existants #}
                 <div style="border-top:1px solid var(--border);padding-top:20px;">
-                    <div style="font-family:var(--font-display);font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--text-muted);margin-bottom:12px;">ASSOCIER / DISSOCIER DES SALONS EXISTANTS</div>
+                    <div style="font-family:var(--font-display);font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--text-muted);margin-bottom:4px;">ASSOCIER / DISSOCIER DES SALONS EXISTANTS</div>
+                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">Cochez <span style="color:var(--blue-light);font-weight:600;">Commun</span> pour une sync auto, <span style="color:var(--gold);font-weight:600;">Classement</span> pour un rattachement manuel.</div>
                     <input type="text" x-model="salonSearch" placeholder="Filtrer les salons…"
                         style="width:100%;margin-bottom:8px;font-size:12px;padding:5px 8px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);">
                     <div class="multi-select" style="max-height:220px;overflow-y:auto;">
                         <template x-for="s in salons.filter(s => !salonSearch || s.Nom.toLowerCase().includes(salonSearch.toLowerCase()))" :key="s.id">
-                            <label class="multi-select-item">
-                                <input type="checkbox"
-                                    :checked="detailForm.Salons && detailForm.Salons.includes(s.id)"
-                                    @change="toggleDetailSalon(s.id, $event.target.checked)">
-                                <span x-text="s.Nom"></span>
-                                <span x-show="s.Type" style="margin-left:auto;font-size:10px;color:var(--text-muted);text-transform:uppercase;" x-text="s.Type"></span>
-                            </label>
+                            <div class="multi-select-item" style="gap:12px;">
+                                <span style="flex:1;font-size:13px;" x-text="s.Nom"></span>
+                                <span x-show="s.Type" style="font-size:10px;color:var(--text-muted);text-transform:uppercase;" x-text="s.Type"></span>
+                                <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--blue-light);cursor:pointer;white-space:nowrap;" @click.stop>
+                                    <input type="checkbox"
+                                        :checked="detailForm.Salons && detailForm.Salons.includes(s.id)"
+                                        @change="toggleDetailSalon(s.id, $event.target.checked)">
+                                    Commun
+                                </label>
+                                <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--gold);cursor:pointer;white-space:nowrap;" @click.stop>
+                                    <input type="checkbox"
+                                        :checked="detailForm.Salons_Classification && detailForm.Salons_Classification.includes(s.id)"
+                                        @change="toggleDetailSalonClassification(s.id, $event.target.checked)">
+                                    Classement
+                                </label>
+                            </div>
                         </template>
                     </div>
                     <button class="btn-primary" style="margin-top:10px;" :disabled="detailSaving" @click="saveDetailSalons()">

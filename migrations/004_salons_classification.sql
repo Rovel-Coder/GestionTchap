@@ -1,0 +1,1 @@
+ALTER TABLE unites ADD COLUMN IF NOT EXISTS "Salons_Classification" INTEGER[] NOT NULL DEFAULT '{}';

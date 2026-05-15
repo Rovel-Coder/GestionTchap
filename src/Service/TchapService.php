@@ -151,17 +151,17 @@ class TchapService
                 $data = $this->callBridge('GET', '/rooms/' . rawurlencode($roomId) . '/members');
             } catch (\Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface $e) {
                 $this->logger->warning('[TchapService] Bridge injoignable pour getMembers, fallback direct', ['exception' => $e->getMessage()]);
-                $path = '/rooms/' . rawurlencode($roomId) . '/members?membership=join';
+                $path = '/rooms/' . rawurlencode($roomId) . '/members?not_membership=leave';
                 $data = $this->call('GET', $path, $config);
             }
         } else {
-            $path = '/rooms/' . rawurlencode($roomId) . '/members?membership=join';
+            $path = '/rooms/' . rawurlencode($roomId) . '/members?not_membership=leave';
             $data = $this->call('GET', $path, $config);
         }
 
         return array_values(array_filter(
             $data['chunk'] ?? [],
-            fn($m) => ($m['content']['membership'] ?? '') === 'join'
+            fn($m) => in_array($m['content']['membership'] ?? '', ['join', 'invite'], true)
         ));
     }
 

@@ -15,7 +15,7 @@ use Symfony\Component\Routing\Attribute\Route;
 
 class UniteController extends AbstractController
 {
-    private const WRITABLE = ['Nom', 'code', 'Salons', 'numero', 'adresse', 'bot_id', 'parent_id', 'niveau_id', 'type'];
+    private const WRITABLE = ['Nom', 'code', 'Salons', 'Salons_Classification', 'numero', 'adresse', 'bot_id', 'parent_id', 'niveau_id', 'type'];
     private const LIMITS   = ['Nom' => 200, 'code' => 50, 'numero' => 50, 'adresse' => 500];
 
     public function __construct(
@@ -156,8 +156,8 @@ class UniteController extends AbstractController
         $vals = ['__id' => $id];
 
         foreach ($fields as $k => $v) {
-            if ($k === 'Salons') {
-                $sets[]       = '"Salons" = :p' . $i;
+            if ($k === 'Salons' || $k === 'Salons_Classification') {
+                $sets[]       = "\"$k\" = :p$i";
                 $vals['p' . $i] = $this->arrayToPg($v);
             } else {
                 $sets[]       = "\"$k\" = :p$i";
@@ -271,7 +271,7 @@ class UniteController extends AbstractController
                 continue;
             }
             $fields[$k] = match ($k) {
-                'Salons'                  => $this->toIntArray($data[$k]),
+                'Salons', 'Salons_Classification' => $this->toIntArray($data[$k]),
                 'bot_id', 'parent_id', 'niveau_id' => ($data[$k] !== null && $data[$k] !== '') ? (int) $data[$k] : null,
                 default                   => $data[$k],
             };
@@ -320,7 +320,7 @@ class UniteController extends AbstractController
         foreach ($fields as $k => $v) {
             $cols[]       = "\"$k\"";
             $phs[]        = ":p$i";
-            $vals["p$i"] = $k === 'Salons' ? $this->arrayToPg($v) : $v;
+            $vals["p$i"] = ($k === 'Salons' || $k === 'Salons_Classification') ? $this->arrayToPg($v) : $v;
             $i++;
         }
 
@@ -334,10 +334,12 @@ class UniteController extends AbstractController
 
     private function formatRow(array $row): array
     {
-        $s = $row['Salons'] ?? '{}';
-        $row['Salons'] = is_string($s)
-            ? ($s === '{}' || $s === '' ? [] : array_map('intval', explode(',', trim($s, '{}'))))
-            : array_map('intval', (array) $s);
+        foreach (['Salons', 'Salons_Classification'] as $col) {
+            $s = $row[$col] ?? '{}';
+            $row[$col] = is_string($s)
+                ? ($s === '{}' || $s === '' ? [] : array_map('intval', explode(',', trim($s, '{}'))))
+                : array_map('intval', (array) $s);
+        }
 
         $row['bot_id']    = isset($row['bot_id'])    ? (int) $row['bot_id']    : null;
         $row['parent_id'] = isset($row['parent_id']) ? (int) $row['parent_id'] : null;
