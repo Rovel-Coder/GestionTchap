@@ -82,6 +82,14 @@
                     </div>
                 </div>
 
+                {# Compteur membres Tchap #}
+                <div x-show="espace.space_id && espace._memberCount !== null"
+                    style="margin-top:6px;display:flex;align-items:center;gap:8px;font-size:11px;">
+                    <span style="color:#6ec38a;" x-text="'✓ ' + (espace._memberCount?.joined ?? 0) + ' membre(s)'"></span>
+                    <span x-show="espace._memberCount?.invited > 0"
+                        style="color:var(--gold);" x-text="'+ ' + espace._memberCount.invited + ' invitation(s) en attente'"></span>
+                </div>
+
                 <div x-show="espace._error"
                     style="margin-top:6px;font-size:11px;color:var(--red-light);white-space:pre-wrap;"
                     x-text="espace._error"></div>
@@ -95,6 +103,13 @@
                         title="Créer l'espace sur Tchap"
                         style="color:var(--gold);">
                         <i class="fa-solid fa-plus" :class="{ 'fa-spin': espace._loading }"></i>
+                    </button>
+                    <button class="btn-icon" x-show="espace.space_id"
+                        @click="checkMembers(espace)"
+                        :disabled="espace._loading"
+                        title="Vérifier les membres Tchap"
+                        style="color:#6ec38a;">
+                        <i class="fa-solid fa-users-check" :class="{ 'fa-spin': espace._loading }" style="font-size:11px;"></i>
                     </button>
                     <button class="btn-icon" x-show="espace.space_id"
                         @click="openInviteModal(espace)"
@@ -297,6 +312,11 @@ function espaceView() {
         deleteTarget: null,
         deleteError:  null,
 
+        // Initialise les propriétés réactives UI sur un objet espace brut
+        _initEspace(e) {
+            return { ...e, _loading: false, _error: null, _memberCount: null };
+        },
+
         async load() {
             this.loading = true;
             try {
@@ -304,7 +324,8 @@ function espaceView() {
                     apiFetch('/api/espaces'),
                     apiFetch('/api/salons'),
                 ]);
-                this.espaces   = espR;
+                // Initialiser les propriétés réactives AVANT de passer à Alpine
+                this.espaces   = espR.map(e => this._initEspace(e));
                 this.allSalons = salR;
             } catch (e) {
                 console.error(e);
@@ -339,10 +360,10 @@ function espaceView() {
                     body: JSON.stringify({ Nom: this.form.Nom, Description: this.form.Description }),
                 });
                 if (this.modalMode === 'create') {
-                    this.espaces.push(data);
+                    this.espaces.push(this._initEspace(data));
                 } else {
                     const idx = this.espaces.findIndex(e => e.id === data.id);
-                    if (idx >= 0) this.espaces[idx] = data;
+                    if (idx >= 0) this.espaces[idx] = { ...this.espaces[idx], ...data };
                 }
                 this.closeModal();
             } catch (e) {
@@ -359,9 +380,13 @@ function espaceView() {
             espace._error   = null;
             try {
                 const data = await apiFetch(`/api/espaces/${espace.id}/create-space`, { method: 'POST' });
-                Object.assign(espace, data);
+                // Mettre à jour les champs DB sans toucher aux propriétés réactives _*
+                Object.keys(data).forEach(k => { if (!k.startsWith('_')) espace[k] = data[k]; });
+                if (data._salons) espace._salons = data._salons;
+                if (espace.space_id) toast(`Espace "${espace.Nom}" créé sur Tchap ✓`, 'success');
             } catch (e) {
                 espace._error = e.message;
+                toast(`Erreur création espace : ${e.message}`, 'error');
             } finally {
                 espace._loading = false;
             }
@@ -397,7 +422,7 @@ function espaceView() {
                     method: 'POST',
                     body: JSON.stringify({ salonId: salon.id }),
                 });
-                espace._salons = data._salons;
+                espace._salons = data._salons ?? espace._salons;
                 if (data._tchap_warning) this.addSalonError = data._tchap_warning;
             } catch (e) {
                 this.addSalonError = e.message;
@@ -411,7 +436,7 @@ function espaceView() {
             espace._error   = null;
             try {
                 const data = await apiFetch(`/api/espaces/${espace.id}/salons/${salon.id}`, { method: 'DELETE' });
-                espace._salons = data._salons;
+                espace._salons = data._salons ?? espace._salons;
                 if (data._tchap_warning) espace._error = data._tchap_warning;
             } catch (e) {
                 espace._error = e.message;
@@ -449,6 +474,30 @@ function espaceView() {
                 this.inviteError = e.message;
             } finally {
                 this.saving = false;
+            }
+        },
+
+        // ── Vérification membres Tchap ──
+
+        async checkMembers(espace) {
+            if (!espace.space_id) return;
+            espace._loading = true;
+            espace._error   = null;
+            try {
+                const data = await apiFetch(`/api/tchap/members/${encodeURIComponent(espace.space_id)}`);
+                const members = Array.isArray(data) ? data : (data.members || []);
+                const joined  = members.filter(m => (m.content?.membership ?? m.membership ?? 'join') === 'join').length;
+                const invited = members.filter(m => (m.content?.membership ?? m.membership) === 'invite').length;
+                espace._memberCount = { joined, invited, total: members.length };
+                if (invited > 0) {
+                    toast(`Espace "${espace.Nom}" : ${joined} membre(s), ${invited} invitation(s) en attente`, 'info');
+                } else {
+                    toast(`Espace "${espace.Nom}" : ${joined} membre(s) actif(s)`, 'success');
+                }
+            } catch (e) {
+                espace._error = e.message;
+            } finally {
+                espace._loading = false;
             }
         },
 
