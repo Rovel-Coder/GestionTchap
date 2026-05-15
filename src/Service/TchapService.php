@@ -227,10 +227,9 @@ class TchapService
         }
 
         return $this->call('POST', '/createRoom', $config, [
-            'name'              => $name,
-            'topic'             => $topic,
-            'preset'            => $preset,
-            'creation_content'  => ['m.federate' => false],
+            'name'   => $name,
+            'topic'  => $topic,
+            'preset' => $preset,
         ]);
     }
 
@@ -343,7 +342,7 @@ class TchapService
             'name'             => $name,
             'topic'            => $topic,
             'preset'           => 'private_chat',
-            'creation_content' => ['m.federate' => false, 'type' => 'm.space'],
+            'creation_content' => ['type' => 'm.space'],
         ]);
     }
 

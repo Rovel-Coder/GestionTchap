@@ -228,7 +228,6 @@ router.post('/rooms', async (req, res) => {
             name,
             topic:            topic ?? '',
             preset:           preset ?? 'private_chat',
-            creation_content: { 'm.federate': false },
             initial_state: [{
                 type:      'm.room.encryption',
                 state_key: '',
@@ -293,7 +292,7 @@ router.post('/spaces', async (req, res) => {
             name,
             topic:            topic ?? '',
             preset:           'private_chat',
-            creation_content: { 'm.federate': false, type: 'm.space' },
+            creation_content: { type: 'm.space' },
         });
         res.json({ space_id: spaceId });
     } catch (e) {

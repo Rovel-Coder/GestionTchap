@@ -986,6 +986,9 @@ function salonView() {
       this.addMembersResult   = null;
     },
 
+    // Exposer mailToTchapId dans le scope Alpine pour les templates
+    mailToTchapId: (email) => mailToTchapId(email),
+
     // Personnel filtré pour l'onglet "Personnel"
     get addMembersPersonnel() {
       const q = (this.addMembersSearch || '').toLowerCase();
@@ -1032,19 +1035,21 @@ function salonView() {
               }
               break;
             }
-            // Email → chercher dans le personnel
+            // Email → chercher dans le personnel, ou dériver le Matrix ID
             const at = cell.indexOf('@');
             if (at > 0 && cell.includes('.', at)) {
               const email = cell.toLowerCase();
               if (!seen.has(email)) {
                 seen.add(email);
-                const person = this.personnel.find(p => (p.Mail || '').toLowerCase() === email);
+                const person  = this.personnel.find(p => (p.Mail || '').toLowerCase() === email);
+                const userId  = person?.user_id || mailToTchapId(email);
                 rows.push({
                   raw:     cell,
                   email,
-                  userId:  person?.user_id || null,
-                  matched: !!(person?.user_id),
+                  userId,
+                  matched: !!userId,
                   name:    person ? `${person.Prenom} ${person.Nom}` : email,
+                  derived: !person?.user_id, // true = ID dérivé de l'email, non confirmé
                 });
               }
               break;
@@ -1065,12 +1070,21 @@ function salonView() {
 
       if (this.addMembersTab === 'personnel') {
         userIds = this.addMembersSelected
-          .map(id => this.personnel.find(p => p.id === id)?.user_id)
+          .map(id => {
+            const p = this.personnel.find(p => p.id === id);
+            return p?.user_id || (p?.Mail ? mailToTchapId(p.Mail) : null);
+          })
           .filter(uid => uid && uid.startsWith('@') && uid.includes(':'));
       } else if (this.addMembersTab === 'manual') {
         userIds = this.addMembersInput.split('\n')
           .map(l => l.trim())
-          .filter(l => l.startsWith('@') && l.includes(':'));
+          .filter(Boolean)
+          .map(l => {
+            if (l.startsWith('@') && l.includes(':')) return l; // Matrix ID direct
+            if (l.includes('@') && !l.startsWith('@')) return mailToTchapId(l); // email → ID
+            return null;
+          })
+          .filter(Boolean);
       } else if (this.addMembersTab === 'csv') {
         userIds = this.addMembersCsvRows
           .filter(r => r.matched && r.userId?.startsWith('@'))
