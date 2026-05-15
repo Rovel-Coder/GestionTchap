@@ -773,29 +773,69 @@
                 {# Associer des salons existants #}
                 <div style="border-top:1px solid var(--border);padding-top:20px;">
                     <div style="font-family:var(--font-display);font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--text-muted);margin-bottom:4px;">ASSOCIER / DISSOCIER DES SALONS EXISTANTS</div>
-                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">Cochez <span style="color:var(--blue-light);font-weight:600;">Commun</span> pour une sync auto, <span style="color:var(--gold);font-weight:600;">Classement</span> pour un rattachement manuel.</div>
+
+                    {# Légende colonnes #}
+                    <div style="display:grid;grid-template-columns:1fr 58px 90px 96px;gap:0;padding:4px 10px;margin-bottom:2px;">
+                        <span style="font-size:10px;color:var(--text-muted);">Salon</span>
+                        <span style="font-size:10px;color:var(--text-muted);">Type</span>
+                        <span style="font-size:10px;font-weight:700;color:var(--blue-light);text-align:center;">
+                            <i class="fa-solid fa-users" style="font-size:9px;margin-right:3px;"></i>Commun
+                        </span>
+                        <span style="font-size:10px;font-weight:700;color:var(--gold);text-align:center;">
+                            <i class="fa-solid fa-folder" style="font-size:9px;margin-right:3px;"></i>Classement
+                        </span>
+                    </div>
+
                     <input type="text" x-model="salonSearch" placeholder="Filtrer les salons…"
-                        style="width:100%;margin-bottom:8px;font-size:12px;padding:5px 8px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);">
-                    <div class="multi-select" style="max-height:220px;overflow-y:auto;">
+                        style="width:100%;margin-bottom:4px;font-size:12px;padding:5px 8px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);">
+
+                    <div style="border:1px solid var(--border);border-radius:var(--radius-sm);max-height:240px;overflow-y:auto;">
                         <template x-for="s in salons.filter(s => !salonSearch || s.Nom.toLowerCase().includes(salonSearch.toLowerCase()))" :key="s.id">
-                            <div class="multi-select-item" style="gap:12px;">
-                                <span style="flex:1;font-size:13px;" x-text="s.Nom"></span>
-                                <span x-show="s.Type" style="font-size:10px;color:var(--text-muted);text-transform:uppercase;" x-text="s.Type"></span>
-                                <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--blue-light);cursor:pointer;white-space:nowrap;" @click.stop>
-                                    <input type="checkbox"
-                                        :checked="detailForm.Salons && detailForm.Salons.includes(s.id)"
-                                        @change="toggleDetailSalon(s.id, $event.target.checked)">
-                                    Commun
-                                </label>
-                                <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--gold);cursor:pointer;white-space:nowrap;" @click.stop>
-                                    <input type="checkbox"
-                                        :checked="detailForm.Salons_Classification && detailForm.Salons_Classification.includes(s.id)"
-                                        @change="toggleDetailSalonClassification(s.id, $event.target.checked)">
-                                    Classement
-                                </label>
+                            <div style="display:grid;grid-template-columns:1fr 58px 90px 96px;gap:0;align-items:center;padding:5px 10px;border-bottom:1px solid var(--border);transition:background .1s;"
+                                :style="(detailForm.Salons && detailForm.Salons.includes(s.id)) || (detailForm.Salons_Classification && detailForm.Salons_Classification.includes(s.id)) ? 'background:rgba(255,255,255,.03);' : ''"
+                                @mouseenter="$el.style.background='var(--bg-hover)'"
+                                @mouseleave="$el.style.background=(detailForm.Salons && detailForm.Salons.includes(s.id)) || (detailForm.Salons_Classification && detailForm.Salons_Classification.includes(s.id)) ? 'rgba(255,255,255,.03)' : ''">
+
+                                {# Nom salon #}
+                                <span style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:8px;"
+                                    x-text="s.Nom"></span>
+
+                                {# Type badge #}
+                                <span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+                                    x-text="s.Type || ''"></span>
+
+                                {# Toggle Commun #}
+                                <div style="display:flex;justify-content:center;">
+                                    <button @click="toggleDetailSalon(s.id, !(detailForm.Salons && detailForm.Salons.includes(s.id)))"
+                                        style="min-width:72px;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;border:1.5px solid;"
+                                        :style="detailForm.Salons && detailForm.Salons.includes(s.id)
+                                            ? 'background:rgba(45,108,223,.2);border-color:var(--blue-light);color:var(--blue-light);'
+                                            : 'background:transparent;border-color:var(--border);color:var(--text-muted);'">
+                                        <i class="fa-solid" :class="detailForm.Salons && detailForm.Salons.includes(s.id) ? 'fa-check' : 'fa-plus'" style="font-size:9px;margin-right:3px;"></i>
+                                        <span x-text="detailForm.Salons && detailForm.Salons.includes(s.id) ? 'Commun' : 'Commun'"></span>
+                                    </button>
+                                </div>
+
+                                {# Toggle Classement #}
+                                <div style="display:flex;justify-content:center;">
+                                    <button @click="toggleDetailSalonClassification(s.id, !(detailForm.Salons_Classification && detailForm.Salons_Classification.includes(s.id)))"
+                                        style="min-width:80px;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;border:1.5px solid;"
+                                        :style="detailForm.Salons_Classification && detailForm.Salons_Classification.includes(s.id)
+                                            ? 'background:rgba(201,161,60,.2);border-color:var(--gold);color:var(--gold);'
+                                            : 'background:transparent;border-color:var(--border);color:var(--text-muted);'">
+                                        <i class="fa-solid" :class="detailForm.Salons_Classification && detailForm.Salons_Classification.includes(s.id) ? 'fa-check' : 'fa-plus'" style="font-size:9px;margin-right:3px;"></i>
+                                        Classement
+                                    </button>
+                                </div>
                             </div>
                         </template>
+
+                        <div x-show="salons.filter(s => !salonSearch || s.Nom.toLowerCase().includes(salonSearch.toLowerCase())).length === 0"
+                            style="padding:16px;text-align:center;font-size:12px;color:var(--text-muted);">
+                            Aucun salon correspondant
+                        </div>
                     </div>
+
                     <button class="btn-primary" style="margin-top:10px;" :disabled="detailSaving" @click="saveDetailSalons()">
                         <i x-show="detailSaving" class="fa-solid fa-spinner fa-spin"></i>
                         <span x-show="!detailSaving">Enregistrer les associations</span>
