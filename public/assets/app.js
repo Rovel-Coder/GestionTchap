@@ -669,7 +669,7 @@ function salonView() {
     loading:    true,
     typeFilter: 'Tous',
     page:       1,
-    perPage:    24,
+    perPage:    25,
     modalOpen:  false,
     modalMode:  'create',
     modalError: null,

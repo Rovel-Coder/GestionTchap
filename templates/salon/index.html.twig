@@ -162,20 +162,21 @@
         </template>
     </div>
 
-    {# ── Pagination ── #}
-    <div class="pagination-bar" x-show="!loading && totalPages > 1">
+    {# ── Pagination ── toujours visible dès qu'il y a des salons #}
+    <div class="pagination-bar" x-show="!loading && filtered.length > 0">
         <div class="pagination-size">
             Afficher
             <select x-model.number="perPage" @change="page = 1">
-                <option value="12">12</option>
-                <option value="24">24</option>
-                <option value="48">48</option>
+                <option value="10">10</option>
+                <option value="25">25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
             </select>
             par page
         </div>
         <div class="pagination-info"
-            x-text="filtered.length + ' salon' + (filtered.length > 1 ? 's' : '') + ' — page ' + page + ' / ' + totalPages"></div>
-        <div class="pagination-controls">
+            x-text="filtered.length + ' salon' + (filtered.length > 1 ? 's' : '') + (totalPages > 1 ? ' — page ' + page + ' / ' + totalPages : '')"></div>
+        <div class="pagination-controls" x-show="totalPages > 1">
             <button class="pagination-btn" :disabled="page === 1" @click="page--">&#8249;</button>
             <template x-for="p in visiblePages" :key="'p' + p">
                 <span x-show="p === '...'" style="padding:0 4px;color:var(--text-muted);line-height:30px;">…</span>
