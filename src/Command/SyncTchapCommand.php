@@ -18,6 +18,10 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 )]
 class SyncTchapCommand extends Command
 {
+    // Pause toutes les BATCH_SIZE opérations Tchap (invite/kick) pour éviter le rate-limiting
+    private const BATCH_SIZE     = 10;
+    private const BATCH_PAUSE_US = 3_000_000; // 3 secondes en microsecondes
+
     public function __construct(
         private readonly TchapService  $tchap,
         private readonly ConfigService $config,
@@ -110,6 +114,7 @@ class SyncTchapCommand extends Command
             }
 
             $manualMode = !empty($agentIds);
+            $opCount    = 0; // compteur d'opérations Tchap pour le batching
 
             // ── Boucle principale par salon ───────────────────────────────────
             foreach ($salons as $salon) {
@@ -172,6 +177,11 @@ class SyncTchapCommand extends Command
                                 $this->tchap->kick($salon['room_id'], $uid, 'Renouvellement invitation', $cfg);
                                 $this->tchap->invite($salon['room_id'], $uid, $cfg);
                                 $reinvited++;
+                                $opCount += 2; // kick + invite = 2 opérations
+                                if ($opCount % self::BATCH_SIZE === 0) {
+                                    $io->writeln("  [batch] pause après $opCount opérations…");
+                                    usleep(self::BATCH_PAUSE_US);
+                                }
                             } catch (\Throwable $e) {
                                 $errors[] = ['action' => 'reinvite', 'user' => $uid, 'salon' => $salon['Nom'], 'error' => $e->getMessage()];
                             }
@@ -186,6 +196,10 @@ class SyncTchapCommand extends Command
                         try {
                             $this->tchap->invite($salon['room_id'], $uid, $cfg);
                             $invited++;
+                            if (++$opCount % self::BATCH_SIZE === 0) {
+                                $io->writeln("  [batch] pause après $opCount opérations…");
+                                usleep(self::BATCH_PAUSE_US);
+                            }
                         } catch (\Throwable $e) {
                             $msg = $e->getMessage();
                             if (str_contains($msg, 'M_INVALID_PARAM') || str_contains($msg, "start with '@'")) {
@@ -208,6 +222,10 @@ class SyncTchapCommand extends Command
                                 try {
                                     $this->tchap->kick($salon['room_id'], $mid, 'Gestion automatique', $cfg);
                                     $kicked++;
+                                    if (++$opCount % self::BATCH_SIZE === 0) {
+                                        $io->writeln("  [batch] pause après $opCount opérations…");
+                                        usleep(self::BATCH_PAUSE_US);
+                                    }
                                 } catch (\Throwable $e) {
                                     $errors[] = ['action' => 'kick', 'user' => $mid, 'salon' => $salon['Nom'], 'error' => $e->getMessage()];
                                 }
