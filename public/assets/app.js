@@ -648,7 +648,8 @@ function personnelView() {
       try {
         const r = await apiFetch('/api/tchap/apply', { method: 'POST', body: JSON.stringify({ salonIds }) });
         const type = (r.errors && r.errors.length) ? 'error' : 'success';
-        toast(`Terminé : ${r.invited} invité(s), ${r.kicked} expulsé(s)${r.errors && r.errors.length ? ` — ${r.errors.length} erreur(s)` : ''}`, type);
+        const reinvMsg = r.reinvited > 0 ? `, ${r.reinvited} ré-invité(s)` : '';
+        toast(`Terminé : ${r.invited} invité(s)${reinvMsg}, ${r.kicked} expulsé(s)${r.errors && r.errors.length ? ` — ${r.errors.length} erreur(s)` : ''}`, type);
         if (r.errors && r.errors.length) {
           r.errors.forEach(err => toast(`${err.action ?? 'erreur'} ${err.user ?? ''} (${err.salon ?? ''}) : ${err.error}`, 'error'));
         }
@@ -1574,7 +1575,8 @@ function uniteView() {
           method: 'POST',
           body: JSON.stringify({ salonIds: unite.Salons.map(Number) }),
         });
-        const msg = `${r.invited ?? 0} invité(s), ${r.kicked ?? 0} expulsé(s)`;
+        const reinvMsg = r.reinvited > 0 ? `, ${r.reinvited} ré-invité(s)` : '';
+        const msg = `${r.invited ?? 0} invité(s)${reinvMsg}, ${r.kicked ?? 0} expulsé(s)`;
         toast(`Sync ${unite.Nom} — ${msg}`, (r.errors?.length) ? 'error' : 'success');
         if (r.errors?.length) r.errors.forEach(e => toast(`${e.user ?? ''}: ${e.error}`, 'error'));
       } catch (e) {
@@ -1592,7 +1594,8 @@ function uniteView() {
           method: 'POST',
           body: JSON.stringify({ salonIds: allSalonIds }),
         });
-        const msg = `${r.invited ?? 0} invité(s), ${r.kicked ?? 0} expulsé(s)`;
+        const reinvMsg2 = r.reinvited > 0 ? `, ${r.reinvited} ré-invité(s)` : '';
+        const msg = `${r.invited ?? 0} invité(s)${reinvMsg2}, ${r.kicked ?? 0} expulsé(s)`;
         toast(`Sync globale — ${msg}`, (r.errors?.length) ? 'error' : 'success');
         if (r.errors?.length) r.errors.forEach(e => toast(`${e.user ?? ''}: ${e.error}`, 'error'));
       } catch (e) {

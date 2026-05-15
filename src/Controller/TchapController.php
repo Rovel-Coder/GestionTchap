@@ -517,9 +517,10 @@ class TchapController extends AbstractController
 
         try {
             $globalCfg = $this->config->getTchapConfig();
-            $invited   = 0;
-            $kicked    = 0;
-            $errors    = [];
+            $invited    = 0;
+            $kicked     = 0;
+            $reinvited  = 0;
+            $errors     = [];
 
             // Charger les agents concernés
             $salonPh = implode(',', array_fill(0, count($salonIds), '?'));
@@ -572,8 +573,17 @@ class TchapController extends AbstractController
                 $cfg = $salonBotCfg[(int) $salon['id']] ?? $globalCfg;
 
                 try {
-                    $members    = $this->tchap->getMembers($salon['room_id'], $cfg);
-                    $memberIds  = array_map('strtolower', array_column($members, 'state_key'));
+                    $members = $this->tchap->getMembers($salon['room_id'], $cfg);
+
+                    // Construire la map userId → membership (join ou invite)
+                    $memberStatus = [];
+                    foreach ($members as $m) {
+                        $uid = strtolower($m['state_key'] ?? '');
+                        if ($uid) {
+                            $memberStatus[$uid] = $m['content']['membership'] ?? 'join';
+                        }
+                    }
+                    $memberIds   = array_keys($memberStatus);
                     $expectedIds = [];
 
                     foreach ($agents as $agent) {
@@ -606,31 +616,50 @@ class TchapController extends AbstractController
                         }
                     }
 
-                    // Inviter les agents attendus mais absents
+                    $botId = strtolower($cfg['botUserId'] ?? '');
+
+                    // Renouveler les invitations en attente (invite → kick + re-invite)
                     foreach ($expectedIds as $uid) {
-                        if (!in_array($uid, $memberIds, true) && $uid !== strtolower($cfg['botUserId'] ?? '')) {
+                        if ($uid === $botId) {
+                            continue;
+                        }
+                        if (($memberStatus[$uid] ?? '') === 'invite') {
                             try {
+                                $this->tchap->kick($salon['room_id'], $uid, 'Renouvellement invitation', $cfg);
                                 $this->tchap->invite($salon['room_id'], $uid, $cfg);
-                                $invited++;
+                                $reinvited++;
                             } catch (\Throwable $e) {
-                                $msg = $e->getMessage();
-                                // M_INVALID_PARAM sur l'invite = Matrix ID inexistant ou incorrect sur Tchap
-                                if (str_contains($msg, 'M_INVALID_PARAM') || str_contains($msg, "start with '@'")) {
-                                    $msg = "Matrix ID introuvable sur Tchap : « $uid » n'existe pas. Vérifiez le vrai ID dans l'app Tchap (profil → Matrix ID) et corrigez le champ user_id de l'agent.";
-                                }
-                                $errors[] = ['action' => 'invite', 'user' => $uid, 'salon' => $salon['Nom'], 'error' => $msg];
+                                $errors[] = ['action' => 'reinvite', 'user' => $uid, 'salon' => $salon['Nom'], 'error' => $e->getMessage()];
                             }
                         }
                     }
 
-                    // Expulser les membres présents mais non attendus
-                    // (uniquement en sync globale — pas en mode sélection manuelle)
+                    // Inviter les agents attendus mais absents du salon
+                    foreach ($expectedIds as $uid) {
+                        if ($uid === $botId || isset($memberStatus[$uid])) {
+                            continue;
+                        }
+                        try {
+                            $this->tchap->invite($salon['room_id'], $uid, $cfg);
+                            $invited++;
+                        } catch (\Throwable $e) {
+                            $msg = $e->getMessage();
+                            // M_INVALID_PARAM = Matrix ID inexistant sur Tchap
+                            if (str_contains($msg, 'M_INVALID_PARAM') || str_contains($msg, "start with '@'")) {
+                                $msg = "Matrix ID introuvable sur Tchap : « $uid » n'existe pas. Vérifiez le vrai ID dans l'app Tchap (profil → Matrix ID) et corrigez le champ user_id de l'agent.";
+                            }
+                            $errors[] = ['action' => 'invite', 'user' => $uid, 'salon' => $salon['Nom'], 'error' => $msg];
+                        }
+                    }
+
+                    // Expulser les membres join non attendus (sync globale uniquement)
+                    // Les membres invite non attendus sont aussi expulsés (invitation erronée)
                     if (!$manualMode) {
                         foreach ($memberIds as $mid) {
                             if (!$mid || !str_starts_with($mid, '@') || !str_contains($mid, ':')) {
                                 continue;
                             }
-                            if ($mid === strtolower($cfg['botUserId'] ?? '')) {
+                            if ($mid === $botId) {
                                 continue;
                             }
                             if (!in_array($mid, $expectedIds, true)) {
@@ -648,7 +677,7 @@ class TchapController extends AbstractController
                 }
             }
 
-            return $this->json(['ok' => true, 'invited' => $invited, 'kicked' => $kicked, 'errors' => $errors]);
+            return $this->json(['ok' => true, 'invited' => $invited, 'reinvited' => $reinvited, 'kicked' => $kicked, 'errors' => $errors]);
         } catch (\Throwable $e) {
             return $this->json(['error' => $e->getMessage()], 500);
         }
