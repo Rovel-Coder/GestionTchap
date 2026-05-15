@@ -1668,6 +1668,46 @@ function uniteView() {
       else         this.detailForm.Salons_Classification = this.detailForm.Salons_Classification.filter(i => i !== id);
     },
 
+    // Retourne les IDs de tous les salons sélectionnés (commun + classement, dédupliqués)
+    detailAllSelected() {
+      const commun     = this.detailForm.Salons               || [];
+      const classement = this.detailForm.Salons_Classification || [];
+      return [...new Set([...commun, ...classement])];
+    },
+
+    // Coche/décoche un salon dans la liste de recherche → ajout dans Commun par défaut
+    detailSelectSalon(salonId, checked) {
+      const id = Number(salonId);
+      if (checked) {
+        if (!this.detailForm.Salons) this.detailForm.Salons = [];
+        this.detailForm.Salons = [...new Set([...this.detailForm.Salons, id])];
+      } else {
+        this.detailRemoveSalon(id);
+      }
+    },
+
+    // Bascule le type d'un salon entre Commun et Classement
+    detailToggleSalonType(salonId) {
+      const id = Number(salonId);
+      const inCommun = (this.detailForm.Salons || []).includes(id);
+      if (inCommun) {
+        // Commun → Classement
+        this.detailForm.Salons = (this.detailForm.Salons || []).filter(i => i !== id);
+        this.detailForm.Salons_Classification = [...new Set([...(this.detailForm.Salons_Classification || []), id])];
+      } else {
+        // Classement → Commun
+        this.detailForm.Salons_Classification = (this.detailForm.Salons_Classification || []).filter(i => i !== id);
+        this.detailForm.Salons = [...new Set([...(this.detailForm.Salons || []), id])];
+      }
+    },
+
+    // Retire un salon des deux listes
+    detailRemoveSalon(salonId) {
+      const id = Number(salonId);
+      this.detailForm.Salons               = (this.detailForm.Salons               || []).filter(i => i !== id);
+      this.detailForm.Salons_Classification = (this.detailForm.Salons_Classification || []).filter(i => i !== id);
+    },
+
     async saveDetailSalons() {
       this.detailSaving = true;
       try {
