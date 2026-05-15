@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Gestion Personnel Tchap{% endblock %}</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c9a84c' stroke-width='2'><path d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/></svg>">
-    <link rel="stylesheet" href="{{ asset('assets/app.css') }}?v=20260515g">
+    <link rel="stylesheet" href="{{ asset('assets/app.css') }}?v=20260515h">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous">
     {% block head_extra %}{% endblock %}
 </head>
@@ -145,6 +145,79 @@
         {% endif %}
     </nav>
 
+    {# ── Widget sync arrière-plan ── #}
+    <div @tchap-sync-start.window="startBackgroundSync($event.detail.salonIds, $event.detail.agentIds ?? [])">
+        <div x-show="syncJob !== null" x-cloak x-transition
+            style="position:fixed;bottom:20px;right:20px;z-index:9999;width:320px;background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:0 8px 32px rgba(0,0,0,.4);overflow:hidden;">
+
+            {# En-tête #}
+            <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border);">
+                <i class="fa-solid"
+                    :class="{
+                        'fa-rotate fa-spin': syncJob?.status === 'running' || syncJob?.status === 'pending',
+                        'fa-circle-check':   syncJob?.status === 'done',
+                        'fa-circle-xmark':   syncJob?.status === 'error'
+                    }"
+                    :style="{
+                        color: syncJob?.status === 'done' ? '#6ec38a' : syncJob?.status === 'error' ? 'var(--red-light)' : 'var(--blue-light)'
+                    }"
+                    style="font-size:14px;flex-shrink:0;"></i>
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:12px;font-weight:700;color:var(--text-primary);">
+                        <span x-show="syncJob?.status === 'pending' || syncJob?.status === 'running'">Synchronisation Tchap</span>
+                        <span x-show="syncJob?.status === 'done'" style="color:#6ec38a;">Synchronisation terminée</span>
+                        <span x-show="syncJob?.status === 'error'" style="color:var(--red-light);">Erreur de synchronisation</span>
+                    </div>
+                    <div style="font-size:11px;color:var(--text-muted);">
+                        <span x-show="syncJob?.currentSalon && (syncJob?.status === 'running')"
+                            x-text="syncJob?.currentSalon"
+                            style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;max-width:200px;"></span>
+                        <span x-show="!syncJob?.currentSalon || syncJob?.status !== 'running'"
+                            x-text="syncJob?.done + ' / ' + syncJob?.total + ' salon(s)'"></span>
+                    </div>
+                </div>
+                <button @click="closeSyncWidget()"
+                    style="background:none;border:none;cursor:pointer;color:var(--text-muted);padding:2px;flex-shrink:0;line-height:1;"
+                    title="Fermer">
+                    <i class="fa-solid fa-xmark" style="font-size:12px;"></i>
+                </button>
+            </div>
+
+            {# Barre de progression #}
+            <div style="padding:10px 14px;">
+                <div style="background:var(--bg-elevated);border-radius:999px;height:6px;overflow:hidden;margin-bottom:8px;">
+                    <div style="height:100%;border-radius:999px;transition:width .4s ease;"
+                        :style="{
+                            width: syncProgress + '%',
+                            background: syncJob?.status === 'done' ? '#6ec38a' : syncJob?.status === 'error' ? 'var(--red-light)' : 'var(--blue-light)'
+                        }"></div>
+                </div>
+
+                {# Compteurs #}
+                <div style="display:flex;gap:14px;font-size:11px;color:var(--text-muted);">
+                    <span x-show="syncJob?.invited > 0" style="color:#6ec38a;">
+                        <i class="fa-solid fa-user-plus" style="margin-right:3px;font-size:10px;"></i>
+                        <span x-text="syncJob?.invited"></span>
+                    </span>
+                    <span x-show="syncJob?.reinvited > 0" style="color:var(--gold);">
+                        <i class="fa-solid fa-rotate" style="margin-right:3px;font-size:10px;"></i>
+                        <span x-text="syncJob?.reinvited"></span>
+                    </span>
+                    <span x-show="syncJob?.kicked > 0" style="color:var(--text-muted);">
+                        <i class="fa-solid fa-user-minus" style="margin-right:3px;font-size:10px;"></i>
+                        <span x-text="syncJob?.kicked"></span>
+                    </span>
+                    <span x-show="syncJob?.errors?.length > 0" style="color:var(--red-light);">
+                        <i class="fa-solid fa-triangle-exclamation" style="margin-right:3px;font-size:10px;"></i>
+                        <span x-text="syncJob?.errors?.length + ' erreur(s)'"></span>
+                    </span>
+                    <span x-show="!syncJob?.invited && !syncJob?.reinvited && !syncJob?.kicked && !syncJob?.errors?.length"
+                        style="color:var(--text-muted);">En attente…</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
     {# ── Toasts ── #}
     <div id="toast-container" x-data="toastManager()" @toast.window="show($event.detail)">
         <template x-for="t in toasts" :key="t.id">
@@ -217,7 +290,7 @@ window.TCHAP_SERVERS  = {{ tchap_servers()|json_encode|raw }};
 </script>
 
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js"></script>
-<script src="{{ asset('assets/app.js') }}?v=20260515g"></script>
+<script src="{{ asset('assets/app.js') }}?v=20260515h"></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

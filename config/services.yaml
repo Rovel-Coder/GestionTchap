@@ -19,3 +19,7 @@ services:
         arguments:
             $bridgeUrl: '%env(default::TCHAP_SERVICE_URL)%'
             $bridgeKey: '%env(default::TCHAP_SERVICE_KEY)%'
+
+    App\Controller\TchapController:
+        arguments:
+            $projectDir: '%kernel.project_dir%'

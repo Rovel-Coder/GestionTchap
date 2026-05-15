@@ -20,6 +20,7 @@ class TchapController extends AbstractController
         private readonly ConfigService $config,
         private readonly RoleService   $roles,
         private readonly Connection    $db,
+        private readonly string        $projectDir = '',
     ) {
     }
 
@@ -495,6 +496,65 @@ class TchapController extends AbstractController
         } catch (\Throwable $e) {
             return $this->json(['error' => $e->getMessage()], 500);
         }
+    }
+
+    // POST /api/tchap/sync/start  — démarre une sync en arrière-plan et retourne un jobId
+    #[Route('/sync/start', name: 'sync_start', methods: ['POST'])]
+    public function syncStart(Request $request): JsonResponse
+    {
+        /** @var AppUser $user */
+        $user = $this->getUser();
+        if (!$this->roles->canManage($user)) {
+            return $this->json(['error' => 'Accès refusé'], 403);
+        }
+
+        $data     = json_decode($request->getContent(), true) ?? [];
+        $salonIds = array_map('intval', $data['salonIds'] ?? []);
+        $agentIds = array_map('intval', $data['agentIds'] ?? []);
+
+        if (empty($salonIds)) {
+            return $this->json(['error' => 'salonIds requis'], 400);
+        }
+
+        $jobId  = uniqid('sync_', true);
+        $params = json_encode(['salonIds' => $salonIds, 'agentIds' => $agentIds], JSON_UNESCAPED_UNICODE);
+
+        $this->db->executeStatement(
+            "INSERT INTO sync_jobs (id, status, total, params) VALUES (?, 'pending', ?, ?)",
+            [$jobId, count($salonIds), $params]
+        );
+
+        $projectDir = $this->projectDir ?: dirname(__DIR__, 2);
+        $cmd        = PHP_BINARY . ' ' . $projectDir . '/bin/console app:sync-tchap ' . escapeshellarg($jobId) . ' > /dev/null 2>&1 &';
+        exec($cmd);
+
+        return $this->json(['ok' => true, 'jobId' => $jobId]);
+    }
+
+    // GET /api/tchap/sync/progress/{jobId}  — état courant d'un job de sync
+    #[Route('/sync/progress/{jobId}', name: 'sync_progress', methods: ['GET'])]
+    public function syncProgress(string $jobId): JsonResponse
+    {
+        /** @var AppUser $user */
+        $user = $this->getUser();
+        if (!$this->roles->canManage($user)) {
+            return $this->json(['error' => 'Accès refusé'], 403);
+        }
+
+        $job = $this->db->fetchAssociative(
+            'SELECT * FROM sync_jobs WHERE id = :id',
+            ['id' => $jobId]
+        );
+
+        if (!$job) {
+            return $this->json(['error' => 'Job introuvable'], 404);
+        }
+
+        // Décoder les champs JSON stockés sous forme de texte
+        $job['errors'] = json_decode($job['errors'] ?? '[]', true) ?? [];
+        $job['params'] = json_decode($job['params'] ?? '{}', true) ?? [];
+
+        return $this->json($job);
     }
 
     // POST /api/tchap/apply  — sync DB → Tchap (invite/kick)

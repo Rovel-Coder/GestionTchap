@@ -147,8 +147,86 @@ function parseCsv(text) {
 function appRoot() {
   return {
     appReady: false,
+
+    // ── Sync en arrière-plan ──────────────────────────────────────────────
+    syncJob: null,       // { jobId, status, total, done, currentSalon, invited, reinvited, kicked, errors }
+    _syncPollTimer: null,
+
     init() {
       this.appReady = true;
+      // Reprendre un éventuel job interrompu (rechargement de page)
+      const saved = sessionStorage.getItem('syncJobId');
+      if (saved) this.startSyncPoll(saved);
+    },
+
+    // Démarre une sync en arrière-plan et lance le polling
+    async startBackgroundSync(salonIds, agentIds = []) {
+      try {
+        const r = await apiFetch('/api/tchap/sync/start', {
+          method: 'POST',
+          body: JSON.stringify({ salonIds, agentIds }),
+        });
+        if (!r?.jobId) throw new Error('Pas de jobId dans la réponse');
+        sessionStorage.setItem('syncJobId', r.jobId);
+        this.syncJob = { jobId: r.jobId, status: 'pending', total: salonIds.length, done: 0, currentSalon: null, invited: 0, reinvited: 0, kicked: 0, errors: [] };
+        this.startSyncPoll(r.jobId);
+        return r.jobId;
+      } catch (e) {
+        toast(`Erreur démarrage sync : ${e.message}`, 'error');
+        return null;
+      }
+    },
+
+    startSyncPoll(jobId) {
+      this.stopSyncPoll();
+      this._syncPollTimer = setInterval(() => this.pollSyncJob(jobId), 2000);
+      // Premier poll immédiat
+      this.pollSyncJob(jobId);
+    },
+
+    stopSyncPoll() {
+      if (this._syncPollTimer) { clearInterval(this._syncPollTimer); this._syncPollTimer = null; }
+    },
+
+    async pollSyncJob(jobId) {
+      try {
+        const r = await apiFetch(`/api/tchap/sync/progress/${encodeURIComponent(jobId)}`);
+        this.syncJob = {
+          jobId,
+          status:       r.status,
+          total:        r.total       ?? 0,
+          done:         r.done        ?? 0,
+          currentSalon: r.current_salon ?? null,
+          invited:      r.invited     ?? 0,
+          reinvited:    r.reinvited   ?? 0,
+          kicked:       r.kicked      ?? 0,
+          errors:       r.errors      ?? [],
+        };
+        if (r.status === 'done' || r.status === 'error') {
+          this.stopSyncPoll();
+          sessionStorage.removeItem('syncJobId');
+          if (r.status === 'done') {
+            const reinvMsg = this.syncJob.reinvited > 0 ? `, ${this.syncJob.reinvited} ré-invité(s)` : '';
+            toast(`Sync terminée — ${this.syncJob.invited} invité(s)${reinvMsg}, ${this.syncJob.kicked} expulsé(s)${this.syncJob.errors.length ? ` — ${this.syncJob.errors.length} erreur(s)` : ''}`,
+              this.syncJob.errors.length ? 'error' : 'success');
+          } else {
+            toast('Erreur pendant la synchronisation', 'error');
+          }
+          // Garder le widget visible 8 secondes après la fin
+          setTimeout(() => { this.syncJob = null; }, 8000);
+        }
+      } catch (_) { /* réseau, on réessaie au prochain tick */ }
+    },
+
+    closeSyncWidget() {
+      this.stopSyncPoll();
+      sessionStorage.removeItem('syncJobId');
+      this.syncJob = null;
+    },
+
+    get syncProgress() {
+      if (!this.syncJob || !this.syncJob.total) return 0;
+      return Math.round((this.syncJob.done / this.syncJob.total) * 100);
     },
   };
 }
@@ -1196,20 +1274,10 @@ function salonView() {
     },
 
     async syncAllToTchap() {
-      this.syncing = true;
-      try {
-        const salonIds = this.salons.filter(s => s.room_id).map(s => s.id);
-        if (!salonIds.length) { toast('Aucun salon avec room_id configuré', 'error'); this.syncing = false; return; }
-        const r = await apiFetch('/api/tchap/apply', {
-          method: 'POST',
-          body: JSON.stringify({ salonIds }),
-        });
-        toast(`Sync terminée — ${r.invited ?? 0} invité(s), ${r.kicked ?? 0} expulsé(s)`, r.errors?.length ? 'error' : 'success');
-        if (r.errors?.length) r.errors.forEach(e => toast(`${e.user ?? ''}: ${e.error}`, 'error'));
-      } catch (e) {
-        toast(e.message, 'error');
-      }
-      this.syncing = false;
+      const salonIds = this.salons.filter(s => s.room_id).map(s => s.id);
+      if (!salonIds.length) { toast('Aucun salon avec room_id configuré', 'error'); return; }
+      window.dispatchEvent(new CustomEvent('tchap-sync-start', { detail: { salonIds, label: 'Sync salons' } }));
+      toast(`Sync lancée en arrière-plan (${salonIds.length} salon(s))`, 'info');
     },
 
     async createTchapRoom(salon) {
@@ -1570,38 +1638,17 @@ function uniteView() {
         return;
       }
       unite._syncing = true;
-      try {
-        const r = await apiFetch('/api/tchap/apply', {
-          method: 'POST',
-          body: JSON.stringify({ salonIds: unite.Salons.map(Number) }),
-        });
-        const reinvMsg = r.reinvited > 0 ? `, ${r.reinvited} ré-invité(s)` : '';
-        const msg = `${r.invited ?? 0} invité(s)${reinvMsg}, ${r.kicked ?? 0} expulsé(s)`;
-        toast(`Sync ${unite.Nom} — ${msg}`, (r.errors?.length) ? 'error' : 'success');
-        if (r.errors?.length) r.errors.forEach(e => toast(`${e.user ?? ''}: ${e.error}`, 'error'));
-      } catch (e) {
-        toast(e.message, 'error');
-      }
+      const salonIds = unite.Salons.map(Number);
+      window.dispatchEvent(new CustomEvent('tchap-sync-start', { detail: { salonIds, label: unite.Nom } }));
+      toast(`Sync "${unite.Nom}" lancée en arrière-plan`, 'info');
       unite._syncing = false;
     },
 
     async syncAllUnites() {
-      this.syncingAll = true;
-      try {
-        const allSalonIds = [...new Set(this.unites.flatMap(u => (u.Salons || []).map(Number)))];
-        if (allSalonIds.length === 0) { toast('Aucun salon configuré', 'error'); this.syncingAll = false; return; }
-        const r = await apiFetch('/api/tchap/apply', {
-          method: 'POST',
-          body: JSON.stringify({ salonIds: allSalonIds }),
-        });
-        const reinvMsg2 = r.reinvited > 0 ? `, ${r.reinvited} ré-invité(s)` : '';
-        const msg = `${r.invited ?? 0} invité(s)${reinvMsg2}, ${r.kicked ?? 0} expulsé(s)`;
-        toast(`Sync globale — ${msg}`, (r.errors?.length) ? 'error' : 'success');
-        if (r.errors?.length) r.errors.forEach(e => toast(`${e.user ?? ''}: ${e.error}`, 'error'));
-      } catch (e) {
-        toast(e.message, 'error');
-      }
-      this.syncingAll = false;
+      const allSalonIds = [...new Set(this.unites.flatMap(u => (u.Salons || []).map(Number)))];
+      if (allSalonIds.length === 0) { toast('Aucun salon configuré', 'error'); return; }
+      window.dispatchEvent(new CustomEvent('tchap-sync-start', { detail: { salonIds: allSalonIds, label: 'Sync globale' } }));
+      toast(`Sync globale lancée en arrière-plan (${allSalonIds.length} salon(s))`, 'info');
     },
 
     // ── Modal détail onglets ──────────────────────────────────
