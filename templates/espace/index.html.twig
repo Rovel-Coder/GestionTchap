@@ -222,7 +222,7 @@
 
     {# ── Modal Inviter un membre ── #}
     <div class="modal-overlay" x-show="inviteTarget !== null" x-cloak @click.self="closeInviteModal()">
-        <div class="modal modal-sm">
+        <div class="modal" style="max-width:520px;width:95vw;">
             <div class="modal-header">
                 <div>
                     <h3 style="margin:0;"><i class="fa-solid fa-user-plus" style="color:var(--blue-light);margin-right:8px;"></i> Inviter dans l'espace</h3>
@@ -230,25 +230,93 @@
                 </div>
                 <button class="btn-icon" @click="closeInviteModal()"><i class="fa-solid fa-xmark"></i></button>
             </div>
-            <div class="modal-body">
-                <div x-show="inviteError" class="alert-error" x-text="inviteError" style="margin-bottom:10px;"></div>
-                <div x-show="inviteSuccess"
-                    style="margin-bottom:10px;padding:8px 12px;background:rgba(110,195,138,.08);border:1px solid rgba(110,195,138,.3);border-radius:var(--radius-sm);font-size:13px;color:#6ec38a;"
-                    x-text="inviteSuccess"></div>
-                <div class="form-group">
-                    <label>Identifiant Matrix</label>
-                    <input type="text" x-model="inviteUserId"
-                        placeholder="@prenom.nom:agent.interieur.tchap.gouv.fr"
-                        style="font-family:monospace;font-size:12px;"
-                        @keydown.enter="doInvite()">
-                    <small style="color:var(--text-muted);">Format : @prenom.nom-domaine.gouv.fr:agent.ministere.tchap.gouv.fr</small>
+
+            {# Onglets #}
+            <div style="display:flex;border-bottom:1px solid var(--border);background:var(--bg-elevated);">
+                <button class="import-tab-btn" :class="{ active: inviteTab === 'personnel' }"
+                    @click="inviteTab = 'personnel'; inviteError = null; inviteSuccess = null">
+                    <i class="fa-solid fa-users" style="margin-right:5px;font-size:11px;"></i>Personnel
+                    <span x-show="inviteSelected.length > 0"
+                        style="margin-left:5px;background:var(--blue);border-radius:10px;padding:1px 6px;font-size:10px;"
+                        x-text="inviteSelected.length"></span>
+                </button>
+                <button class="import-tab-btn" :class="{ active: inviteTab === 'manual' }"
+                    @click="inviteTab = 'manual'; inviteError = null; inviteSuccess = null">
+                    <i class="fa-solid fa-keyboard" style="margin-right:5px;font-size:11px;"></i>Manuel
+                </button>
+            </div>
+
+            <div class="modal-body" style="padding:0;">
+
+                {# ── Onglet Personnel ── #}
+                <div x-show="inviteTab === 'personnel'" style="padding:14px 16px;">
+                    <div x-show="inviteSuccess"
+                        style="margin-bottom:10px;padding:7px 12px;background:rgba(110,195,138,.08);border:1px solid rgba(110,195,138,.3);border-radius:var(--radius-sm);font-size:13px;color:#6ec38a;"
+                        x-text="inviteSuccess"></div>
+                    <div x-show="inviteError" class="alert-error" x-text="inviteError" style="margin-bottom:10px;white-space:pre-wrap;"></div>
+
+                    <input type="text" x-model="inviteSearch" placeholder="Filtrer par nom, prénom, email…"
+                        style="width:100%;margin-bottom:8px;font-size:12px;padding:6px 10px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);">
+
+                    <div style="border:1px solid var(--border);border-radius:var(--radius-sm);max-height:280px;overflow-y:auto;">
+                        <template x-for="person in invitePersonnelFiltered.slice(0, 50)" :key="person.id">
+                            <label style="display:flex;align-items:center;gap:10px;padding:7px 12px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s;"
+                                @mouseenter="$el.style.background='var(--bg-hover)'"
+                                @mouseleave="$el.style.background=''">
+                                <input type="checkbox"
+                                    :checked="inviteSelected.includes(person.id)"
+                                    @change="toggleInvitePerson(person.id)"
+                                    style="flex-shrink:0;accent-color:var(--blue-light);">
+                                <div style="width:28px;height:28px;border-radius:50%;background:rgba(45,108,223,.15);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--blue-light);flex-shrink:0;"
+                                    x-text="(person.Prenom||'?').charAt(0).toUpperCase()"></div>
+                                <div style="flex:1;min-width:0;">
+                                    <div style="font-size:13px;font-weight:600;" x-text="person.Prenom + ' ' + person.Nom"></div>
+                                    <div style="font-size:11px;color:var(--text-muted);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+                                        x-text="person.user_id || person.Mail || '—'"></div>
+                                </div>
+                                <span x-show="person.Grade" style="font-size:10px;color:var(--text-muted);flex-shrink:0;" x-text="person.Grade"></span>
+                            </label>
+                        </template>
+                        <div x-show="invitePersonnelFiltered.length === 0"
+                            style="padding:20px;text-align:center;color:var(--text-muted);font-size:12px;">
+                            Aucun agent avec un compte Tchap trouvé
+                        </div>
+                    </div>
+
+                    <div x-show="invitePersonnelFiltered.length > 50"
+                        style="font-size:11px;color:var(--text-muted);margin-top:5px;text-align:center;">
+                        Affichage des 50 premiers résultats — affinez la recherche
+                    </div>
+                </div>
+
+                {# ── Onglet Manuel ── #}
+                <div x-show="inviteTab === 'manual'" style="padding:14px 16px;">
+                    <div x-show="inviteSuccess"
+                        style="margin-bottom:10px;padding:7px 12px;background:rgba(110,195,138,.08);border:1px solid rgba(110,195,138,.3);border-radius:var(--radius-sm);font-size:13px;color:#6ec38a;"
+                        x-text="inviteSuccess"></div>
+                    <div x-show="inviteError" class="alert-error" x-text="inviteError" style="margin-bottom:10px;white-space:pre-wrap;"></div>
+                    <div class="form-group">
+                        <label>Adresses email ou identifiants Matrix <small style="color:var(--text-muted);">(un par ligne)</small></label>
+                        <textarea x-model="inviteManual" rows="5"
+                            placeholder="prenom.nom@diplomatie.gouv.fr&#10;@prenom.nom-domaine.gouv.fr:agent.ministere.tchap.gouv.fr"
+                            style="font-family:monospace;font-size:12px;"></textarea>
+                        <small style="color:var(--text-muted);">Les emails sont convertis automatiquement vers le bon homeserver Tchap.</small>
+                    </div>
                 </div>
             </div>
+
             <div class="modal-footer">
                 <button class="btn-ghost" @click="closeInviteModal()">Fermer</button>
-                <button class="btn-primary" :disabled="saving || !inviteUserId.trim()" @click="doInvite()">
+                <button class="btn-primary"
+                    :disabled="saving || (inviteTab === 'personnel' && inviteSelected.length === 0) || (inviteTab === 'manual' && !inviteManual.trim())"
+                    @click="doInvite()">
                     <i x-show="saving" class="fa-solid fa-spinner fa-spin"></i>
-                    <span x-show="!saving"><i class="fa-solid fa-paper-plane"></i> Inviter</span>
+                    <span x-show="!saving">
+                        <i class="fa-solid fa-paper-plane"></i>
+                        <span x-show="inviteTab === 'personnel' && inviteSelected.length > 0"
+                            x-text="'Inviter (' + inviteSelected.length + ')'"></span>
+                        <span x-show="inviteTab !== 'personnel' || inviteSelected.length === 0">Inviter</span>
+                    </span>
                 </button>
             </div>
         </div>
@@ -303,10 +371,14 @@ function espaceView() {
         addSalonError:  null,
 
         // Modal inviter
-        inviteTarget:  null,
-        inviteUserId:  '',
-        inviteError:   null,
-        inviteSuccess: null,
+        inviteTarget:    null,
+        inviteTab:       'personnel',   // 'personnel' | 'manual'
+        inviteSearch:    '',
+        inviteSelected:  [],            // IDs personnel sélectionnés
+        inviteManual:    '',            // Matrix IDs manuels
+        inviteError:     null,
+        inviteSuccess:   null,
+        personnel:       [],
 
         // Suppression
         deleteTarget: null,
@@ -320,13 +392,15 @@ function espaceView() {
         async load() {
             this.loading = true;
             try {
-                const [espR, salR] = await Promise.all([
+                const [espR, salR, perR] = await Promise.all([
                     apiFetch('/api/espaces'),
                     apiFetch('/api/salons'),
+                    apiFetch('/api/personnel'),
                 ]);
                 // Initialiser les propriétés réactives AVANT de passer à Alpine
                 this.espaces   = espR.map(e => this._initEspace(e));
                 this.allSalons = salR;
+                this.personnel = perR || [];
             } catch (e) {
                 console.error(e);
             }
@@ -448,33 +522,77 @@ function espaceView() {
         // ── Inviter ──
 
         openInviteModal(espace) {
-            this.inviteTarget  = espace;
-            this.inviteUserId  = '';
-            this.inviteError   = null;
-            this.inviteSuccess = null;
+            this.inviteTarget   = espace;
+            this.inviteTab      = 'personnel';
+            this.inviteSearch   = '';
+            this.inviteSelected = [];
+            this.inviteManual   = '';
+            this.inviteError    = null;
+            this.inviteSuccess  = null;
         },
 
-        closeInviteModal() {
-            this.inviteTarget = null;
+        closeInviteModal() { this.inviteTarget = null; },
+
+        get invitePersonnelFiltered() {
+            const q = (this.inviteSearch || '').toLowerCase();
+            return this.personnel.filter(p =>
+                (p.user_id || p.Mail) &&
+                (!q || `${p.Nom} ${p.Prenom} ${p.Grade || ''} ${p.Mail || ''}`.toLowerCase().includes(q))
+            );
+        },
+
+        toggleInvitePerson(id) {
+            if (this.inviteSelected.includes(id))
+                this.inviteSelected = this.inviteSelected.filter(x => x !== id);
+            else
+                this.inviteSelected = [...this.inviteSelected, id];
         },
 
         async doInvite() {
-            if (!this.inviteUserId.trim()) return;
             this.inviteError   = null;
             this.inviteSuccess = null;
-            this.saving        = true;
-            try {
-                await apiFetch(`/api/espaces/${this.inviteTarget.id}/invite`, {
-                    method: 'POST',
-                    body: JSON.stringify({ userId: this.inviteUserId.trim() }),
-                });
-                this.inviteSuccess = `✓ ${this.inviteUserId} invité dans l'espace`;
-                this.inviteUserId  = '';
-            } catch (e) {
-                this.inviteError = e.message;
-            } finally {
-                this.saving = false;
+
+            // Construire la liste des Matrix IDs à inviter
+            const userIds = [];
+
+            if (this.inviteTab === 'personnel') {
+                for (const id of this.inviteSelected) {
+                    const p = this.personnel.find(x => x.id === id);
+                    if (!p) continue;
+                    const uid = p.user_id || (p.Mail ? mailToTchapId(p.Mail) : null);
+                    if (uid) userIds.push(uid);
+                }
+            } else {
+                // Manuel : une entrée par ligne, email ou Matrix ID
+                for (const line of this.inviteManual.split('\n').map(l => l.trim()).filter(Boolean)) {
+                    if (line.startsWith('@') && line.includes(':')) userIds.push(line);
+                    else if (line.includes('@') && !line.startsWith('@')) userIds.push(mailToTchapId(line));
+                }
             }
+
+            if (!userIds.length) { this.inviteError = 'Aucun identifiant valide sélectionné'; return; }
+
+            this.saving = true;
+            let ok = 0;
+            const errors = [];
+            for (const userId of userIds) {
+                try {
+                    await apiFetch(`/api/espaces/${this.inviteTarget.id}/invite`, {
+                        method: 'POST',
+                        body: JSON.stringify({ userId }),
+                    });
+                    ok++;
+                } catch (e) {
+                    errors.push(`${userId} : ${e.message}`);
+                }
+            }
+            this.inviteSuccess = ok > 0 ? `✓ ${ok} membre(s) invité(s) dans l'espace` : null;
+            this.inviteError   = errors.length ? errors.join('\n') : null;
+            if (ok > 0) {
+                this.inviteSelected = [];
+                this.inviteManual   = '';
+            }
+            this.saving = false;
         },
 
         // ── Vérification membres Tchap ──
