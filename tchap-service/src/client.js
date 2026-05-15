@@ -23,38 +23,62 @@ const verif      = require('./verif');
 // ── Intercepteur des requêtes matrix-bot-sdk (package "request") ──────────
 // Le bot-sdk utilise "request" (pas fetch). On injecte :
 //   1. User-Agent Element → contourne le WAF Tchap
-//   2. Capture des to-device events de vérification dans les réponses /sync
+//   2. Retry transparent sur erreurs réseau transitoires (ECONNRESET, etc.)
+//   3. Capture des to-device events de vérification dans les réponses /sync
+const NET_ERRORS   = new Set(['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'ENOTFOUND', 'EPIPE']);
+const MAX_NET_RETRY = 3;
+
 setRequestFn((options, callback) => {
   // 1. User-Agent
   if (!options.headers) options.headers = {};
   options.headers['User-Agent'] = UA;
 
-  return requestLib(options, (error, response, body) => {
-    const url = options.uri || options.url || '';
-    if (!error && body && url.includes('/sync')) {
-      try {
-        const data = typeof body === 'string' ? JSON.parse(body) : body;
-        const toDeviceEvents = (data && data.to_device && data.to_device.events) || [];
-        const verifEvents = toDeviceEvents.filter(e => e.type && e.type.startsWith('m.key.verification.'));
-        const otherEvents  = toDeviceEvents.filter(e => !e.type || !e.type.startsWith('m.key.verification.'));
+  let attempt = 0;
+  const url = options.uri || options.url || '';
 
-        if (verifEvents.length) {
-          console.log(`[SAS] Sync intercepté — ${verifEvents.length} to-device event(s):`, verifEvents.map(e => e.type).join(', '));
-          for (const ev of verifEvents) {
-            console.log(`[SAS] Événement vérification capturé : ${ev.type} de ${ev.sender}`);
-            verif.onToDevice(ev.type, ev, loadBotConfig());
-          }
-          // Supprimer les events de vérification avant de les passer au Rust SDK
-          // pour éviter que le SDK envoie automatiquement un cancel conflictuel
-          data.to_device.events = otherEvents;
-          return callback(error, response, JSON.stringify(data));
-        }
-      } catch (e) {
-        console.warn('[SAS] Erreur parsing sync:', e.message);
+  function doRequest() {
+    attempt++;
+    return requestLib(options, (error, response, body) => {
+      // 2. Retry transparent sur erreurs réseau (ECONNRESET, ETIMEDOUT, …)
+      //    Le SDK long-poll /sync reçoit régulièrement ECONNRESET quand le
+      //    serveur ferme la connexion TLS après timeout — c'est normal et ne
+      //    doit pas remonter comme une erreur au SDK.
+      if (error && NET_ERRORS.has(error.code) && attempt <= MAX_NET_RETRY) {
+        const wait = attempt * 2000; // 2 s, 4 s, 6 s
+        console.warn(`[net-retry] ${error.code} sur ${url} — tentative ${attempt}/${MAX_NET_RETRY}, attente ${wait}ms`);
+        setTimeout(doRequest, wait);
+        return;
       }
-    }
-    callback(error, response, body);
-  });
+
+      // 3. Capture des to-device events de vérification dans les réponses /sync
+      if (!error && body && url.includes('/sync')) {
+        try {
+          const data = typeof body === 'string' ? JSON.parse(body) : body;
+          const toDeviceEvents = (data && data.to_device && data.to_device.events) || [];
+          const verifEvents = toDeviceEvents.filter(e => e.type && e.type.startsWith('m.key.verification.'));
+          const otherEvents  = toDeviceEvents.filter(e => !e.type || !e.type.startsWith('m.key.verification.'));
+
+          if (verifEvents.length) {
+            console.log(`[SAS] Sync intercepté — ${verifEvents.length} to-device event(s):`, verifEvents.map(e => e.type).join(', '));
+            for (const ev of verifEvents) {
+              console.log(`[SAS] Événement vérification capturé : ${ev.type} de ${ev.sender}`);
+              verif.onToDevice(ev.type, ev, loadBotConfig());
+            }
+            // Supprimer les events de vérification avant de les passer au Rust SDK
+            // pour éviter que le SDK envoie automatiquement un cancel conflictuel
+            data.to_device.events = otherEvents;
+            return callback(error, response, JSON.stringify(data));
+          }
+        } catch (e) {
+          console.warn('[SAS] Erreur parsing sync:', e.message);
+        }
+      }
+
+      callback(error, response, body);
+    });
+  }
+
+  return doRequest();
 });
 const fs = require('fs');
 const path = require('path');
