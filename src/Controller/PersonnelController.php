@@ -6,6 +6,7 @@ use App\Security\AppUser;
 use App\Service\ConfigService;
 use App\Service\RoleService;
 use App\Service\ScopeService;
+use App\Service\TchapService;
 use Doctrine\DBAL\Connection;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -35,6 +36,7 @@ class PersonnelController extends AbstractController
         private readonly RoleService    $roles,
         private readonly ScopeService   $scope,
         private readonly ConfigService  $config,
+        private readonly TchapService   $tchap,
     ) {
     }
 
@@ -325,7 +327,7 @@ class PersonnelController extends AbstractController
             $domain = substr($val, $at + 1);
             // Remplacer les @ résiduels dans local (ne devrait pas arriver, sécurité)
             $local  = str_replace('@', '-', $local);
-            return "@{$local}-{$domain}:agent.interieur.tchap.gouv.fr";
+            return "@{$local}-{$domain}:{$this->tchap->domainToTchapHomeserver($domain)}";
         }
         // Autre valeur : retourner telle quelle (sera rejeté par la validation si invalide)
         return $val;

@@ -395,6 +395,23 @@ class TchapService
         $local  = substr($mail, 0, $at);
         $domain = substr($mail, $at + 1);
 
-        return "@{$local}-{$domain}:agent.interieur.tchap.gouv.fr";
+        return "@{$local}-{$domain}:{$this->domainToTchapHomeserver($domain)}";
+    }
+
+    /**
+     * Dérive le homeserver Tchap depuis un domaine email.
+     * ex : gendarmerie.interieur.gouv.fr → agent.interieur.tchap.gouv.fr
+     *      diplomatie.gouv.fr            → agent.diplomatie.tchap.gouv.fr
+     */
+    public function domainToTchapHomeserver(string $domain): string
+    {
+        $domain = strtolower(trim($domain));
+        if (str_ends_with($domain, '.gouv.fr')) {
+            $withoutGouv = substr($domain, 0, -strlen('.gouv.fr'));
+            $parts       = explode('.', $withoutGouv);
+            $ministry    = end($parts);
+            return "agent.{$ministry}.tchap.gouv.fr";
+        }
+        return 'agent.interieur.tchap.gouv.fr';
     }
 }

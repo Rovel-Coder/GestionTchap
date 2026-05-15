@@ -69,6 +69,30 @@ function toast(message, type = 'info') {
   window.dispatchEvent(new CustomEvent('toast', { detail: { message, type } }));
 }
 
+// Dérive le homeserver Tchap depuis un domaine email
+// ex: gendarmerie.interieur.gouv.fr → agent.interieur.tchap.gouv.fr
+//     diplomatie.gouv.fr            → agent.diplomatie.tchap.gouv.fr
+function domainToTchapHomeserver(domain) {
+  domain = (domain || '').trim().toLowerCase();
+  if (domain.endsWith('.gouv.fr')) {
+    const withoutGouv = domain.slice(0, -'.gouv.fr'.length);
+    const parts = withoutGouv.split('.');
+    return `agent.${parts[parts.length - 1]}.tchap.gouv.fr`;
+  }
+  return 'agent.interieur.tchap.gouv.fr';
+}
+
+// Convertit une adresse email Tchap en Matrix ID
+// ex: prenom.nom@gendarmerie.interieur.gouv.fr → @prenom.nom-gendarmerie.interieur.gouv.fr:agent.interieur.tchap.gouv.fr
+function mailToTchapId(email) {
+  email = (email || '').trim().toLowerCase();
+  const at = email.indexOf('@');
+  if (at < 1) return '';
+  const local  = email.slice(0, at);
+  const domain = email.slice(at + 1);
+  return `@${local}-${domain}:${domainToTchapHomeserver(domain)}`;
+}
+
 function parseCsvLine(line, sep) {
   const result = [];
   let field = '';
@@ -156,16 +180,8 @@ function personnelView() {
     importing:  false,
     form: {},
     mailToMatrixId(mail) {
-        if (!mail || !mail.includes('@')) {
-            return '';
-        }
-
-        const localPart = mail
-            .split('@')[0]
-            .trim()
-            .toLowerCase();
-
-        return `@${localPart}:agent.interieur.tchap.gouv.fr`;
+        if (!mail || !mail.includes('@')) return '';
+        return mailToTchapId(mail);
     },
 
     csvRows:      [],
@@ -339,11 +355,9 @@ function personnelView() {
     mailToMatrixId(val) {
       if (!val) return val;
       val = val.trim();
-      if (val.startsWith('@')) return val; // déjà un Matrix ID
-      if (!val.includes('@')) return val;  // ni email ni Matrix ID, laisser tel quel
-      // C'est une adresse email → convertir en Matrix ID Tchap
-      const [local, domain] = val.split('@');
-      return `@${local}-${domain}:agent.interieur.tchap.gouv.fr`;
+      if (val.startsWith('@')) return val;  // déjà un Matrix ID
+      if (!val.includes('@')) return val;   // ni email ni Matrix ID, laisser tel quel
+      return mailToTchapId(val);
     },
 
     async save() {
@@ -485,8 +499,7 @@ function personnelView() {
           }
           // email → user_id
           if (!userId && email) {
-            const local = email.split('@')[0];
-            userId = `@${local}:agent.interieur.tchap.gouv.fr`;
+            userId = mailToTchapId(email);
           }
           // Extraire prénom depuis l'email si manquant (même si nom déjà connu)
           if (!prenom && email.includes('@')) {
@@ -1355,7 +1368,7 @@ function uniteView() {
     email,
     prenom,
     nom,
-    user_id: `@${local}:agent.interieur.tchap.gouv.fr`
+    user_id: mailToTchapId(email)
   });
 }
       });
