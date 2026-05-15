@@ -168,7 +168,10 @@ class SyncTchapCommand extends Command
                     $botId = strtolower($cfg['botUserId'] ?? '');
 
                     // Renouveler les invitations en attente
-                    foreach ($expectedIds as $uid) {
+                    // — mode global : uniquement les membres attendus (les autres seront expulsés)
+                    // — mode manuel : tous les membres avec une invitation en attente
+                    $reinviteScope = $manualMode ? $memberIds : $expectedIds;
+                    foreach ($reinviteScope as $uid) {
                         if ($uid === $botId) {
                             continue;
                         }
