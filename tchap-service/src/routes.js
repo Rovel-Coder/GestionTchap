@@ -7,6 +7,33 @@ const ssss    = require('./ssss');
 
 const router = express.Router();
 
+// ── Rate-limit helpers ────────────────────────────────────────────────────────
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/**
+ * Wrapper autour de fetch() avec retry automatique sur 429 (rate limit Matrix).
+ * Attend retry_after_ms + 200ms de buffer avant chaque retry.
+ * Retourne le dernier objet Response (succès ou échec définitif).
+ */
+async function matrixFetch(url, options, tag = '') {
+    const MAX_RETRIES = 5;
+    let lastErrData   = {};
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        const resp = await fetch(url, options);
+        if (resp.status !== 429) return resp;
+        lastErrData = await resp.json().catch(() => ({}));
+        const waitMs = Math.min((lastErrData.retry_after_ms ?? 1000) + 200, 30_000);
+        if (attempt < MAX_RETRIES) {
+            console.warn(`[rate-limit${tag}] 429 — attente ${waitMs}ms (tentative ${attempt + 1}/${MAX_RETRIES})`);
+            await sleep(waitMs);
+        } else {
+            console.error(`[rate-limit${tag}] 429 persistant après ${MAX_RETRIES} tentatives, abandon`);
+        }
+    }
+    return { ok: false, status: 429, json: async () => lastErrData };
+}
+
 // Health check sans authentification
 router.get('/health', (_req, res) => {
     const cfg = bot.getBotConfig();
@@ -102,11 +129,11 @@ router.post('/rooms/:roomId/invite', async (req, res) => {
     console.log(`[invite] ${userId} → ${roomId}`);
 
     try {
-        const resp = await fetch(url, {
+        const resp = await matrixFetch(url, {
             method:  'POST',
             headers: { 'Authorization': `Bearer ${cfg.accessToken}`, 'Content-Type': 'application/json' },
             body:    JSON.stringify({ user_id: userId }),
-        });
+        }, ' invite');
         const data = await resp.json().catch(() => ({}));
 
         if (!resp.ok) {
@@ -139,11 +166,11 @@ router.post('/rooms/:roomId/kick', async (req, res) => {
     console.log(`[kick] ${userId} ← ${roomId}`);
 
     try {
-        const resp = await fetch(url, {
+        const resp = await matrixFetch(url, {
             method:  'POST',
             headers: { 'Authorization': `Bearer ${cfg.accessToken}`, 'Content-Type': 'application/json' },
             body:    JSON.stringify({ user_id: userId, reason: reason ?? 'Gestion automatique' }),
-        });
+        }, ' kick');
         const data = await resp.json().catch(() => ({}));
 
         if (!resp.ok) {
@@ -172,11 +199,11 @@ router.post('/rooms/:roomId/leave', async (req, res) => {
     console.log(`[leave] ${roomId}`);
 
     try {
-        const resp = await fetch(url, {
+        const resp = await matrixFetch(url, {
             method:  'POST',
             headers: { 'Authorization': `Bearer ${cfg.accessToken}`, 'Content-Type': 'application/json' },
             body:    JSON.stringify({}),
-        });
+        }, ' leave');
         const data = await resp.json().catch(() => ({}));
 
         if (!resp.ok) {
@@ -332,11 +359,11 @@ router.post('/spaces/:spaceId/invite', async (req, res) => {
     console.log(`[space-invite] ${userId} → ${spaceId}`);
 
     try {
-        const resp = await fetch(url, {
+        const resp = await matrixFetch(url, {
             method:  'POST',
             headers: { 'Authorization': `Bearer ${cfg.accessToken}`, 'Content-Type': 'application/json' },
             body:    JSON.stringify({ user_id: userId }),
-        });
+        }, ' space-invite');
         const data = await resp.json().catch(() => ({}));
 
         if (!resp.ok) {
