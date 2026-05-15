@@ -1609,8 +1609,10 @@ function uniteView() {
       this.detailUnite = unite;
       this.detailTab   = 'fiche';
       this.detailError = null;
-      this.salonSearch = '';
-      this.quickSalon  = { Nom: '', Type: 'operationnel', Description: '', assocType: 'commun' };
+      this.salonSearch  = '';
+      this.salonPage    = 1;
+      this.salonPerPage = 25;
+      this.quickSalon   = { Nom: '', Type: 'operationnel', Description: '', assocType: 'commun' };
       this.detailForm  = {
         Nom:                    unite.Nom       || '',
         code:                   unite.code      || '',
@@ -1666,6 +1668,32 @@ function uniteView() {
       const id = Number(salonId);
       if (checked) this.detailForm.Salons_Classification = [...new Set([...this.detailForm.Salons_Classification, id])];
       else         this.detailForm.Salons_Classification = this.detailForm.Salons_Classification.filter(i => i !== id);
+    },
+
+    // Liste filtrée des salons non encore sélectionnés
+    detailSalonFiltered() {
+      const q        = (this.salonSearch || '').toLowerCase();
+      const selected = this.detailAllSelected();
+      return this.salons.filter(s =>
+        !selected.includes(s.id) &&
+        (!q || s.Nom.toLowerCase().includes(q) || (s.Type || '').toLowerCase().includes(q))
+      );
+    },
+
+    // Total de pages
+    detailSalonPageCount() {
+      return Math.max(1, Math.ceil(this.detailSalonFiltered().length / this.salonPerPage));
+    },
+
+    // Résultats de la page courante
+    detailSalonPage() {
+      const start = (this.salonPage - 1) * this.salonPerPage;
+      return this.detailSalonFiltered().slice(start, start + this.salonPerPage);
+    },
+
+    // Réinitialise la page à 1 (appelé sur changement de recherche ou perPage)
+    detailSalonReset() {
+      this.salonPage = 1;
     },
 
     // Retourne les IDs de tous les salons sélectionnés (commun + classement, dédupliqués)

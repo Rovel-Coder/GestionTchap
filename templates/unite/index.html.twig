@@ -777,19 +777,39 @@
                     {# ── Étape 1 : recherche et sélection ── #}
                     <div style="margin-bottom:14px;">
                         <div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px;">
-                            <span style="font-weight:600;color:var(--text-primary);">1.</span> Recherchez et cochez les salons à associer
+                            <span style="font-weight:600;color:var(--text-primary);">1.</span> Sélectionnez les salons à associer
                         </div>
-                        <input type="text" x-model="salonSearch"
-                            placeholder="Rechercher un salon…"
-                            style="width:100%;margin-bottom:4px;font-size:12px;padding:6px 10px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);">
 
-                        {# Résultats limités à 25 — liste vide si recherche vide #}
-                        <div x-show="salonSearch.trim().length > 0"
-                            style="border:1px solid var(--border);border-radius:var(--radius-sm);max-height:200px;overflow-y:auto;">
-                            <template x-for="s in salons.filter(s =>
-                                s.Nom.toLowerCase().includes(salonSearch.toLowerCase()) &&
-                                !detailAllSelected().includes(s.id)
-                            ).slice(0, 25)" :key="s.id">
+                        {# Barre outils : recherche + par page #}
+                        <div style="display:flex;gap:8px;margin-bottom:4px;align-items:center;">
+                            <input type="text" x-model="salonSearch"
+                                @input="detailSalonReset()"
+                                placeholder="Filtrer…"
+                                style="flex:1;font-size:12px;padding:5px 10px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);">
+                            <select x-model.number="salonPerPage" @change="detailSalonReset()"
+                                style="font-size:11px;padding:5px 8px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-muted);flex-shrink:0;">
+                                <option :value="10">10 / page</option>
+                                <option :value="25">25 / page</option>
+                                <option :value="50">50 / page</option>
+                                <option :value="100">100 / page</option>
+                            </select>
+                        </div>
+
+                        {# Compteur résultats #}
+                        <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;display:flex;justify-content:space-between;">
+                            <span>
+                                <span x-text="detailSalonFiltered().length"></span> salon(s)
+                                <template x-if="salonSearch.trim()"> non sélectionné(s) correspondants</template>
+                                <template x-if="!salonSearch.trim()"> non sélectionné(s)</template>
+                            </span>
+                            <span x-show="detailSalonPageCount() > 1">
+                                Page <span x-text="salonPage"></span> / <span x-text="detailSalonPageCount()"></span>
+                            </span>
+                        </div>
+
+                        {# Liste paginée #}
+                        <div style="border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;">
+                            <template x-for="s in detailSalonPage()" :key="s.id">
                                 <label style="display:flex;align-items:center;gap:10px;padding:7px 12px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s;"
                                     @mouseenter="$el.style.background='var(--bg-hover)'"
                                     @mouseleave="$el.style.background=''">
@@ -799,14 +819,34 @@
                                     <span x-show="s.Type" style="font-size:10px;color:var(--text-muted);text-transform:uppercase;flex-shrink:0;" x-text="s.Type"></span>
                                 </label>
                             </template>
-                            <div x-show="salons.filter(s => s.Nom.toLowerCase().includes(salonSearch.toLowerCase()) && !detailAllSelected().includes(s.id)).length === 0"
-                                style="padding:12px;text-align:center;font-size:12px;color:var(--text-muted);">
-                                Aucun salon correspondant non encore sélectionné
+                            <div x-show="detailSalonFiltered().length === 0"
+                                style="padding:14px;text-align:center;font-size:12px;color:var(--text-muted);">
+                                Aucun salon disponible
                             </div>
                         </div>
-                        <div x-show="salonSearch.trim().length === 0"
-                            style="font-size:11px;color:var(--text-muted);padding:4px 0;">
-                            Tapez pour rechercher parmi <span x-text="salons.length"></span> salons
+
+                        {# Pagination #}
+                        <div x-show="detailSalonPageCount() > 1"
+                            style="display:flex;align-items:center;justify-content:center;gap:4px;margin-top:6px;">
+                            <button class="btn-ghost" style="padding:3px 10px;font-size:12px;"
+                                :disabled="salonPage <= 1"
+                                @click="salonPage = Math.max(1, salonPage - 1)">
+                                <i class="fa-solid fa-chevron-left" style="font-size:10px;"></i>
+                            </button>
+                            <template x-for="p in Array.from({length: detailSalonPageCount()}, (_, i) => i + 1).filter(p =>
+                                p === 1 || p === detailSalonPageCount() || Math.abs(p - salonPage) <= 2
+                            )" :key="p">
+                                <button class="btn-ghost" style="padding:3px 9px;font-size:12px;min-width:30px;"
+                                    :style="p === salonPage ? 'background:var(--blue);color:#fff;border-color:var(--blue);' : ''"
+                                    @click="salonPage = p"
+                                    x-text="p">
+                                </button>
+                            </template>
+                            <button class="btn-ghost" style="padding:3px 10px;font-size:12px;"
+                                :disabled="salonPage >= detailSalonPageCount()"
+                                @click="salonPage = Math.min(detailSalonPageCount(), salonPage + 1)">
+                                <i class="fa-solid fa-chevron-right" style="font-size:10px;"></i>
+                            </button>
                         </div>
                     </div>
 
