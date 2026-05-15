@@ -358,6 +358,53 @@ class TchapController extends AbstractController
         }
     }
 
+    // POST /api/tchap/reinvite  — ré-invite les membres en statut "invite" (révoque + recrée)
+    #[Route('/reinvite', name: 'reinvite', methods: ['POST'])]
+    public function reinvite(Request $request): JsonResponse
+    {
+        /** @var AppUser $user */
+        $user = $this->getUser();
+        if (!$this->roles->canManage($user)) {
+            return $this->json(['error' => 'Accès refusé'], 403);
+        }
+
+        $data   = json_decode($request->getContent(), true) ?? [];
+        $roomId = trim($data['roomId'] ?? '');
+        if (!$roomId) {
+            return $this->json(['error' => 'roomId requis'], 400);
+        }
+
+        try {
+            $cfg     = $this->config->getTchapConfig();
+            $members = $this->tchap->getMembers($roomId, $cfg);
+            $botId   = strtolower($cfg['botUserId'] ?? '');
+
+            $reinvited = 0;
+            $errors    = [];
+
+            foreach ($members as $m) {
+                $uid        = strtolower($m['state_key'] ?? '');
+                $membership = $m['content']['membership'] ?? '';
+
+                if ($uid === $botId || $membership !== 'invite') {
+                    continue;
+                }
+
+                try {
+                    $this->tchap->kick($roomId, $uid, 'Renouvellement invitation', $cfg);
+                    $this->tchap->invite($roomId, $uid, $cfg);
+                    $reinvited++;
+                } catch (\Throwable $e) {
+                    $errors[] = ['user' => $uid, 'error' => $e->getMessage()];
+                }
+            }
+
+            return $this->json(['ok' => true, 'reinvited' => $reinvited, 'errors' => $errors]);
+        } catch (\Throwable $e) {
+            return $this->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
     // POST /api/tchap/kick-all  — expulse tous les membres non-bot d'un salon
     // Paramètre optionnel : kickBot (bool, défaut true) — si false, le bot ne quitte pas le salon
     #[Route('/kick-all', name: 'kick_all', methods: ['POST'])]

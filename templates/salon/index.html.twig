@@ -144,9 +144,17 @@
                         <i class="fa-solid fa-plus" :class="{ 'fa-spin': salon._loading }"></i>
                     </button>
                     <button class="btn-icon" x-show="!!salon.room_id"
-                        @click="fetchMembers(salon)" title="Synchroniser membres" style="color:var(--blue-light);"
+                        @click="fetchMembers(salon)" title="Rafraîchir les membres" style="color:var(--blue-light);"
                         :disabled="salon._loading">
                         <i class="fa-solid fa-rotate" :class="{ 'fa-spin': salon._loading }"></i>
+                    </button>
+                    <button class="btn-icon"
+                        x-show="!!salon.room_id && salon._inviteCount > 0"
+                        @click="reinviteSalon(salon)"
+                        :disabled="salon._loading"
+                        :title="'Renouveler ' + (salon._inviteCount ?? 0) + ' invitation(s) en attente'"
+                        style="color:var(--gold);">
+                        <i class="fa-solid fa-envelope-circle-check" style="font-size:12px;"></i>
                     </button>
                     <button class="btn-icon" @click="openModal('edit', salon)" title="Modifier">
                         <i class="fa-solid fa-pen"></i>

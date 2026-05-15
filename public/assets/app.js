@@ -868,6 +868,28 @@ function salonView() {
       }
     },
 
+    async reinviteSalon(salon) {
+      if (!salon.room_id) return;
+      salon._loading = true;
+      try {
+        const r = await apiFetch('/api/tchap/reinvite', {
+          method: 'POST',
+          body: JSON.stringify({ roomId: salon.room_id }),
+        });
+        if (r.reinvited > 0) {
+          toast(`${r.reinvited} invitation(s) renouvelée(s) dans "${salon.Nom}"`, 'success');
+          // Rafraîchir le compteur
+          await this.fetchMembers(salon);
+        } else {
+          toast(`Aucune invitation en attente dans "${salon.Nom}"`, 'info');
+        }
+        if (r.errors?.length) r.errors.forEach(e => toast(`${e.user}: ${e.error}`, 'error'));
+      } catch (e) {
+        toast(e.message, 'error');
+      }
+      salon._loading = false;
+    },
+
     getUniteIdsForSalon(salonId) {
       return this.unites
         .filter(u => (u.Salons || []).includes(Number(salonId)))
