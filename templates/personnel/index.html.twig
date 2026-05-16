@@ -190,6 +190,7 @@
     <div class="table-wrapper" x-show="!loading">
         <table class="data-table">
             <colgroup>
+                <col style="width:44px">
                 <col style="width:180px">
                 <col style="width:150px">
                 <col style="width:140px">
@@ -198,6 +199,7 @@
             </colgroup>
             <thead>
                 <tr>
+                    <th style="padding:0;"></th>
                     <th>
                         <span x-show="selectMode" style="margin-right:6px;">
                             <input type="checkbox"
@@ -215,12 +217,23 @@
             </thead>
             <tbody>
                 <tr x-show="filtered.length === 0 && !loading">
-                    <td colspan="{{ permissions.canManage ? 5 : 4 }}" class="empty-state">Aucun agent trouvé</td>
+                    <td colspan="{{ permissions.canManage ? 6 : 5 }}" class="empty-state">Aucun agent trouvé</td>
                 </tr>
                 <template x-for="agent in paginated" :key="agent.id">
                     <tr :class="{ 'tr-selected': selectedPersonnel.includes(agent.id) }"
                         @click="selectMode && toggleSelectAgent(agent.id)"
                         :style="selectMode ? 'cursor:pointer;' : ''">
+                        {# Colonne avatar #}
+                        <td style="padding:4px 6px;text-align:center;vertical-align:middle;">
+                            <span x-data="avatarComp(agent.user_id, (agent.Prenom || '') + ' ' + (agent.Nom || ''))"
+                                style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;overflow:hidden;flex-shrink:0;background:var(--bg-elevated);">
+                                <img x-show="imgSrc && !error" :src="imgSrc" @load="onLoad()" @error="onError()"
+                                    style="width:100%;height:100%;object-fit:cover;">
+                                <span x-show="!imgSrc || error"
+                                    style="font-size:11px;font-weight:700;color:var(--text-muted);"
+                                    x-text="initials"></span>
+                            </span>
+                        </td>
                         <td class="td-nom" data-label="Nom"
                             @click="!selectMode && openModal('detail', agent)"
                             :style="!selectMode ? 'cursor:pointer;' : ''">
@@ -229,15 +242,6 @@
                                 @click.stop
                                 @change="toggleSelectAgent(agent.id)"
                                 style="margin-right:6px;cursor:pointer;">
-                            {# Mini avatar 28px #}
-                            <span x-data="avatarComp(agent.user_id, (agent.Prenom || '') + ' ' + (agent.Nom || ''))"
-                                style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;overflow:hidden;flex-shrink:0;margin-right:7px;vertical-align:middle;background:var(--bg-elevated);">
-                                <img x-show="imgSrc && !error" :src="imgSrc" @load="onLoad()" @error="onError()"
-                                    style="width:100%;height:100%;object-fit:cover;">
-                                <span x-show="!imgSrc || error"
-                                    style="font-size:10px;font-weight:700;color:var(--text-muted);"
-                                    x-text="initials"></span>
-                            </span>
                             <span x-text="agent.Nom"></span>
                         </td>
                         <td data-label="Prénom" x-text="agent.Prenom"></td>

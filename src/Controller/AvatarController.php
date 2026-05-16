@@ -18,7 +18,7 @@ class AvatarController extends AbstractController
     }
 
     /**
-     * Proxy avatar Tchap avec cache fichier 1h.
+     * Proxy avatar Tchap avec cache fichier 15 min.
      * Accessible à tous les utilisateurs authentifiés (ROLE_USER+).
      * Retourne 404 si l'utilisateur n'a pas d'avatar ou si Tchap est injoignable.
      */
@@ -36,8 +36,8 @@ class AvatarController extends AbstractController
         $imgPath  = $cacheDir . '/' . $cacheKey . '.img';
         $metaPath = $cacheDir . '/' . $cacheKey . '.meta';
 
-        // Servir depuis le cache si frais (1h)
-        if (is_file($imgPath) && is_file($metaPath) && filemtime($imgPath) > time() - 3600) {
+        // Servir depuis le cache si frais (15 min)
+        if (is_file($imgPath) && is_file($metaPath) && filemtime($imgPath) > time() - 900) {
             $meta = json_decode(file_get_contents($metaPath), true);
             return new Response(file_get_contents($imgPath), 200, [
                 'Content-Type'  => $meta['ct'] ?? 'image/jpeg',
@@ -70,7 +70,29 @@ class AvatarController extends AbstractController
 
         return new Response($image['content'], 200, [
             'Content-Type'  => $image['contentType'],
-            'Cache-Control' => 'public, max-age=3600',
+            'Cache-Control' => 'public, max-age=900',
         ]);
+    }
+
+    // DELETE /api/avatar?userId=@... — purge le cache d'un avatar (après mise à jour dans Tchap)
+    #[Route('/api/avatar', name: 'api_avatar_purge', methods: ['DELETE'])]
+    public function purge(Request $request): Response
+    {
+        $userId = trim($request->query->get('userId', ''));
+        if (!$userId) {
+            return new Response('', 400);
+        }
+
+        $cacheKey = 'av_' . md5($userId);
+        $cacheDir = $this->getParameter('kernel.var_dir') . '/avatars';
+
+        foreach (['img', 'meta'] as $ext) {
+            $path = $cacheDir . '/' . $cacheKey . '.' . $ext;
+            if (is_file($path)) {
+                unlink($path);
+            }
+        }
+
+        return new Response('', 204);
     }
 }

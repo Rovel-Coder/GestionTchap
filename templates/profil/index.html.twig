@@ -20,14 +20,24 @@
 
         {# ── Bandeau identité ── #}
         <div style="display:flex;align-items:center;gap:16px;background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px 24px;">
-            {# Avatar Tchap avec fallback initiales #}
-            <div x-data="avatarComp(profil.user_id, (profil.Prenom || '') + ' ' + (profil.Nom || ''))"
-                style="width:56px;height:56px;border-radius:50%;overflow:hidden;flex-shrink:0;position:relative;">
-                <img x-show="imgSrc && !error" :src="imgSrc" @load="onLoad()" @error="onError()"
-                    style="width:100%;height:100%;object-fit:cover;display:block;">
-                <div x-show="!imgSrc || error"
-                    style="width:100%;height:100%;background:rgba(201,168,76,.15);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:var(--gold);"
-                    x-text="initials"></div>
+            {# Avatar Tchap avec fallback initiales + bouton rafraîchir #}
+            <div style="position:relative;flex-shrink:0;">
+                <div x-data="avatarComp(profil.user_id, (profil.Prenom || '') + ' ' + (profil.Nom || ''))"
+                    x-ref="avatarComp"
+                    style="width:56px;height:56px;border-radius:50%;overflow:hidden;">
+                    <img x-show="imgSrc && !error" :src="imgSrc" @load="onLoad()" @error="onError()"
+                        style="width:100%;height:100%;object-fit:cover;display:block;">
+                    <div x-show="!imgSrc || error"
+                        style="width:100%;height:100%;background:rgba(201,168,76,.15);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:var(--gold);"
+                        x-text="initials"></div>
+                </div>
+                <button @click="refreshAvatar()"
+                    :disabled="avatarRefreshing"
+                    title="Rafraîchir la photo depuis Tchap"
+                    style="position:absolute;bottom:-4px;right:-4px;width:20px;height:20px;border-radius:50%;background:var(--bg-elevated);border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">
+                    <i class="fa-solid fa-rotate" style="font-size:9px;color:var(--text-muted);"
+                        :class="{ 'fa-spin': avatarRefreshing }"></i>
+                </button>
             </div>
             <div>
                 <div style="font-size:20px;font-weight:700;font-family:var(--font-display);"
@@ -69,7 +79,12 @@
 
                 <div class="form-group">
                     <label>Grade</label>
-                    <input type="text" x-model="form.Grade" maxlength="100" placeholder="ex: Maréchal des logis chef">
+                    <select x-model="form.Grade">
+                        <option value="">— Sélectionner —</option>
+                        <template x-for="g in allGrades" :key="g">
+                            <option :value="g" x-text="g"></option>
+                        </template>
+                    </select>
                 </div>
 
                 <div class="form-group">
@@ -97,12 +112,25 @@
 
                 <div class="form-group">
                     <label>Statut</label>
-                    <input type="text" x-model="form.Statut" maxlength="100" placeholder="ex: En activité">
+                    <select x-model="form.Statut">
+                        <option value="actif">Actif</option>
+                        <option value="reserve">Réserve</option>
+                        <option value="admin_civil">Administratif - Civil</option>
+                        <option value="admin_militaire">Administratif - Militaire</option>
+                    </select>
                 </div>
 
                 <div class="form-group">
                     <label>Subdivision</label>
-                    <input type="text" x-model="form.Subdivision" maxlength="200" placeholder="ex: Escadron 1">
+                    <select x-model="form.Subdivision">
+                        <option value="">— Sélectionner —</option>
+                        <option value="dept">Gendarmerie départementale</option>
+                        <option value="mobile">Gendarmerie mobile</option>
+                        <option value="grepub">Garde républicaine</option>
+                        <option value="air">Gendarmerie de l'air et de l'espace</option>
+                        <option value="maritime">Gendarmerie maritime</option>
+                        <option value="cta">Corps technique et administratif</option>
+                    </select>
                 </div>
 
             </div>
@@ -166,12 +194,14 @@
 <script>
 function profilView() {
     return {
-        loading:     true,
-        saving:      false,
-        saveError:   null,
-        saveSuccess: null,
-        profil:      {},
-        form:        {},
+        loading:          true,
+        saving:           false,
+        saveError:        null,
+        saveSuccess:      null,
+        profil:           {},
+        form:             {},
+        avatarRefreshing: false,
+        get allGrades()   { return typeof ALL_GRADES !== 'undefined' ? ALL_GRADES : []; },
 
         async load() {
             this.loading = true;
@@ -213,6 +243,24 @@ function profilView() {
                 this.saveError = e.message;
             } finally {
                 this.saving = false;
+            }
+        },
+
+        async refreshAvatar() {
+            if (!this.profil.user_id) return;
+            this.avatarRefreshing = true;
+            try {
+                await fetch(`/api/avatar?userId=${encodeURIComponent(this.profil.user_id)}`, { method: 'DELETE' });
+                // Forcer le rechargement de l'image en ajoutant un timestamp
+                const img = this.$el.querySelector('img[src*="/api/avatar"]');
+                if (img) {
+                    img.src = `/api/avatar?userId=${encodeURIComponent(this.profil.user_id)}&t=${Date.now()}`;
+                }
+                toast('Avatar rechargé depuis Tchap', 'success');
+            } catch (e) {
+                toast('Impossible de rafraîchir l\'avatar', 'error');
+            } finally {
+                this.avatarRefreshing = false;
             }
         },
     };
