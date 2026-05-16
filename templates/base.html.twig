@@ -291,6 +291,35 @@ window.TCHAP_SERVERS  = {{ tchap_servers()|json_encode|raw }};
 
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js"></script>
 <script src="{{ asset('assets/app.js') }}?v=20260516a"></script>
+<script>
+/**
+ * Composant Alpine réutilisable : avatar Tchap avec fallback initiales.
+ * Usage : <div x-data="avatarComp('@user:server', 'Prénom Nom')"> ... </div>
+ * Ou via le macro Twig : {{ tchap_avatar(userId, displayName) }}
+ *
+ * Le composant expose :
+ *   - imgSrc    : URL de l'image (null si non chargée ou erreur)
+ *   - initials  : initiales de secours
+ *   - loaded    : true quand l'image a chargé sans erreur
+ *   - error     : true si l'image a échoué
+ */
+document.addEventListener('alpine:init', () => {
+    Alpine.data('avatarComp', (userId, displayName) => ({
+        imgSrc:   userId ? `/api/avatar?userId=${encodeURIComponent(userId)}` : null,
+        initials: (() => {
+            if (!displayName) return '?';
+            const parts = displayName.trim().split(/\s+/);
+            return parts.length >= 2
+                ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+                : displayName.slice(0, 2).toUpperCase();
+        })(),
+        loaded: false,
+        error:  false,
+        onLoad()  { this.loaded = true; },
+        onError() { this.error = true; this.imgSrc = null; },
+    }));
+});
+</script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

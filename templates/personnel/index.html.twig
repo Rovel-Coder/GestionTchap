@@ -229,6 +229,15 @@
                                 @click.stop
                                 @change="toggleSelectAgent(agent.id)"
                                 style="margin-right:6px;cursor:pointer;">
+                            {# Mini avatar 28px #}
+                            <span x-data="avatarComp(agent.user_id, (agent.Prenom || '') + ' ' + (agent.Nom || ''))"
+                                style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;overflow:hidden;flex-shrink:0;margin-right:7px;vertical-align:middle;background:var(--bg-elevated);">
+                                <img x-show="imgSrc && !error" :src="imgSrc" @load="onLoad()" @error="onError()"
+                                    style="width:100%;height:100%;object-fit:cover;">
+                                <span x-show="!imgSrc || error"
+                                    style="font-size:10px;font-weight:700;color:var(--text-muted);"
+                                    x-text="initials"></span>
+                            </span>
                             <span x-text="agent.Nom"></span>
                         </td>
                         <td data-label="Prénom" x-text="agent.Prenom"></td>
@@ -297,7 +306,17 @@
     <div class="modal-overlay" x-show="modalOpen" x-cloak @click.self="closeModal()">
         <div class="modal modal-large">
             <div class="modal-header">
-                <h3 x-text="modalMode === 'create' ? 'Ajouter un agent' : (modalMode === 'edit' ? 'Modifier un agent' : 'Détail agent')"></h3>
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <template x-if="modalMode === 'detail' && form.user_id">
+                        <span x-data="avatarComp(form.user_id, (form.Prenom || '') + ' ' + (form.Nom || ''))"
+                            style="width:36px;height:36px;border-radius:50%;overflow:hidden;flex-shrink:0;background:var(--bg-elevated);display:flex;align-items:center;justify-content:center;">
+                            <img x-show="imgSrc && !error" :src="imgSrc" @load="onLoad()" @error="onError()"
+                                style="width:100%;height:100%;object-fit:cover;">
+                            <span x-show="!imgSrc || error" style="font-size:13px;font-weight:700;color:var(--text-muted);" x-text="initials"></span>
+                        </span>
+                    </template>
+                    <h3 x-text="modalMode === 'create' ? 'Ajouter un agent' : (modalMode === 'edit' ? 'Modifier un agent' : ((form.Prenom || '') + ' ' + (form.Nom || '')).trim() || 'Détail agent')"></h3>
+                </div>
                 <button class="btn-icon" @click="closeModal()"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="modal-body">

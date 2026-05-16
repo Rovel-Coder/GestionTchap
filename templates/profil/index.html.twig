@@ -20,8 +20,15 @@
 
         {# ── Bandeau identité ── #}
         <div style="display:flex;align-items:center;gap:16px;background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px 24px;">
-            <div style="width:56px;height:56px;border-radius:50%;background:rgba(201,168,76,.15);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:var(--gold);flex-shrink:0;"
-                x-text="(profil.Prenom || '?').charAt(0).toUpperCase()"></div>
+            {# Avatar Tchap avec fallback initiales #}
+            <div x-data="avatarComp(profil.user_id, (profil.Prenom || '') + ' ' + (profil.Nom || ''))"
+                style="width:56px;height:56px;border-radius:50%;overflow:hidden;flex-shrink:0;position:relative;">
+                <img x-show="imgSrc && !error" :src="imgSrc" @load="onLoad()" @error="onError()"
+                    style="width:100%;height:100%;object-fit:cover;display:block;">
+                <div x-show="!imgSrc || error"
+                    style="width:100%;height:100%;background:rgba(201,168,76,.15);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:var(--gold);"
+                    x-text="initials"></div>
+            </div>
             <div>
                 <div style="font-size:20px;font-weight:700;font-family:var(--font-display);"
                     x-text="(profil.Prenom || '') + ' ' + (profil.Nom || '')"></div>

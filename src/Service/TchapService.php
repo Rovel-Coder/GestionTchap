@@ -328,6 +328,49 @@ class TchapService
         return $this->call('GET', '/profile/' . rawurlencode($userId), $config);
     }
 
+    /**
+     * Télécharge le thumbnail d'un avatar Matrix (mxc://) et retourne les bytes + content-type.
+     * Retourne null si l'URL est invalide ou le téléchargement échoue.
+     */
+    public function downloadAvatar(string $mxcUrl, array $config, int $size = 64): ?array
+    {
+        if (!str_starts_with($mxcUrl, 'mxc://')) {
+            return null;
+        }
+
+        $parts = explode('/', substr($mxcUrl, 6), 2); // retire 'mxc://'
+        if (count($parts) < 2) {
+            return null;
+        }
+        [$server, $mediaId] = $parts;
+
+        if (empty($config['homeserver']) || empty($config['token'])) {
+            return null;
+        }
+
+        $hs  = rtrim($config['homeserver'], '/');
+        $url = "$hs/_matrix/media/v3/thumbnail/$server/$mediaId?width=$size&height=$size&method=crop";
+
+        try {
+            $response = $this->httpClient->request('GET', $url, [
+                'headers' => ['Authorization' => 'Bearer ' . $config['token']],
+                'timeout' => 8,
+            ]);
+
+            if ($response->getStatusCode() !== 200) {
+                return null;
+            }
+
+            $ct = $response->getHeaders(false)['content-type'][0] ?? 'image/jpeg';
+            // Garder uniquement le type MIME (sans paramètres)
+            $ct = explode(';', $ct)[0];
+
+            return ['content' => $response->getContent(), 'contentType' => trim($ct)];
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
     public function createSpace(string $name, string $topic, array $config): array
     {
         if ($this->bridgeEnabled() && empty($config['bypass_bridge'])) {
