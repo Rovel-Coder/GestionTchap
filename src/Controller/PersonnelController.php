@@ -61,10 +61,11 @@ class PersonnelController extends AbstractController
             || ($uiConfig['roleFeatures'][$baseRole]['carto'] ?? false);
 
         if ($hasCarto) {
-            return $this->redirectToRoute('app_carto');
+            return $this->redirectToRoute(‘app_carto’);
         }
 
-        throw $this->createAccessDeniedException('Aucune vue n’est accessible pour ce compte.');
+        // Lecteur : accès en lecture seule à l’annuaire
+        return $this->redirectToRoute(‘app_personnel’);
     }
 
     #[Route('/personnel', name: 'app_personnel', methods: ['GET'])]
@@ -72,9 +73,6 @@ class PersonnelController extends AbstractController
     {
         /** @var AppUser $user */
         $user = $this->getUser();
-        if (!$this->roles->canManage($user)) {
-            throw $this->createAccessDeniedException('Accès réservé aux gestionnaires');
-        }
 
         return $this->render('personnel/index.html.twig', [
             'user'        => $user->toArray(),
@@ -89,11 +87,9 @@ class PersonnelController extends AbstractController
     {
         /** @var AppUser $user */
         $user = $this->getUser();
-        if (!$this->roles->canManage($user)) {
-            return $this->json(['error' => 'Accès réservé aux gestionnaires'], 403);
-        }
 
-        if ($user->isSysAdmin()) {
+        if ($user->isSysAdmin() || !$this->roles->canManage($user)) {
+            // Sysadmin et lecteurs (lecture seule) : tout le personnel
             $rows = $this->db->fetchAllAssociative(
                 'SELECT * FROM personnel ORDER BY "Nom", "Prenom"'
             );
