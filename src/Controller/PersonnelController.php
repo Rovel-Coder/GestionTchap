@@ -130,6 +130,10 @@ class PersonnelController extends AbstractController
         $data   = json_decode($request->getContent(), true) ?? [];
         $fields = $this->extractWritableFields($data);
 
+        if (isset($fields['Role']) && !$this->roles->canAdmin($user)) {
+            return $this->json(['error' => 'Seul un administrateur peut définir le rôle'], 403);
+        }
+
         $err = $this->validateFields($fields);
         if ($err) {
             return $this->json(['error' => $err], 400);
