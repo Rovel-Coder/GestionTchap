@@ -371,6 +371,16 @@
                                     <span class="ec-member-badge" :class="m.membership"
                                         x-text="{ join:'Présent', invite:'Invité', leave:'Parti', ban:'Banni' }[m.membership] ?? m.membership">
                                     </span>
+                                    {% if permissions.canManage %}
+                                    <button @click="kickFromEspace(m)"
+                                        :disabled="m._loading"
+                                        title="Retirer de l'espace"
+                                        style="background:none;border:none;cursor:pointer;color:var(--text-muted);padding:2px 4px;line-height:1;flex-shrink:0;font-size:12px;"
+                                        @mouseenter="$el.style.color='var(--red-light)'"
+                                        @mouseleave="$el.style.color='var(--text-muted)'">
+                                        <i class="fa-solid fa-user-xmark"></i>
+                                    </button>
+                                    {% endif %}
                                 </div>
                             </template>
                             <div x-show="membersList.length === 0" style="padding:20px;text-align:center;color:var(--text-muted);font-size:12px;">
@@ -832,6 +842,34 @@ function espaceView() {
                 toast(e.message, 'error');
             } finally {
                 espace._loading = false;
+            }
+        },
+
+        async kickFromEspace(member) {
+            if (!this.membersTarget?.space_id) return;
+            member._loading = true;
+            try {
+                await apiFetch('/api/tchap/kick', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        roomId: this.membersTarget.space_id,
+                        userId: member.userId,
+                        reason: 'Retiré de l\'espace',
+                    }),
+                });
+                this.membersList = this.membersList.filter(m => m.userId !== member.userId);
+                // Mettre à jour le compteur sur la vignette
+                const espace = this.espaces.find(e => e.id === this.membersTarget.id);
+                if (espace) {
+                    espace._memberCount = {
+                        joined:  this.membersList.filter(m => m.membership === 'join').length,
+                        invited: this.membersList.filter(m => m.membership === 'invite').length,
+                    };
+                }
+                toast(`${member.userId} retiré de l'espace`, 'success');
+            } catch (e) {
+                toast(e.message, 'error');
+                member._loading = false;
             }
         },
 
