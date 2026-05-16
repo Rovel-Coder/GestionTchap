@@ -1,0 +1,654 @@
+{% extends 'base.html.twig' %}
+{% block title %}Accueil — Gestion Tchap{% endblock %}
+
+{% block content %}
+<div class="view bv-view" x-data="bienvenueView()" x-init="init()">
+
+    {# ── En-tête personnalisé ── #}
+    <div class="bv-header">
+        <div class="bv-greeting">
+            <div class="bv-avatar">{{ user.displayName|slice(0,1)|upper }}</div>
+            <div>
+                <div class="bv-title">Bonjour, {{ user.displayName }} 👋</div>
+                <div class="bv-subtitle">
+                    Tableau de bord
+                    <span class="bv-role-badge bv-role-{{ user.role|replace({':': '-'}) }}">
+                        {{ user.role|replace({'_': ' ', ':': ' › '})|capitalize }}
+                    </span>
+                </div>
+            </div>
+        </div>
+        <button class="btn-primary bv-tour-btn" @click="startTour()">
+            <i class="fa-solid fa-map-location-dot"></i>
+            Lancer la visite guidée
+        </button>
+    </div>
+
+    {# ── Statistiques ── #}
+    <div class="bv-stats">
+        <a href="{{ path('app_personnel') }}" class="bv-stat-card">
+            <i class="fa-solid fa-users bv-stat-icon" style="color:var(--blue-light);"></i>
+            <div class="bv-stat-value">{{ stats.agents }}</div>
+            <div class="bv-stat-label">Agents</div>
+        </a>
+        <a href="{{ path('app_salons') }}" class="bv-stat-card">
+            <i class="fa-solid fa-comments bv-stat-icon" style="color:#6ec38a;"></i>
+            <div class="bv-stat-value">{{ stats.salons }}</div>
+            <div class="bv-stat-label">Salons</div>
+        </a>
+        <a href="{{ path('app_unites') }}" class="bv-stat-card">
+            <i class="fa-solid fa-sitemap bv-stat-icon" style="color:#a78bfa;"></i>
+            <div class="bv-stat-value">{{ stats.unites }}</div>
+            <div class="bv-stat-label">Unités</div>
+        </a>
+        <a href="{{ path('app_espaces') }}" class="bv-stat-card">
+            <i class="fa-solid fa-layer-group bv-stat-icon" style="color:var(--gold);"></i>
+            <div class="bv-stat-value">{{ stats.espaces }}</div>
+            <div class="bv-stat-label">Espaces</div>
+        </a>
+    </div>
+
+    {# ── Accès rapide ── #}
+    <div class="bv-section-title">Accès rapide</div>
+    <div class="bv-shortcuts">
+
+        {% if permissions.canManage %}
+        <a href="{{ path('app_personnel') }}" class="bv-shortcut">
+            <div class="bv-shortcut-icon" style="background:rgba(45,108,223,.12);">
+                <i class="fa-solid fa-users" style="color:var(--blue-light);"></i>
+            </div>
+            <div class="bv-shortcut-body">
+                <div class="bv-shortcut-title">Personnel</div>
+                <div class="bv-shortcut-desc">Annuaire, rôles et affectations des agents</div>
+            </div>
+            <i class="fa-solid fa-arrow-right bv-shortcut-arrow"></i>
+        </a>
+        <a href="{{ path('app_salons') }}" class="bv-shortcut">
+            <div class="bv-shortcut-icon" style="background:rgba(110,195,138,.12);">
+                <i class="fa-solid fa-comments" style="color:#6ec38a;"></i>
+            </div>
+            <div class="bv-shortcut-body">
+                <div class="bv-shortcut-title">Salons Tchap</div>
+                <div class="bv-shortcut-desc">Gestion et synchronisation des salons</div>
+            </div>
+            <i class="fa-solid fa-arrow-right bv-shortcut-arrow"></i>
+        </a>
+        <a href="{{ path('app_unites') }}" class="bv-shortcut">
+            <div class="bv-shortcut-icon" style="background:rgba(167,139,250,.12);">
+                <i class="fa-solid fa-sitemap" style="color:#a78bfa;"></i>
+            </div>
+            <div class="bv-shortcut-body">
+                <div class="bv-shortcut-title">Unités</div>
+                <div class="bv-shortcut-desc">Structure hiérarchique et salons associés</div>
+            </div>
+            <i class="fa-solid fa-arrow-right bv-shortcut-arrow"></i>
+        </a>
+        <a href="{{ path('app_espaces') }}" class="bv-shortcut">
+            <div class="bv-shortcut-icon" style="background:rgba(201,168,76,.12);">
+                <i class="fa-solid fa-layer-group" style="color:var(--gold);"></i>
+            </div>
+            <div class="bv-shortcut-body">
+                <div class="bv-shortcut-title">Espaces</div>
+                <div class="bv-shortcut-desc">Regrouper des salons en espaces Tchap</div>
+            </div>
+            <i class="fa-solid fa-arrow-right bv-shortcut-arrow"></i>
+        </a>
+        {% endif %}
+
+        {% if permissions.canCrise %}
+        <a href="{{ path('app_crise') }}" class="bv-shortcut bv-shortcut-crisis">
+            <div class="bv-shortcut-icon" style="background:rgba(192,57,43,.12);">
+                <i class="fa-solid fa-triangle-exclamation" style="color:var(--red-light);"></i>
+            </div>
+            <div class="bv-shortcut-body">
+                <div class="bv-shortcut-title">Mode Crise</div>
+                <div class="bv-shortcut-desc">Activation, gestion et suivi opérationnel</div>
+            </div>
+            <i class="fa-solid fa-arrow-right bv-shortcut-arrow"></i>
+        </a>
+        {% endif %}
+
+        {% if permissions.canAdmin %}
+        <a href="{{ path('app_hierarchie') }}" class="bv-shortcut">
+            <div class="bv-shortcut-icon" style="background:rgba(45,108,223,.08);">
+                <i class="fa-solid fa-diagram-project" style="color:var(--blue-light);"></i>
+            </div>
+            <div class="bv-shortcut-body">
+                <div class="bv-shortcut-title">Hiérarchie</div>
+                <div class="bv-shortcut-desc">Visualisation de l'arborescence complète</div>
+            </div>
+            <i class="fa-solid fa-arrow-right bv-shortcut-arrow"></i>
+        </a>
+        {% endif %}
+
+        {% if permissions.isSysAdmin %}
+        <a href="{{ path('app_config') }}" class="bv-shortcut">
+            <div class="bv-shortcut-icon" style="background:rgba(201,168,76,.08);">
+                <i class="fa-solid fa-gear" style="color:var(--gold);"></i>
+            </div>
+            <div class="bv-shortcut-body">
+                <div class="bv-shortcut-title">Configuration</div>
+                <div class="bv-shortcut-desc">Tchap, bots, serveurs et paramètres système</div>
+            </div>
+            <i class="fa-solid fa-arrow-right bv-shortcut-arrow"></i>
+        </a>
+        {% endif %}
+
+    </div>
+
+    {# ── Modale visite guidée ── #}
+    <div class="bv-tour-overlay" x-show="tourOpen" x-cloak x-transition.opacity>
+        <div class="bv-tour-modal" x-transition.scale>
+
+            {# Barre de progression #}
+            <div class="bv-tour-progress-bar">
+                <div class="bv-tour-progress-fill"
+                    :style="{ width: ((currentStep + 1) / tourSteps.length * 100) + '%' }"></div>
+            </div>
+
+            {# Compteur #}
+            <div class="bv-tour-counter">
+                <span x-text="currentStep + 1"></span> / <span x-text="tourSteps.length"></span>
+            </div>
+
+            {# Contenu de l'étape #}
+            <template x-if="tourSteps[currentStep]">
+                <div class="bv-tour-step" x-transition.opacity>
+                    <div class="bv-tour-icon" :style="{ background: tourSteps[currentStep].bg }">
+                        <i :class="tourSteps[currentStep].icon"
+                            :style="{ color: tourSteps[currentStep].color }"></i>
+                    </div>
+                    <div class="bv-tour-step-title" x-text="tourSteps[currentStep].title"></div>
+                    <div class="bv-tour-step-desc" x-html="tourSteps[currentStep].desc"></div>
+                    <a x-show="tourSteps[currentStep].url"
+                        :href="tourSteps[currentStep].url"
+                        class="bv-tour-link">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                        <span x-text="tourSteps[currentStep].urlLabel || 'Accéder'"></span>
+                    </a>
+                </div>
+            </template>
+
+            {# Navigation #}
+            <div class="bv-tour-nav">
+                <button class="btn-ghost" @click="prevStep()" :disabled="currentStep === 0">
+                    <i class="fa-solid fa-chevron-left"></i> Précédent
+                </button>
+                <button class="btn-ghost bv-tour-skip" @click="closeTour()">
+                    Passer
+                </button>
+                <button class="btn-primary" @click="nextStep()">
+                    <span x-show="currentStep < tourSteps.length - 1">
+                        Suivant <i class="fa-solid fa-chevron-right"></i>
+                    </span>
+                    <span x-show="currentStep === tourSteps.length - 1">
+                        <i class="fa-solid fa-check"></i> Terminer
+                    </span>
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block head_extra %}
+<style>
+.bv-view {
+    flex: 1;
+    overflow-y: auto;
+    padding: 28px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+/* ── En-tête ── */
+.bv-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+.bv-greeting {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+.bv-avatar {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: rgba(201,168,76,.18);
+    color: var(--gold);
+    font-size: 20px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-family: var(--font-display);
+}
+.bv-title {
+    font-size: 22px;
+    font-weight: 700;
+    font-family: var(--font-display);
+    letter-spacing: .04em;
+}
+.bv-subtitle {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-top: 3px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.bv-role-badge {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(201,168,76,.15);
+    color: var(--gold);
+    border: 1px solid rgba(201,168,76,.3);
+}
+.bv-tour-btn { gap: 8px; }
+
+/* ── Stats ── */
+.bv-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+}
+.bv-stat-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    text-decoration: none;
+    transition: all .18s;
+    cursor: pointer;
+}
+.bv-stat-card:hover {
+    border-color: var(--border-light);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
+}
+.bv-stat-icon { font-size: 22px; }
+.bv-stat-value {
+    font-size: 32px;
+    font-weight: 700;
+    font-family: var(--font-display);
+    line-height: 1;
+}
+.bv-stat-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+}
+
+/* ── Accès rapide ── */
+.bv-section-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--text-muted);
+}
+.bv-shortcuts {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+.bv-shortcut {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    text-decoration: none;
+    color: var(--text-primary);
+    transition: all .18s;
+}
+.bv-shortcut:hover {
+    border-color: var(--border-light);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow);
+}
+.bv-shortcut-crisis { border-color: rgba(192,57,43,.2); }
+.bv-shortcut-crisis:hover { border-color: var(--red-light); }
+.bv-shortcut-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+.bv-shortcut-body { flex: 1; min-width: 0; }
+.bv-shortcut-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+.bv-shortcut-desc {
+    font-size: 11px;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.bv-shortcut-arrow {
+    color: var(--text-muted);
+    font-size: 12px;
+    flex-shrink: 0;
+}
+
+/* ── Tour overlay ── */
+.bv-tour-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.65);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+.bv-tour-modal {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    width: 100%;
+    max-width: 480px;
+    overflow: hidden;
+    box-shadow: 0 24px 64px rgba(0,0,0,.5);
+}
+.bv-tour-progress-bar {
+    height: 3px;
+    background: var(--bg-elevated);
+}
+.bv-tour-progress-fill {
+    height: 100%;
+    background: var(--gold);
+    transition: width .4s ease;
+}
+.bv-tour-counter {
+    text-align: right;
+    padding: 10px 20px 0;
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: var(--font-display);
+}
+.bv-tour-step {
+    padding: 24px 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 12px;
+}
+.bv-tour-icon {
+    width: 72px;
+    height: 72px;
+    border-radius: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    margin-bottom: 4px;
+}
+.bv-tour-step-title {
+    font-size: 18px;
+    font-weight: 700;
+    font-family: var(--font-display);
+    letter-spacing: .04em;
+}
+.bv-tour-step-desc {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    max-width: 360px;
+}
+.bv-tour-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--blue-light);
+    text-decoration: none;
+    padding: 5px 12px;
+    border: 1px solid rgba(45,108,223,.3);
+    border-radius: 6px;
+    background: rgba(45,108,223,.08);
+    transition: all .15s;
+    margin-top: 4px;
+}
+.bv-tour-link:hover {
+    background: rgba(45,108,223,.15);
+    border-color: var(--blue-light);
+}
+.bv-tour-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 24px 20px;
+    border-top: 1px solid var(--border);
+    gap: 8px;
+}
+.bv-tour-skip {
+    font-size: 12px;
+    color: var(--text-muted);
+    padding: 5px 10px;
+}
+
+@media (max-width: 900px) {
+    .bv-stats { grid-template-columns: repeat(2, 1fr); }
+    .bv-shortcuts { grid-template-columns: 1fr; }
+    .bv-view { padding: 16px; }
+}
+</style>
+
+<script>
+function bienvenueView() {
+    const role  = {{ user.role|json_encode|raw }};
+    const perms = {{ permissions|json_encode|raw }};
+
+    // ── Définition de toutes les étapes disponibles ──
+    const ALL_STEPS = [
+        // Étape commune
+        {
+            id: 'welcome',
+            roles: ['gestionnaire', 'superviseur_crise', 'admin', 'sysadmin'],
+            icon: 'fa-solid fa-hexagon-nodes',
+            bg: 'rgba(201,168,76,.12)',
+            color: 'var(--gold)',
+            title: 'Bienvenue dans Gestion Tchap',
+            desc: `Cet outil vous permet de gérer le personnel, les salons et espaces
+                   Tchap de votre organisation, et de piloter les synchronisations
+                   automatiques vers la messagerie sécurisée de l'État.`,
+            url: null,
+        },
+        // Personnel
+        {
+            id: 'personnel',
+            roles: ['gestionnaire', 'superviseur_crise', 'admin', 'sysadmin'],
+            icon: 'fa-solid fa-users',
+            bg: 'rgba(45,108,223,.12)',
+            color: 'var(--blue-light)',
+            title: 'Annuaire du personnel',
+            desc: `Consultez et gérez les fiches des agents : grade, unité d'affectation,
+                   identifiant Tchap, statut. Importez des agents en masse via CSV.
+                   <br><br>
+                   <strong>Astuce :</strong> cliquez sur un agent pour voir sa fiche complète
+                   avec ses salons assignés.`,
+            url: '/personnel',
+            urlLabel: 'Aller au personnel',
+        },
+        // Salons
+        {
+            id: 'salons',
+            roles: ['gestionnaire', 'superviseur_crise', 'admin', 'sysadmin'],
+            icon: 'fa-solid fa-comments',
+            bg: 'rgba(110,195,138,.12)',
+            color: '#6ec38a',
+            title: 'Salons Tchap',
+            desc: `Gérez les salons de communication : créez-les sur Tchap,
+                   associez-les aux unités, et synchronisez automatiquement
+                   leurs membres selon les affectations.
+                   <br><br>
+                   Le bouton <strong>Synchroniser</strong> invite tous les agents
+                   attendus et expulse ceux qui ne le sont plus.`,
+            url: '/salons',
+            urlLabel: 'Aller aux salons',
+        },
+        // Unités
+        {
+            id: 'unites',
+            roles: ['gestionnaire', 'superviseur_crise', 'admin', 'sysadmin'],
+            icon: 'fa-solid fa-sitemap',
+            bg: 'rgba(167,139,250,.12)',
+            color: '#a78bfa',
+            title: 'Unités',
+            desc: `Naviguez dans l'arborescence hiérarchique de votre organisation.
+                   Chaque unité peut avoir ses propres salons Tchap et son bot dédié.
+                   <br><br>
+                   <strong>Glissez</strong> les agents entre unités, ajoutez
+                   des salons directement depuis la fiche unité.`,
+            url: '/unites',
+            urlLabel: 'Voir les unités',
+        },
+        // Espaces
+        {
+            id: 'espaces',
+            roles: ['gestionnaire', 'superviseur_crise', 'admin', 'sysadmin'],
+            icon: 'fa-solid fa-layer-group',
+            bg: 'rgba(201,168,76,.12)',
+            color: 'var(--gold)',
+            title: 'Espaces Tchap',
+            desc: `Les espaces sont des conteneurs qui regroupent plusieurs salons
+                   sous une même arborescence dans Tchap.
+                   <br><br>
+                   Lorsque vous ajoutez un salon à un espace, ses membres sont
+                   <strong>automatiquement invités</strong> dans l'espace.`,
+            url: '/espaces',
+            urlLabel: 'Voir les espaces',
+        },
+        // Crise
+        {
+            id: 'crise',
+            roles: ['superviseur_crise', 'admin', 'sysadmin'],
+            icon: 'fa-solid fa-triangle-exclamation',
+            bg: 'rgba(192,57,43,.12)',
+            color: 'var(--red-light)',
+            title: 'Mode Crise',
+            desc: `Activez une cellule de crise en quelques clics : sélectionnez
+                   les agents et salons concernés, envoyez les invitations en masse.
+                   <br><br>
+                   Le suivi de crise permet de monitorer l'état des synchronisations
+                   en temps réel pendant l'opération.`,
+            url: '/crise',
+            urlLabel: 'Accéder au mode crise',
+        },
+        // Hiérarchie
+        {
+            id: 'hierarchie',
+            roles: ['admin', 'sysadmin'],
+            icon: 'fa-solid fa-diagram-project',
+            bg: 'rgba(45,108,223,.08)',
+            color: 'var(--blue-light)',
+            title: 'Hiérarchie',
+            desc: `Vue arborescente complète de toutes les unités de votre organisation.
+                   Créez, déplacez et restructurez les unités, assignez les bots
+                   dédiés et définissez les relations d'administration inter-unités.`,
+            url: '/hierarchie',
+            urlLabel: 'Voir la hiérarchie',
+        },
+        // Config
+        {
+            id: 'config',
+            roles: ['sysadmin'],
+            icon: 'fa-solid fa-gear',
+            bg: 'rgba(201,168,76,.08)',
+            color: 'var(--gold)',
+            title: 'Configuration système',
+            desc: `Configurez le bot Tchap principal (E2EE via bridge Node.js),
+                   les serveurs Matrix des différentes administrations,
+                   et les droits d'accès par rôle.
+                   <br><br>
+                   <strong>Réservé aux administrateurs système.</strong>`,
+            url: '/config',
+            urlLabel: 'Ouvrir la configuration',
+        },
+        // Fin
+        {
+            id: 'end',
+            roles: ['gestionnaire', 'superviseur_crise', 'admin', 'sysadmin'],
+            icon: 'fa-solid fa-circle-check',
+            bg: 'rgba(110,195,138,.12)',
+            color: '#6ec38a',
+            title: 'Vous êtes prêt·e !',
+            desc: `La visite est terminée. Vous pouvez la relancer à tout moment
+                   depuis ce tableau de bord.
+                   <br><br>
+                   En cas de question, consultez la documentation ou contactez
+                   votre administrateur.`,
+            url: null,
+        },
+    ];
+
+    // Filtrer les étapes selon le rôle
+    const baseRole = role.includes(':') ? role.split(':')[0] : role;
+    const tourSteps = ALL_STEPS.filter(s => s.roles.includes(baseRole));
+
+    return {
+        tourOpen:    false,
+        currentStep: 0,
+        tourSteps,
+
+        init() {
+            // Auto-lancer la visite à la première connexion
+            const seen = localStorage.getItem('bv_tour_done_v1');
+            if (!seen) {
+                setTimeout(() => this.startTour(), 600);
+            }
+        },
+
+        startTour() {
+            this.currentStep = 0;
+            this.tourOpen    = true;
+        },
+
+        nextStep() {
+            if (this.currentStep < this.tourSteps.length - 1) {
+                this.currentStep++;
+            } else {
+                this.closeTour();
+            }
+        },
+
+        prevStep() {
+            if (this.currentStep > 0) this.currentStep--;
+        },
+
+        closeTour() {
+            this.tourOpen = false;
+            localStorage.setItem('bv_tour_done_v1', '1');
+        },
+    };
+}
+</script>
+{% endblock %}

@@ -48,7 +48,7 @@ class PersonnelController extends AbstractController
         $user = $this->getUser();
 
         if ($this->roles->canManage($user)) {
-            return $this->redirectToRoute('app_personnel');
+            return $this->redirectToRoute('app_bienvenue');
         }
 
         if ($this->roles->canCrise($user)) {
