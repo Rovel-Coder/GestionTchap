@@ -363,6 +363,74 @@ class EspaceController extends AbstractController
         }
     }
 
+    // POST /api/espaces/{id}/sync-members — invite dans l'espace tous les membres actifs des salons liés
+    #[Route('/api/espaces/{id}/sync-members', name: 'api_espaces_sync_members', methods: ['POST'])]
+    public function syncMembers(int $id): JsonResponse
+    {
+        /** @var AppUser $user */
+        $user = $this->getUser();
+        if (!$this->roles->canManage($user)) {
+            return $this->json(['error' => 'Accès réservé aux gestionnaires'], 403);
+        }
+
+        $espace = $this->db->fetchAssociative('SELECT * FROM espaces WHERE id = :id', ['id' => $id]);
+        if (!$espace) {
+            return $this->json(['error' => 'Espace introuvable'], 404);
+        }
+
+        if (empty($espace['space_id'])) {
+            return $this->json(['error' => "L'espace n'a pas encore été créé sur Tchap"], 409);
+        }
+
+        try {
+            $cfg   = $this->config->getTchapConfig();
+            $botId = strtolower($cfg['botUserId'] ?? '');
+
+            // Membres actuels de l'espace
+            $espaceRaw  = $this->tchap->getMembers($espace['space_id'], $cfg);
+            $espaceUids = array_map(fn($m) => strtolower($m['state_key'] ?? ''), $espaceRaw);
+
+            $invited = 0;
+            $skipped = 0;
+            $errors  = [];
+
+            foreach ($this->getSalons($id) as $salon) {
+                if (empty($salon['room_id'])) {
+                    continue;
+                }
+                try {
+                    $salonMembers = $this->tchap->getMembers($salon['room_id'], $cfg);
+                } catch (\Throwable $e) {
+                    $errors[] = "Salon « {$salon['Nom']} » : {$e->getMessage()}";
+                    continue;
+                }
+
+                foreach ($salonMembers as $m) {
+                    $uid  = strtolower($m['state_key'] ?? '');
+                    $memb = $m['content']['membership'] ?? 'join';
+                    if (!$uid || $uid === $botId || $memb !== 'join') {
+                        continue;
+                    }
+                    if (in_array($uid, $espaceUids, true)) {
+                        $skipped++;
+                        continue;
+                    }
+                    try {
+                        $this->tchap->invite($espace['space_id'], $uid, $cfg);
+                        $espaceUids[] = $uid; // évite de réinviter dans la même passe
+                        $invited++;
+                    } catch (\Throwable $e) {
+                        $errors[] = "$uid : {$e->getMessage()}";
+                    }
+                }
+            }
+
+            return $this->json(['ok' => true, 'invited' => $invited, 'skipped' => $skipped, 'errors' => $errors]);
+        } catch (\Throwable $e) {
+            return $this->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
     // GET /api/espaces/{id}/members — membres de l'espace Tchap avec leur statut
     #[Route('/api/espaces/{id}/members', name: 'api_espaces_members', methods: ['GET'])]
     public function members(int $id): JsonResponse

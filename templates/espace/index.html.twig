@@ -112,6 +112,12 @@
                         title="Voir les membres de l'espace" style="color:#6ec38a;">
                         <i class="fa-solid fa-users"></i>
                     </button>
+                    <button class="btn-icon" x-show="espace.space_id && espace._salons?.length > 0"
+                        @click="syncMembers(espace)" :disabled="espace._loading"
+                        title="Inviter dans l'espace les membres de tous les salons liés"
+                        style="color:var(--blue-light);">
+                        <i class="fa-solid fa-rotate" :class="{ 'fa-spin': espace._loading }"></i>
+                    </button>
                     <button class="btn-icon" x-show="espace.space_id"
                         @click="openInviteModal(espace)" title="Inviter dans l'espace"
                         style="color:var(--blue-light);">
@@ -810,6 +816,22 @@ function espaceView() {
                 this.membersError = e.message;
             } finally {
                 this.membersLoading = false;
+            }
+        },
+
+        async syncMembers(espace) {
+            espace._loading = true;
+            try {
+                const data = await apiFetch(`/api/espaces/${espace.id}/sync-members`, { method: 'POST' });
+                const msg = `${data.invited} invité(s)${data.skipped > 0 ? `, ${data.skipped} déjà présents` : ''}`;
+                toast(data.invited > 0 ? msg : `Tous les membres sont déjà dans l'espace`, data.invited > 0 ? 'success' : 'info');
+                if (data.errors?.length) data.errors.forEach(e => toast(e, 'error'));
+                // Rafraîchir le compteur si la modale est ouverte sur cet espace
+                if (this.membersTarget?.id === espace.id) await this.openMembersModal(espace);
+            } catch (e) {
+                toast(e.message, 'error');
+            } finally {
+                espace._loading = false;
             }
         },
 
