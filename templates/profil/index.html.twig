@@ -1,0 +1,214 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Mon profil — Gestion Tchap{% endblock %}
+
+{% block content %}
+<div class="view" x-data="profilView()" x-init="load()">
+
+    <div class="view-toolbar">
+        <div class="toolbar-left">
+            <span class="view-title">MON PROFIL</span>
+        </div>
+    </div>
+
+    {# ── Spinner ── #}
+    <div x-show="loading" style="flex:1;display:flex;align-items:center;justify-content:center;">
+        <div class="spinner"></div>
+    </div>
+
+    <div x-show="!loading" style="flex:1;overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:20px;max-width:860px;margin:0 auto;width:100%;">
+
+        {# ── Bandeau identité ── #}
+        <div style="display:flex;align-items:center;gap:16px;background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px 24px;">
+            <div style="width:56px;height:56px;border-radius:50%;background:rgba(201,168,76,.15);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:var(--gold);flex-shrink:0;"
+                x-text="(profil.Prenom || '?').charAt(0).toUpperCase()"></div>
+            <div>
+                <div style="font-size:20px;font-weight:700;font-family:var(--font-display);"
+                    x-text="(profil.Prenom || '') + ' ' + (profil.Nom || '')"></div>
+                <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">
+                    <span x-text="profil.Grade || ''"></span>
+                    <span x-show="profil.Grade && profil.Subdivision"> · </span>
+                    <span x-text="profil.Subdivision || ''"></span>
+                </div>
+            </div>
+            <div style="margin-left:auto;">
+                <span style="font-size:11px;background:rgba(201,168,76,.15);color:var(--gold);border:1px solid rgba(201,168,76,.3);border-radius:4px;padding:3px 10px;font-family:var(--font-display);font-weight:700;letter-spacing:.06em;">
+                    Lecteur
+                </span>
+            </div>
+        </div>
+
+        {# ── Alerte / succès ── #}
+        <div x-show="saveError" class="alert-error" x-text="saveError"></div>
+        <div x-show="saveSuccess"
+            style="padding:8px 14px;background:rgba(110,195,138,.08);border:1px solid rgba(110,195,138,.3);border-radius:var(--radius-sm);font-size:13px;color:#6ec38a;"
+            x-text="saveSuccess"></div>
+
+        {# ── Informations modifiables ── #}
+        <div style="background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;">
+            <div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+                <span style="font-size:13px;font-weight:700;font-family:var(--font-display);letter-spacing:.06em;">INFORMATIONS PERSONNELLES</span>
+                <button class="btn-primary" style="font-size:12px;padding:5px 14px;" :disabled="saving" @click="save()">
+                    <i x-show="saving" class="fa-solid fa-spinner fa-spin"></i>
+                    <span x-show="!saving"><i class="fa-solid fa-floppy-disk"></i> Enregistrer</span>
+                </button>
+            </div>
+            <div style="padding:20px;display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+
+                <div class="form-group">
+                    <label>NiGend <span style="color:var(--text-muted);font-size:10px;">(numéro matricule)</span></label>
+                    <input type="text" x-model="form.NiGend" maxlength="50" placeholder="ex: 123456">
+                </div>
+
+                <div class="form-group">
+                    <label>Grade</label>
+                    <input type="text" x-model="form.Grade" maxlength="100" placeholder="ex: Maréchal des logis chef">
+                </div>
+
+                <div class="form-group">
+                    <label>Prénom</label>
+                    <input type="text" x-model="form.Prenom" maxlength="100">
+                </div>
+
+                <div class="form-group">
+                    <label>Nom</label>
+                    <input type="text" x-model="form.Nom" maxlength="100">
+                </div>
+
+                <div class="form-group" style="grid-column:1/-1;">
+                    <label>Adresse e-mail</label>
+                    <input type="email" x-model="form.Mail" maxlength="200">
+                </div>
+
+                <div class="form-group" style="grid-column:1/-1;">
+                    <label>
+                        Identifiant Tchap
+                        <span style="font-size:10px;color:var(--text-muted);margin-left:6px;">format @prenom.nom-gend:agent.interieur.tchap.gouv.fr</span>
+                    </label>
+                    <input type="text" x-model="form.user_id" maxlength="200" placeholder="@prenom.nom-gend:agent.interieur.tchap.gouv.fr" style="font-family:monospace;font-size:12px;">
+                </div>
+
+                <div class="form-group">
+                    <label>Statut</label>
+                    <input type="text" x-model="form.Statut" maxlength="100" placeholder="ex: En activité">
+                </div>
+
+                <div class="form-group">
+                    <label>Subdivision</label>
+                    <input type="text" x-model="form.Subdivision" maxlength="200" placeholder="ex: Escadron 1">
+                </div>
+
+            </div>
+        </div>
+
+        {# ── Unités attribuées (lecture seule) ── #}
+        <div style="background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;">
+            <div style="padding:14px 20px;border-bottom:1px solid var(--border);">
+                <span style="font-size:13px;font-weight:700;font-family:var(--font-display);letter-spacing:.06em;">UNITÉS ATTRIBUÉES</span>
+                <span style="margin-left:8px;font-size:11px;color:var(--text-muted);">(gérées par votre administrateur)</span>
+            </div>
+            <div style="padding:14px 20px;">
+                <template x-if="profil._unites && profil._unites.length > 0">
+                    <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                        <template x-for="u in profil._unites" :key="u.id">
+                            <span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;background:rgba(124,58,237,.1);border:1px solid rgba(124,58,237,.2);color:#a78bfa;border-radius:6px;padding:4px 10px;">
+                                <i class="fa-solid fa-sitemap" style="font-size:10px;"></i>
+                                <span x-text="u.Nom"></span>
+                                <span x-show="u.code" style="font-size:10px;opacity:.7;" x-text="'(' + u.code + ')'"></span>
+                                <span style="font-size:9px;opacity:.6;text-transform:uppercase;" x-text="u.type"></span>
+                            </span>
+                        </template>
+                    </div>
+                </template>
+                <template x-if="!profil._unites || profil._unites.length === 0">
+                    <span style="font-size:12px;color:var(--text-muted);font-style:italic;">Aucune unité attribuée</span>
+                </template>
+            </div>
+        </div>
+
+        {# ── Salons attribués (lecture seule) ── #}
+        <div style="background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;">
+            <div style="padding:14px 20px;border-bottom:1px solid var(--border);">
+                <span style="font-size:13px;font-weight:700;font-family:var(--font-display);letter-spacing:.06em;">SALONS TCHAP ATTRIBUÉS</span>
+                <span style="margin-left:8px;font-size:11px;color:var(--text-muted);">(gérés par votre administrateur)</span>
+            </div>
+            <div style="padding:14px 20px;">
+                <template x-if="profil._salons && profil._salons.length > 0">
+                    <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                        <template x-for="s in profil._salons" :key="s.id">
+                            <span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:6px;padding:4px 10px;">
+                                <i class="fa-solid fa-comments" style="font-size:10px;color:var(--blue-light);"></i>
+                                <span x-text="s.Nom"></span>
+                                <span x-show="s.Type" style="font-size:9px;color:var(--text-muted);text-transform:uppercase;" x-text="s.Type"></span>
+                            </span>
+                        </template>
+                    </div>
+                </template>
+                <template x-if="!profil._salons || profil._salons.length === 0">
+                    <span style="font-size:12px;color:var(--text-muted);font-style:italic;">Aucun salon attribué</span>
+                </template>
+            </div>
+        </div>
+
+    </div>
+
+</div>
+{% endblock %}
+
+{% block head_extra %}
+<script>
+function profilView() {
+    return {
+        loading:     true,
+        saving:      false,
+        saveError:   null,
+        saveSuccess: null,
+        profil:      {},
+        form:        {},
+
+        async load() {
+            this.loading = true;
+            try {
+                this.profil = await apiFetch('/api/mon-profil');
+                this.resetForm();
+            } catch (e) {
+                console.error(e);
+            }
+            this.loading = false;
+        },
+
+        resetForm() {
+            this.form = {
+                NiGend:      this.profil.NiGend      || '',
+                Nom:         this.profil.Nom          || '',
+                Prenom:      this.profil.Prenom       || '',
+                Mail:        this.profil.Mail         || '',
+                user_id:     this.profil.user_id      || '',
+                Statut:      this.profil.Statut       || '',
+                Subdivision: this.profil.Subdivision  || '',
+                Grade:       this.profil.Grade        || '',
+            };
+        },
+
+        async save() {
+            this.saveError   = null;
+            this.saveSuccess = null;
+            this.saving      = true;
+            try {
+                const updated = await apiFetch('/api/mon-profil', {
+                    method: 'PATCH',
+                    body: JSON.stringify(this.form),
+                });
+                this.profil      = updated;
+                this.saveSuccess = 'Profil mis à jour avec succès.';
+                setTimeout(() => { this.saveSuccess = null; }, 4000);
+            } catch (e) {
+                this.saveError = e.message;
+            } finally {
+                this.saving = false;
+            }
+        },
+    };
+}
+</script>
+{% endblock %}

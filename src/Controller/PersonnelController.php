@@ -64,8 +64,8 @@ class PersonnelController extends AbstractController
             return $this->redirectToRoute(‘app_carto’);
         }
 
-        // Lecteur : accès en lecture seule à l’annuaire
-        return $this->redirectToRoute(‘app_personnel’);
+        // Lecteur : fiche personnelle uniquement
+        return $this->redirectToRoute(‘app_mon_profil’);
     }
 
     #[Route('/personnel', name: 'app_personnel', methods: ['GET'])]
@@ -73,6 +73,9 @@ class PersonnelController extends AbstractController
     {
         /** @var AppUser $user */
         $user = $this->getUser();
+        if (!$this->roles->canManage($user)) {
+            return $this->redirectToRoute('app_mon_profil');
+        }
 
         return $this->render('personnel/index.html.twig', [
             'user'        => $user->toArray(),
@@ -88,8 +91,7 @@ class PersonnelController extends AbstractController
         /** @var AppUser $user */
         $user = $this->getUser();
 
-        if ($user->isSysAdmin() || !$this->roles->canManage($user)) {
-            // Sysadmin et lecteurs (lecture seule) : tout le personnel
+        if ($user->isSysAdmin()) {
             $rows = $this->db->fetchAllAssociative(
                 'SELECT * FROM personnel ORDER BY "Nom", "Prenom"'
             );
