@@ -108,9 +108,9 @@
                         <i class="fa-solid fa-plus" :class="{ 'fa-spin': espace._loading }"></i>
                     </button>
                     <button class="btn-icon" x-show="espace.space_id"
-                        @click="checkMembers(espace)" :disabled="espace._loading"
-                        title="Vérifier les membres Tchap" style="color:#6ec38a;">
-                        <i class="fa-solid fa-users-check" :class="{ 'fa-spin': espace._loading }" style="font-size:11px;"></i>
+                        @click="openMembersModal(espace)" :disabled="espace._loading"
+                        title="Voir les membres de l'espace" style="color:#6ec38a;">
+                        <i class="fa-solid fa-users"></i>
                     </button>
                     <button class="btn-icon" x-show="espace.space_id"
                         @click="openInviteModal(espace)" title="Inviter dans l'espace"
@@ -321,6 +321,70 @@
         </div>
     </div>
 
+    {# ── Modal Membres de l'espace ── #}
+    <div class="modal-overlay" x-show="membersTarget !== null" x-cloak @click.self="closeMembersModal()">
+        <div class="modal" style="max-width:520px;width:95vw;display:flex;flex-direction:column;max-height:80vh;">
+            <div class="modal-header" style="flex-shrink:0;">
+                <div>
+                    <h3 style="margin:0;"><i class="fa-solid fa-users" style="color:#6ec38a;margin-right:8px;"></i>Membres de l'espace</h3>
+                    <div style="font-size:12px;color:var(--text-muted);margin-top:3px;" x-text="membersTarget?.Nom ?? ''"></div>
+                </div>
+                <button class="btn-icon" @click="closeMembersModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div class="modal-body" style="flex:1;overflow-y:auto;min-height:0;">
+                <div x-show="membersLoading" style="display:flex;justify-content:center;padding:20px;">
+                    <div class="spinner"></div>
+                </div>
+                <div x-show="membersError" class="alert-error" x-text="membersError"></div>
+
+                <template x-if="!membersLoading && !membersError">
+                    <div>
+                        {# Résumé #}
+                        <div style="display:flex;gap:12px;margin-bottom:12px;font-size:12px;">
+                            <span style="color:#6ec38a;">
+                                <i class="fa-solid fa-circle-check" style="margin-right:4px;font-size:10px;"></i>
+                                <span x-text="membersList.filter(m=>m.membership==='join').length"></span> présents
+                            </span>
+                            <span x-show="membersList.filter(m=>m.membership==='invite').length > 0" style="color:var(--gold);">
+                                <i class="fa-solid fa-envelope" style="margin-right:4px;font-size:10px;"></i>
+                                <span x-text="membersList.filter(m=>m.membership==='invite').length"></span> invités
+                            </span>
+                            <span x-show="membersList.length === 0" style="color:var(--text-muted);">Aucun membre</span>
+                        </div>
+
+                        {# Liste #}
+                        <div style="border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;">
+                            <template x-for="m in membersList" :key="m.userId">
+                                <div style="display:flex;align-items:center;gap:10px;padding:7px 12px;border-bottom:1px solid var(--border);font-size:12px;">
+                                    <div style="width:28px;height:28px;border-radius:50%;background:var(--bg-elevated);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;color:var(--text-muted);">
+                                        <i class="fa-solid fa-user"></i>
+                                    </div>
+                                    <span style="flex:1;font-family:monospace;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary);"
+                                        x-text="m.userId"></span>
+                                    <span class="ec-member-badge" :class="m.membership"
+                                        x-text="{ join:'Présent', invite:'Invité', leave:'Parti', ban:'Banni' }[m.membership] ?? m.membership">
+                                    </span>
+                                </div>
+                            </template>
+                            <div x-show="membersList.length === 0" style="padding:20px;text-align:center;color:var(--text-muted);font-size:12px;">
+                                Aucun membre dans cet espace
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
+            <div class="modal-footer" style="flex-shrink:0;">
+                <button class="btn-ghost" @click="closeMembersModal()">Fermer</button>
+                <button class="btn-ghost" @click="openInviteModal(membersTarget); closeMembersModal()"
+                    x-show="membersTarget?.space_id" style="color:var(--blue-light);">
+                    <i class="fa-solid fa-user-plus"></i> Inviter
+                </button>
+            </div>
+        </div>
+    </div>
+
     {# ── Modal Suppression ── #}
     <div class="modal-overlay" x-show="deleteTarget !== null" x-cloak>
         <div class="modal modal-sm">
@@ -355,50 +419,53 @@
 .espace-card {
     display: flex;
     flex-direction: column;
-    min-height: 220px;
+    height: 270px;      /* hauteur fixe : toutes les cartes identiques */
+    min-height: 0;
+    overflow: hidden;
 }
 
-/* space_id : 1 ligne tronquée, hauteur fixe */
+/* Nom : une seule ligne, tronquée */
+.espace-card .card-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* space_id monospace tronqué */
 .espace-card .ec-meta {
     font-size: 9px;
+    font-family: monospace;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     margin-bottom: 4px;
     flex-shrink: 0;
-    min-height: 14px;
+    color: var(--text-muted);
+    height: 13px;
 }
 
-/* Zone centrale flexible — absorbe l'espace variable */
+/* Zone centrale flexible */
 .espace-card .card-middle {
     flex: 1;
     min-height: 0;
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 5px;
 }
 
-/* Description : 2 lignes max, toujours présente */
+/* Description : 1 ligne max */
 .espace-card .ec-desc {
     overflow: hidden;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-size: 11px;
     color: var(--text-secondary);
-    line-height: 1.4;
     flex-shrink: 0;
+    height: 16px;
 }
 
-/* Bloc salons */
-.ec-salons {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    min-height: 0;
-    overflow: hidden;
-}
+/* Compteur salons */
 .ec-salons-header {
     font-size: 10px;
     font-weight: 600;
@@ -409,13 +476,13 @@
     flex-shrink: 0;
 }
 
-/* Pills sans scrollbar — max 3 rangées puis tronqué */
+/* Pills : 2 rangées max, overflow hidden — pas de scrollbar */
 .ec-salons-pills {
     display: flex;
     flex-wrap: wrap;
     gap: 3px;
     overflow: hidden;
-    max-height: 68px;  /* ≈ 3 rangées × (20px + 4px gap) */
+    max-height: 46px;   /* 2 rangées × (20px + 3px gap) */
 }
 .ec-pill {
     display: inline-flex;
@@ -427,33 +494,48 @@
     border-radius: 4px;
     padding: 2px 6px;
     white-space: nowrap;
-    max-width: 160px;
+    max-width: 150px;
+    overflow: hidden;
+}
+.ec-pill span:first-child {
     overflow: hidden;
     text-overflow: ellipsis;
 }
 .ec-empty {
-    font-size: 11px;
+    font-size: 10px;
     color: var(--text-muted);
     font-style: italic;
 }
 
-/* Statut membres — hauteur fixe, toujours présent */
+/* Statut membres — 1 ligne fixe */
 .ec-status {
     flex-shrink: 0;
-    height: 18px;
+    height: 16px;
     overflow: hidden;
     font-size: 10px;
     display: flex;
     align-items: center;
-    margin-top: 4px;
+    gap: 8px;
 }
 
-/* Actions — toujours en bas, pas de margin variable */
+/* Actions */
 .espace-card .card-actions {
     flex-shrink: 0;
-    margin-top: 0;
     padding-top: 6px;
+    margin-top: 0;
 }
+
+/* Modal membres */
+.ec-member-badge {
+    font-size: 10px;
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-weight: 600;
+}
+.ec-member-badge.join   { background:rgba(110,195,138,.15);color:#6ec38a;border:1px solid rgba(110,195,138,.3); }
+.ec-member-badge.invite { background:rgba(201,161,60,.15);color:var(--gold);border:1px solid rgba(201,161,60,.3); }
+.ec-member-badge.leave  { background:rgba(150,150,150,.1);color:var(--text-muted);border:1px solid var(--border); }
+.ec-member-badge.ban    { background:rgba(192,57,43,.1);color:var(--red-light);border:1px solid rgba(192,57,43,.2); }
 </style>
 <script>
 function espaceView() {
@@ -487,6 +569,12 @@ function espaceView() {
         // Suppression
         deleteTarget: null,
         deleteError:  null,
+
+        // Modal membres
+        membersTarget:  null,
+        membersLoading: false,
+        membersError:   null,
+        membersList:    [],
 
         // Initialise les propriétés réactives UI sur un objet espace brut
         _initEspace(e) {
@@ -602,6 +690,10 @@ function espaceView() {
                 });
                 espace._salons = data._salons ?? espace._salons;
                 if (data._tchap_warning) this.addSalonError = data._tchap_warning;
+                // Feedback auto-invite
+                if (data._invited > 0) {
+                    toast(`${data._invited} membre(s) du salon invité(s) dans l'espace${data._skipped > 0 ? ` (${data._skipped} déjà présents)` : ''}`, 'success');
+                }
             } catch (e) {
                 this.addSalonError = e.message;
             } finally {
@@ -699,28 +791,32 @@ function espaceView() {
             this.saving = false;
         },
 
-        // ── Vérification membres Tchap ──
+        // ── Modal membres ──
 
-        async checkMembers(espace) {
-            if (!espace.space_id) return;
-            espace._loading = true;
-            espace._error   = null;
+        async openMembersModal(espace) {
+            this.membersTarget  = espace;
+            this.membersLoading = true;
+            this.membersError   = null;
+            this.membersList    = [];
             try {
-                const data = await apiFetch(`/api/tchap/members/${encodeURIComponent(espace.space_id)}`);
-                const members = Array.isArray(data) ? data : (data.members || []);
-                const joined  = members.filter(m => (m.content?.membership ?? m.membership ?? 'join') === 'join').length;
-                const invited = members.filter(m => (m.content?.membership ?? m.membership) === 'invite').length;
-                espace._memberCount = { joined, invited, total: members.length };
-                if (invited > 0) {
-                    toast(`Espace "${espace.Nom}" : ${joined} membre(s), ${invited} invitation(s) en attente`, 'info');
-                } else {
-                    toast(`Espace "${espace.Nom}" : ${joined} membre(s) actif(s)`, 'success');
-                }
+                const data = await apiFetch(`/api/espaces/${espace.id}/members`);
+                this.membersList = data.members ?? [];
+                // Mettre à jour le compteur sur la vignette
+                espace._memberCount = {
+                    joined:  this.membersList.filter(m => m.membership === 'join').length,
+                    invited: this.membersList.filter(m => m.membership === 'invite').length,
+                };
             } catch (e) {
-                espace._error = e.message;
+                this.membersError = e.message;
             } finally {
-                espace._loading = false;
+                this.membersLoading = false;
             }
+        },
+
+        closeMembersModal() {
+            this.membersTarget = null;
+            this.membersList   = [];
+            this.membersError  = null;
         },
 
         // ── Suppression ──

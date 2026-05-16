@@ -223,21 +223,58 @@ class EspaceController extends AbstractController
             ['eid' => $id, 'sid' => $salonId]
         );
 
-        // Lien Tchap si les deux ont leur ID Matrix
+        $cfg        = $this->config->getTchapConfig();
         $tchapError = null;
+        $invited    = 0;
+        $skipped    = 0;
+
         if (!empty($espace['space_id']) && !empty($salon['room_id'])) {
+            // 1. Ajouter le salon comme enfant de l'espace
             try {
                 $this->tchap->addChildToSpace(
                     spaceId: $espace['space_id'],
                     roomId:  $salon['room_id'],
-                    config:  $this->config->getTchapConfig(),
+                    config:  $cfg,
                 );
             } catch (\Throwable $e) {
                 $tchapError = $e->getMessage();
             }
+
+            // 2. Auto-inviter les membres du salon dans l'espace
+            try {
+                $botId = strtolower($cfg['botUserId'] ?? '');
+
+                $salonRaw    = $this->tchap->getMembers($salon['room_id'], $cfg);
+                $espaceRaw   = $this->tchap->getMembers($espace['space_id'], $cfg);
+                $espaceUids  = array_map(fn($m) => strtolower($m['state_key'] ?? ''), $espaceRaw);
+
+                foreach ($salonRaw as $m) {
+                    $uid  = strtolower($m['state_key'] ?? '');
+                    $memb = $m['content']['membership'] ?? 'join';
+                    if (!$uid || $uid === $botId || $memb !== 'join') {
+                        continue;
+                    }
+                    if (in_array($uid, $espaceUids, true)) {
+                        $skipped++;
+                        continue;
+                    }
+                    try {
+                        $this->tchap->invite($espace['space_id'], $uid, $cfg);
+                        $invited++;
+                    } catch (\Throwable) {
+                        // non critique
+                    }
+                }
+            } catch (\Throwable) {
+                // non critique — le lien salon/espace est déjà enregistré
+            }
         }
 
-        $response = ['_salons' => $this->getSalons($id)];
+        $response = [
+            '_salons'  => $this->getSalons($id),
+            '_invited' => $invited,
+            '_skipped' => $skipped,
+        ];
         if ($tchapError) {
             $response['_tchap_warning'] = "Salon lié en base mais erreur Tchap : $tchapError";
         }
@@ -321,6 +358,53 @@ class EspaceController extends AbstractController
                 config: $this->config->getTchapConfig(),
             );
             return $this->json(['ok' => true]);
+        } catch (\Throwable $e) {
+            return $this->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    // GET /api/espaces/{id}/members — membres de l'espace Tchap avec leur statut
+    #[Route('/api/espaces/{id}/members', name: 'api_espaces_members', methods: ['GET'])]
+    public function members(int $id): JsonResponse
+    {
+        /** @var AppUser $user */
+        $user = $this->getUser();
+        if (!$this->roles->canManage($user)) {
+            return $this->json(['error' => 'Accès réservé aux gestionnaires'], 403);
+        }
+
+        $espace = $this->db->fetchAssociative('SELECT * FROM espaces WHERE id = :id', ['id' => $id]);
+        if (!$espace) {
+            return $this->json(['error' => 'Espace introuvable'], 404);
+        }
+
+        if (empty($espace['space_id'])) {
+            return $this->json(['members' => []]);
+        }
+
+        try {
+            $cfg    = $this->config->getTchapConfig();
+            $botId  = strtolower($cfg['botUserId'] ?? '');
+            $raw    = $this->tchap->getMembers($espace['space_id'], $cfg);
+
+            $members = [];
+            foreach ($raw as $m) {
+                $uid  = strtolower($m['state_key'] ?? '');
+                $memb = $m['content']['membership'] ?? 'join';
+                if (!$uid || $uid === $botId) {
+                    continue;
+                }
+                $members[] = ['userId' => $uid, 'membership' => $memb];
+            }
+
+            // Tri : join → invite → reste
+            $order = ['join' => 0, 'invite' => 1];
+            usort($members, fn($a, $b) =>
+                ($order[$a['membership']] ?? 2) <=> ($order[$b['membership']] ?? 2)
+                ?: strcmp($a['userId'], $b['userId'])
+            );
+
+            return $this->json(['members' => $members]);
         } catch (\Throwable $e) {
             return $this->json(['error' => $e->getMessage()], 500);
         }
