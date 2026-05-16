@@ -32,95 +32,93 @@
         </div>
 
         <template x-for="espace in espaces" :key="espace.id">
-            <div class="card">
+            <div class="card espace-card">
+
+                {# En-tête #}
                 <div class="card-header">
                     <div style="display:flex;align-items:center;gap:8px;min-width:0;">
-                        <i class="fa-solid fa-layer-group" style="color:var(--gold);flex-shrink:0;"></i>
+                        <i class="fa-solid fa-layer-group" style="color:var(--gold);flex-shrink:0;font-size:13px;"></i>
                         <span class="card-name" x-text="espace.Nom"></span>
                     </div>
                     <span class="card-type-badge" x-show="espace.space_id"
-                        style="background:rgba(110,195,138,.15);color:#6ec38a;border-color:rgba(110,195,138,.3);">
-                        Tchap ✓
-                    </span>
+                        style="background:rgba(110,195,138,.15);color:#6ec38a;">Tchap ✓</span>
                     <span class="card-type-badge" x-show="!espace.space_id"
-                        style="background:rgba(192,57,43,.08);color:var(--red-light);border-color:rgba(192,57,43,.2);">
-                        Non créé
-                    </span>
+                        style="background:rgba(192,57,43,.08);color:var(--red-light);">Non créé</span>
                 </div>
 
-                <div x-show="espace.space_id" class="card-meta"
-                    style="font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace;"
-                    x-text="espace.space_id"></div>
-
-                <div x-show="espace.Description" class="card-desc" x-text="espace.Description"></div>
-
-                {# ── Salons liés ── #}
-                <div style="margin-top:8px;">
-                    <div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:4px;display:flex;align-items:center;gap:6px;">
-                        <i class="fa-solid fa-comments" style="font-size:10px;"></i>
-                        <span x-text="espace._salons.length + ' salon' + (espace._salons.length > 1 ? 's' : '')"></span>
-                    </div>
-                    <div x-show="espace._salons.length > 0"
-                        style="display:flex;flex-wrap:wrap;gap:4px;max-height:80px;overflow-y:auto;">
-                        <template x-for="salon in espace._salons" :key="salon.id">
-                            <span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:4px;padding:2px 7px;">
-                                <span x-text="salon.Nom"></span>
-                                {% if permissions.canManage %}
-                                <button @click.stop="removeSalon(espace, salon)"
-                                    style="background:none;border:none;cursor:pointer;color:var(--text-muted);padding:0;line-height:1;font-size:10px;"
-                                    :disabled="espace._loading"
-                                    title="Retirer ce salon">
-                                    <i class="fa-solid fa-xmark"></i>
-                                </button>
-                                {% endif %}
-                            </span>
-                        </template>
-                    </div>
-                    <div x-show="espace._salons.length === 0"
-                        style="font-size:11px;color:var(--text-muted);font-style:italic;">
-                        Aucun salon associé
-                    </div>
+                {# space_id ou warning — toujours sur 1 ligne #}
+                <div class="card-meta ec-meta">
+                    <span x-show="espace.space_id" style="font-family:monospace;" x-text="espace.space_id"></span>
+                    <span x-show="!espace.space_id" style="color:var(--red-light);">⚠ Pas de space_id</span>
                 </div>
 
-                {# Compteur membres Tchap #}
-                <div x-show="espace.space_id && espace._memberCount !== null"
-                    style="margin-top:6px;display:flex;align-items:center;gap:8px;font-size:11px;">
-                    <span style="color:#6ec38a;" x-text="'✓ ' + (espace._memberCount?.joined ?? 0) + ' membre(s)'"></span>
-                    <span x-show="espace._memberCount?.invited > 0"
-                        style="color:var(--gold);" x-text="'+ ' + espace._memberCount.invited + ' invitation(s) en attente'"></span>
+                {# Zone centrale flexible — description + salons liés #}
+                <div class="card-middle">
+
+                    {# Description : toujours présente, vide si aucune #}
+                    <div class="card-desc ec-desc" x-text="espace.Description || ''"></div>
+
+                    {# Salons liés #}
+                    <div class="ec-salons">
+                        <div class="ec-salons-header">
+                            <i class="fa-solid fa-comments"></i>
+                            <span x-text="(espace._salons?.length ?? 0) + ' salon' + ((espace._salons?.length ?? 0) > 1 ? 's' : '')"></span>
+                        </div>
+                        <div class="ec-salons-pills">
+                            <template x-if="espace._salons?.length === 0">
+                                <span class="ec-empty">Aucun salon associé</span>
+                            </template>
+                            <template x-for="salon in espace._salons" :key="salon.id">
+                                <span class="ec-pill">
+                                    <span x-text="salon.Nom"></span>
+                                    {% if permissions.canManage %}
+                                    <button @click.stop="removeSalon(espace, salon)"
+                                        :disabled="espace._loading" title="Retirer ce salon"
+                                        style="background:none;border:none;cursor:pointer;color:var(--text-muted);padding:0;line-height:1;font-size:9px;">
+                                        <i class="fa-solid fa-xmark"></i>
+                                    </button>
+                                    {% endif %}
+                                </span>
+                            </template>
+                        </div>
+                    </div>
+
                 </div>
 
-                <div x-show="espace._error"
-                    style="margin-top:6px;font-size:11px;color:var(--red-light);white-space:pre-wrap;"
-                    x-text="espace._error"></div>
+                {# Membres Tchap + erreur — hauteur fixe #}
+                <div class="ec-status">
+                    <template x-if="espace._memberCount !== null">
+                        <span>
+                            <span style="color:#6ec38a;" x-text="'✓ ' + (espace._memberCount?.joined ?? 0) + ' membre(s)'"></span>
+                            <span x-show="espace._memberCount?.invited > 0" style="color:var(--gold);margin-left:6px;"
+                                x-text="'+ ' + espace._memberCount.invited + ' en attente'"></span>
+                        </span>
+                    </template>
+                    <template x-if="espace._error">
+                        <span style="color:var(--red-light);" x-text="espace._error"></span>
+                    </template>
+                </div>
 
-                {# ── Actions ── #}
-                <div class="card-actions" style="margin-top:10px;">
+                {# Actions — toujours en bas #}
+                <div class="card-actions">
                     {% if permissions.canManage %}
                     <button class="btn-icon" x-show="!espace.space_id"
-                        @click="createTchapSpace(espace)"
-                        :disabled="espace._loading"
-                        title="Créer l'espace sur Tchap"
-                        style="color:var(--gold);">
+                        @click="createTchapSpace(espace)" :disabled="espace._loading"
+                        title="Créer l'espace sur Tchap" style="color:var(--gold);">
                         <i class="fa-solid fa-plus" :class="{ 'fa-spin': espace._loading }"></i>
                     </button>
                     <button class="btn-icon" x-show="espace.space_id"
-                        @click="checkMembers(espace)"
-                        :disabled="espace._loading"
-                        title="Vérifier les membres Tchap"
-                        style="color:#6ec38a;">
+                        @click="checkMembers(espace)" :disabled="espace._loading"
+                        title="Vérifier les membres Tchap" style="color:#6ec38a;">
                         <i class="fa-solid fa-users-check" :class="{ 'fa-spin': espace._loading }" style="font-size:11px;"></i>
                     </button>
                     <button class="btn-icon" x-show="espace.space_id"
-                        @click="openInviteModal(espace)"
-                        title="Inviter un membre dans l'espace"
+                        @click="openInviteModal(espace)" title="Inviter dans l'espace"
                         style="color:var(--blue-light);">
                         <i class="fa-solid fa-user-plus"></i>
                     </button>
-                    <button class="btn-icon"
-                        @click="openAddSalonModal(espace)"
-                        :disabled="espace._loading"
-                        title="Gérer les salons de l'espace">
+                    <button class="btn-icon" @click="openAddSalonModal(espace)"
+                        :disabled="espace._loading" title="Gérer les salons">
                         <i class="fa-solid fa-sliders"></i>
                     </button>
                     <button class="btn-icon" @click="openModal('edit', espace)" title="Modifier">
@@ -129,11 +127,12 @@
                     {% endif %}
                     {% if permissions.canAdmin %}
                     <button class="btn-icon" @click="startDelete(espace)"
-                        title="Supprimer l'espace" style="color:var(--red-light);">
+                        title="Supprimer" style="color:var(--red-light);">
                         <i class="fa-solid fa-trash"></i>
                     </button>
                     {% endif %}
                 </div>
+
             </div>
         </template>
     </div>
@@ -351,6 +350,111 @@
 {% endblock %}
 
 {% block head_extra %}
+<style>
+/* ── Vignettes espaces — structure uniforme ────────────────────────────── */
+.espace-card {
+    display: flex;
+    flex-direction: column;
+    min-height: 220px;
+}
+
+/* space_id : 1 ligne tronquée, hauteur fixe */
+.espace-card .ec-meta {
+    font-size: 9px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-bottom: 4px;
+    flex-shrink: 0;
+    min-height: 14px;
+}
+
+/* Zone centrale flexible — absorbe l'espace variable */
+.espace-card .card-middle {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+/* Description : 2 lignes max, toujours présente */
+.espace-card .ec-desc {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    flex-shrink: 0;
+}
+
+/* Bloc salons */
+.ec-salons {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-height: 0;
+    overflow: hidden;
+}
+.ec-salons-header {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
+}
+
+/* Pills sans scrollbar — max 3 rangées puis tronqué */
+.ec-salons-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    overflow: hidden;
+    max-height: 68px;  /* ≈ 3 rangées × (20px + 4px gap) */
+}
+.ec-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 10px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 6px;
+    white-space: nowrap;
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.ec-empty {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* Statut membres — hauteur fixe, toujours présent */
+.ec-status {
+    flex-shrink: 0;
+    height: 18px;
+    overflow: hidden;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    margin-top: 4px;
+}
+
+/* Actions — toujours en bas, pas de margin variable */
+.espace-card .card-actions {
+    flex-shrink: 0;
+    margin-top: 0;
+    padding-top: 6px;
+}
+</style>
 <script>
 function espaceView() {
     return {
