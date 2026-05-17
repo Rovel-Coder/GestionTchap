@@ -58,12 +58,7 @@
                 <span class="nav-label">Crise</span>
             </a>
             {% endif %}
-            {% if (uiConfig.roleFeatures[user.role].carto ?? false) or permissions.isSysAdmin %}
-            <a href="{{ path('app_carto') }}" class="nav-btn {% if app.request.attributes.get('_route') starts with 'app_carto' %}active{% endif %}">
-                <i class="fa-solid fa-map-location-dot"></i>
-                <span class="nav-label">Carto</span>
-            </a>
-            {% endif %}
+            {# Carto temporairement désactivé #}
             <a href="{{ path('app_messages_page') }}" class="nav-btn {% if app.request.attributes.get('_route') starts with 'app_messages' %}active{% endif %}">
                 <i class="fa-solid fa-paper-plane"></i>
                 <span class="nav-label">Messages</span>

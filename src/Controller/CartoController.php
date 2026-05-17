@@ -26,6 +26,8 @@ class CartoController extends AbstractController
     #[Route('/carto', name: 'app_carto', methods: ['GET'])]
     public function page(): Response
     {
+        throw $this->createNotFoundException('La cartographie est temporairement désactivée.');
+
         /** @var AppUser $user */
         $user = $this->getUser();
 
