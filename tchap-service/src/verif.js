@@ -117,7 +117,7 @@ function calcEmoji(sharedSecret, senderUserId, senderDeviceId, senderKeyB64,
 function calcMac(sharedSecret, senderUserId, senderDeviceId,
   receiverUserId, receiverDeviceId, txnId, keyId, keyValue) {
   const infoMac = [
-    'MATRIX_KEY_VERIFICATION_MAC_v2',
+    'MATRIX_KEY_VERIFICATION_MAC',
     senderUserId, senderDeviceId,
     receiverUserId, receiverDeviceId,
     txnId, keyId,
