@@ -165,6 +165,39 @@
                     </div>
                 </div>
 
+                {# Bot Tchap dédié (admin / sysadmin uniquement) #}
+                {% if permissions.canAdmin %}
+                <div style="border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-card);overflow:hidden;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);">
+                        <div>
+                            <span style="font-family:var(--font-display);font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--text-muted);">BOT TCHAP DÉDIÉ</span>
+                            <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Bot secondaire utilisé pour cette unité (laissez vide pour le bot principal)</div>
+                        </div>
+                    </div>
+                    <div style="padding:14px 16px;display:flex;align-items:center;gap:10px;">
+                        <select x-model.number="selectedBotId" style="flex:1;">
+                            <option :value="null">— Bot principal (par défaut) —</option>
+                            <template x-for="bot in bots.filter(b => !b.isPrincipal)" :key="bot.id">
+                                <option :value="bot.id"
+                                    x-text="bot.name + ' (' + bot.userId + ')' + (!bot.connected ? ' ✗ non connecté' : ' ✓')">
+                                </option>
+                            </template>
+                        </select>
+                        <button class="btn-primary" style="white-space:nowrap;"
+                            :disabled="botSaving"
+                            @click="saveBotId()">
+                            <i x-show="botSaving" class="fa-solid fa-spinner fa-spin"></i>
+                            <span x-show="!botSaving">Enregistrer</span>
+                        </button>
+                    </div>
+                    <div x-show="selectedBotId && !bots.find(b => b.id === selectedBotId)?.connected"
+                        style="padding:6px 16px 12px;font-size:11px;color:var(--yellow,#c9a84c);">
+                        <i class="fa-solid fa-triangle-exclamation" style="margin-right:4px;"></i>
+                        Ce bot n'est pas connecté. Connectez-le depuis la page Configuration.
+                    </div>
+                </div>
+                {% endif %}
+
                 {# Administrateurs côte à côte #}
                 <div style="display:flex;gap:12px;align-items:flex-start;">
 

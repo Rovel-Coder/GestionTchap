@@ -3069,11 +3069,17 @@ function hierarchieView() {
     addAdminError:  null,
     addAdminSearch: '',
 
+    // ── Bot par unité (admin/sysadmin)
+    bots:          [],
+    selectedBotId: null,
+    botSaving:     false,
+
     async load() {
       this.loading = true;
       try { this.niveaux   = await apiFetch('/api/niveaux')   || []; } catch (e) { toast('Niveaux: ' + e.message, 'error'); }
       try { this.unites    = await apiFetch('/api/unites')    || []; } catch (e) { toast('Unités: '  + e.message, 'error'); }
       try { this.personnel = await apiFetch('/api/personnel') || []; } catch (e) { /* non-bloquant */ }
+      try { this.bots      = await apiFetch('/api/bots')      || []; } catch (e) { /* admin-only, ignoré pour les autres rôles */ }
       this.rebuildTree();
       this.loading = false;
       this.$watch('search',        () => this.rebuildTree());
@@ -3164,6 +3170,7 @@ function hierarchieView() {
         return;
       }
       this.selected = unite;
+      this.selectedBotId = unite.bot_id ?? null;
       this.admins = [];
       this.loadAdmins(unite.id);
     },
@@ -3327,6 +3334,22 @@ function hierarchieView() {
         this.admins = this.admins.filter(a => a.id !== admin.id);
         toast('Rôle retiré', 'success');
       } catch (e) { toast(e.message, 'error'); }
+    },
+
+    async saveBotId() {
+      if (!this.selected) return;
+      this.botSaving = true;
+      try {
+        const updated = await apiFetch(`/api/unites/${this.selected.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ bot_id: this.selectedBotId }),
+        });
+        const idx = this.unites.findIndex(u => u.id === this.selected.id);
+        if (idx >= 0) this.unites[idx] = updated;
+        this.selected = updated;
+        toast('Bot mis à jour', 'success');
+      } catch (e) { toast(e.message, 'error'); }
+      this.botSaving = false;
     },
 
     // ── Gestion des niveaux (sysadmin) ─────────────────────
