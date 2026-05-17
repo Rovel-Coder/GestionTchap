@@ -761,6 +761,12 @@ function salonView() {
     // Sélection multiple
     selectMode:       false,
     selectedSalons:   [],
+    // Modérateurs
+    moderatorsOpen:   false,
+    moderatorsSalon:  null,
+    moderatorsList:   [],
+    moderatorsLoading: false,
+    moderatorsError:  null,
     // Ajout de membres
     addMembersTarget:   null,
     addMembersTab:      'personnel', // 'personnel' | 'manual' | 'csv'
@@ -1078,6 +1084,62 @@ function salonView() {
         toast(e.message, 'error');
         this.saving = false;
       }
+    },
+
+    // ── Modérateurs ─────────────────────────────────────────
+    async openModerators(salon) {
+      this.moderatorsSalon  = salon;
+      this.moderatorsList   = [];
+      this.moderatorsError  = null;
+      this.moderatorsLoading = true;
+      this.moderatorsOpen   = true;
+
+      try {
+        // Charger membres + power levels en parallèle
+        const [membersData, plData] = await Promise.all([
+          apiFetch(`/api/tchap/members/${encodeURIComponent(salon.room_id)}`),
+          apiFetch(`/api/tchap/power-levels/${encodeURIComponent(salon.room_id)}`),
+        ]);
+
+        const raw     = Array.isArray(membersData) ? membersData : (membersData.members || []);
+        const botId   = (plData.botUserId || membersData.botUserId || '').toLowerCase();
+        const levels  = plData.users || {};
+
+        this.moderatorsList = raw
+          .filter(m => (m.content?.membership ?? m.membership) === 'join')
+          .map(m => {
+            const userId = (m.state_key || m.userId || '').toLowerCase();
+            return {
+              userId,
+              level:  levels[userId] ?? 0,
+              isBot:  botId && userId === botId,
+              saving: false,
+            };
+          })
+          .sort((a, b) => b.level - a.level || a.userId.localeCompare(b.userId));
+      } catch (e) {
+        this.moderatorsError = e.message;
+      }
+      this.moderatorsLoading = false;
+    },
+
+    async setModerator(member, level) {
+      member.saving = true;
+      try {
+        await apiFetch('/api/tchap/set-power-level', {
+          method: 'POST',
+          body: JSON.stringify({
+            roomId: this.moderatorsSalon.room_id,
+            userId: member.userId,
+            level,
+          }),
+        });
+        member.level = level;
+        toast(level >= 50 ? `${member.userId} est maintenant modérateur` : `${member.userId} est repassé membre`, 'success');
+      } catch (e) {
+        toast(e.message, 'error');
+      }
+      member.saving = false;
     },
 
     // ── Ajout de membres ────────────────────────────────────

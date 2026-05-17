@@ -141,6 +141,10 @@
                         title="Ajouter des membres" style="color:var(--green-light, #6ec38a);">
                         <i class="fa-solid fa-user-plus"></i>
                     </button>
+                    <button class="btn-icon" x-show="!!salon.room_id" @click="openModerators(salon)"
+                        title="Gérer les modérateurs" style="color:var(--gold);">
+                        <i class="fa-solid fa-shield-halved"></i>
+                    </button>
                     <button class="btn-icon" x-show="!salon.room_id"
                         @click="createTchapRoom(salon)" title="Créer la room sur Tchap"
                         style="color:var(--gold);" :disabled="salon._loading">
@@ -613,6 +617,71 @@
                 </div>
             </template>
 
+        </div>
+    </div>
+
+    {# ── Modal Modérateurs ── #}
+    <div class="modal-overlay" x-show="moderatorsOpen" x-cloak @click.self="moderatorsOpen = false">
+        <div class="modal" style="max-width:520px;width:95vw;">
+            <div class="modal-header">
+                <h3>
+                    <i class="fa-solid fa-shield-halved" style="margin-right:8px;color:var(--gold);"></i>
+                    Modérateurs — <span x-text="moderatorsSalon?.Nom"></span>
+                </h3>
+                <button class="btn-icon" @click="moderatorsOpen = false"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">
+                    Les modérateurs peuvent supprimer des messages et gérer les membres.
+                    Le niveau Admin (100) est réservé aux bots.
+                </p>
+                <div x-show="moderatorsLoading" style="text-align:center;padding:20px;">
+                    <div class="spinner"></div>
+                </div>
+                <div x-show="moderatorsError" class="alert-error" x-text="moderatorsError"></div>
+                <div x-show="!moderatorsLoading && !moderatorsError">
+                    <div x-show="moderatorsList.length === 0"
+                        style="padding:16px;text-align:center;font-size:12px;color:var(--text-muted);">
+                        Aucun membre trouvé dans ce salon
+                    </div>
+                    <template x-for="m in moderatorsList" :key="m.userId">
+                        <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);">
+                            <div style="flex:1;min-width:0;">
+                                <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" x-text="m.userId"></div>
+                            </div>
+                            {# Bot : non modifiable #}
+                            <template x-if="m.isBot">
+                                <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;background:rgba(201,168,76,.15);color:var(--gold);">
+                                    Bot (admin)
+                                </span>
+                            </template>
+                            {# Membres ordinaires : bascule Membre / Modérateur #}
+                            <template x-if="!m.isBot">
+                                <div style="display:flex;gap:4px;">
+                                    <button
+                                        :class="m.level < 50 ? 'btn-primary' : 'btn-ghost'"
+                                        style="padding:3px 10px;font-size:11px;"
+                                        :disabled="m.saving || m.level < 50"
+                                        @click="setModerator(m, 0)">
+                                        Membre
+                                    </button>
+                                    <button
+                                        :class="m.level >= 50 ? 'btn-primary' : 'btn-ghost'"
+                                        style="padding:3px 10px;font-size:11px;"
+                                        :disabled="m.saving || m.level >= 50"
+                                        @click="setModerator(m, 50)">
+                                        <i x-show="m.saving" class="fa-solid fa-spinner fa-spin"></i>
+                                        <span x-show="!m.saving">Modérateur</span>
+                                    </button>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-primary" @click="moderatorsOpen = false">Fermer</button>
+            </div>
         </div>
     </div>
 

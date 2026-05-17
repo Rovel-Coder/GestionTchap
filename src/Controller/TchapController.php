@@ -300,6 +300,63 @@ class TchapController extends AbstractController
         }
     }
 
+    // GET /api/tchap/power-levels/{roomId} — niveaux de permission actuels du salon
+    #[Route('/power-levels/{roomId}', name: 'power_levels', methods: ['GET'], requirements: ['roomId' => '.+'])]
+    public function powerLevels(string $roomId): JsonResponse
+    {
+        /** @var AppUser $user */
+        $user = $this->getUser();
+        if (!$this->roles->canManage($user)) {
+            return $this->json(['error' => 'Accès réservé aux gestionnaires'], 403);
+        }
+
+        try {
+            $cfg   = $this->getCfgForRoom($roomId);
+            $state = $this->tchap->getRoomState($roomId, $cfg);
+            $users = [];
+            foreach ($state as $event) {
+                if (($event['type'] ?? '') === 'm.room.power_levels') {
+                    $users = $event['content']['users'] ?? [];
+                    break;
+                }
+            }
+            return $this->json(['users' => $users, 'botUserId' => $cfg['botUserId'] ?? '']);
+        } catch (\Throwable $e) {
+            return $this->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    // POST /api/tchap/set-power-level — définir le niveau d'un membre (max 50 = modérateur)
+    #[Route('/set-power-level', name: 'set_power_level', methods: ['POST'])]
+    public function setPowerLevelAction(Request $request): JsonResponse
+    {
+        /** @var AppUser $user */
+        $user = $this->getUser();
+        if (!$this->roles->canManage($user)) {
+            return $this->json(['error' => 'Accès réservé aux gestionnaires'], 403);
+        }
+
+        $data   = json_decode($request->getContent(), true) ?? [];
+        $roomId = trim($data['roomId'] ?? '');
+        $userId = trim($data['userId'] ?? '');
+        $level  = (int) ($data['level'] ?? 0);
+
+        if (!$roomId || !$userId) {
+            return $this->json(['error' => 'roomId et userId requis'], 400);
+        }
+
+        // Niveau 100 (admin) réservé aux bots — on plafonne à 50
+        $level = max(0, min(50, $level));
+
+        try {
+            $cfg    = $this->getCfgForRoom($roomId);
+            $result = $this->tchap->setPowerLevel($roomId, $userId, $level, $cfg);
+            return $this->json(['ok' => true, 'level' => $level]);
+        } catch (\Throwable $e) {
+            return $this->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
     // POST /api/tchap/invite
     #[Route('/invite', name: 'invite', methods: ['POST'])]
     public function invite(Request $request): JsonResponse
