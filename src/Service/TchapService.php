@@ -297,7 +297,12 @@ class TchapService
         }
 
         if ($this->bridgeEnabled() && !($config['bypass_bridge'] ?? false)) {
-            return $this->callBridge('POST', '/rooms/' . rawurlencode($roomId) . '/send', $payload);
+            try {
+                return $this->callBridge('POST', '/rooms/' . rawurlencode($roomId) . '/send', $payload);
+            } catch (\Throwable $e) {
+                // Bridge injoignable : fallback vers l'API Matrix directe (sans E2EE)
+                $this->logger->warning('Bridge indisponible, envoi direct : ' . $e->getMessage());
+            }
         }
 
         // Appel direct Matrix : PUT /rooms/{roomId}/send/m.room.message/{txnId}
