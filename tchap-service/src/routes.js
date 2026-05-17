@@ -280,6 +280,10 @@ router.post('/rooms/:roomId/send', async (req, res) => {
             content.url  = url;
             if (info) content.info = info;
         }
+        // m.mentions : requis par les clients Matrix récents pour @room et mentions utilisateurs (MSC3952)
+        if (req.body['m.mentions']) {
+            content['m.mentions'] = req.body['m.mentions'];
+        }
         const eventId = await bot.get().sendMessage(req.params.roomId, content);
         res.json({ event_id: eventId });
     } catch (e) {

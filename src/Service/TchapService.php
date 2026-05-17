@@ -296,6 +296,11 @@ class TchapService
             }
         }
 
+        // @room : champ m.mentions requis par les clients Matrix récents (MSC3952)
+        if (str_contains($body, '@room')) {
+            $payload['m.mentions'] = ['room' => true];
+        }
+
         if ($this->bridgeEnabled() && !($config['bypass_bridge'] ?? false)) {
             try {
                 return $this->callBridge('POST', '/rooms/' . rawurlencode($roomId) . '/send', $payload);
