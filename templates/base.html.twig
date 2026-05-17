@@ -81,7 +81,10 @@
         {# ── Profil utilisateur ── #}
         <div class="user-profile-wrapper" x-data="{ open: false }">
             <div class="header-user" @click="open = !open" :class="{ 'header-user-open': open }">
-                <div class="user-avatar">{{ user.displayName|slice(0,1)|upper }}</div>
+                <div class="user-avatar" x-data="avatarComp('{{ user.user_id|e('js') }}', '{{ user.displayName|e('js') }}')" style="overflow:hidden;display:flex;align-items:center;justify-content:center;">
+                    <img x-show="!error && imgSrc" :src="imgSrc" @load="onLoad()" @error="onError()" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" x-cloak>
+                    <span x-show="error || !imgSrc" x-text="initials"></span>
+                </div>
                 <div class="user-info">
                     <div class="user-info-top">
                         <span class="user-name">{{ user.displayName }}</span>
@@ -93,7 +96,10 @@
 
             <div class="user-profile-panel" x-show="open" @click.outside="open = false" x-cloak>
                 <div class="profile-header">
-                    <div class="profile-avatar">{{ user.displayName|slice(0,1)|upper }}</div>
+                    <div class="profile-avatar" x-data="avatarComp('{{ user.user_id|e('js') }}', '{{ user.displayName|e('js') }}')" style="overflow:hidden;display:flex;align-items:center;justify-content:center;">
+                        <img x-show="!error && imgSrc" :src="imgSrc" @load="onLoad()" @error="onError()" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" x-cloak>
+                        <span x-show="error || !imgSrc" x-text="initials"></span>
+                    </div>
                     <div class="profile-info">
                         <div class="profile-name">{{ user.displayName }}</div>
                         <div class="profile-mail">{{ user.identifier }}</div>
