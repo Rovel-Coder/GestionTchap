@@ -11,9 +11,10 @@ Elle maintient un annuaire d'agents, gère les salons de communication et orches
 - **Annuaire du personnel** — agents, grades, statuts, unités, import/export CSV
 - **Gestion des salons Tchap** — création, membres, types (général, opérationnel, crise)
 - **Synchronisation automatisée** — la base de données et Tchap restent en permanence cohérents
+- **Messages** — composition et envoi de messages formatés dans un ou plusieurs salons simultanément, avec pièces jointes
 - **Mode Crise** — déploiement en masse dans les salons d'urgence en quelques clics
 - **Suivi de Crise** — tableau de bord de présence en temps réel
-- **Cartographie** — localisation géographique des unités
+- **Hiérarchie** — gestion de l'arborescence des unités, attribution d'un bot dédié par unité, gestion des administrateurs et des droits délégués
 - **Gestion des rôles** hiérarchiques : `lecteur` → `gestionnaire` → `superviseur_crise` → `admin` → `sysadmin`
 
 ---
@@ -32,11 +33,9 @@ Elle maintient un annuaire d'agents, gère les salons de communication et orches
 
 ## Déploiement
 
-Deux modes d'installation sont disponibles. Voir [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md) pour choisir.
+Deux modes d'installation sont disponibles. Voir [docs/GUIDE.md](docs/GUIDE.md) pour le guide complet.
 
 ### Avec Docker (recommandé)
-
-Voir le guide complet : [docs/DEPLOIEMENT-DOCKER.md](docs/DEPLOIEMENT-DOCKER.md)
 
 **Démarrage rapide en local :**
 
@@ -60,7 +59,6 @@ ansible-playbook ansible/playbooks/deploy.yml --ask-vault-pass
 ```
 
 L'application se met ensuite à jour automatiquement toutes les heures.
-Guide complet : [ansible/DEPLOIEMENT.md](ansible/DEPLOIEMENT.md)
 
 ### Sans Docker (VM native)
 
@@ -73,21 +71,19 @@ Voir le guide complet : [docs/DEPLOIEMENT-VM.md](docs/DEPLOIEMENT-VM.md)
 | Document | Contenu |
 |----------|---------|
 | [docs/APPLICATION.md](docs/APPLICATION.md) | Fonctionnement détaillé, droits, synchronisation Tchap, schéma BDD |
-| [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md) | Choix du mode de déploiement |
-| [docs/DEPLOIEMENT-DOCKER.md](docs/DEPLOIEMENT-DOCKER.md) | Docker local + Ansible production |
+| [docs/GUIDE.md](docs/GUIDE.md) | Guide de déploiement (Docker local + Ansible production) |
 | [docs/DEPLOIEMENT-VM.md](docs/DEPLOIEMENT-VM.md) | Installation native sans Docker |
-| [docs/VM_CONFIGURATION.md](docs/VM_CONFIGURATION.md) | Réglages avancés PHP-FPM, PostgreSQL, Nginx |
-| [ansible/DEPLOIEMENT.md](ansible/DEPLOIEMENT.md) | Guide Ansible complet, mise à jour automatique |
 
 ---
 
 ## Première connexion
 
 1. Se connecter avec `Sic` / `SicGestionTchap` → **changer le mot de passe immédiatement**
-2. **Configuration → Bot Tchap** : connecter le bot avec ses identifiants Tchap
+2. **Configuration → Bot Tchap** : connecter le bot principal avec ses identifiants Tchap
 3. **Configuration → Chiffrement E2EE** : vérifier l'appareil du bot (SAS ou clé de sécurité)
-4. Créer les unités, les salons, importer le personnel
-5. Lancer une synchronisation BDD → Tchap depuis le menu Personnel
+4. Créer les unités dans **Hiérarchie**, assigner un bot dédié si nécessaire
+5. Créer les salons, importer le personnel
+6. Lancer une synchronisation BDD → Tchap depuis le menu Personnel
 
 ---
 
@@ -105,4 +101,7 @@ docker compose exec postgres psql -U tchap -d gestion_tchap
 
 # Réappliquer les migrations
 docker compose exec php php bin/console app:db:migrate
+
+# Reconstruire le bridge Node.js après modification de tchap-service/
+docker compose build tchap-bridge && docker compose up -d tchap-bridge
 ```
