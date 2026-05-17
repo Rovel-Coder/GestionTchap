@@ -60,7 +60,7 @@
     </div>
 
     {# ── Layout deux colonnes ── #}
-    <div x-show="!loading" style="display:flex;flex:1;min-height:0;overflow:hidden;">
+    <div x-show="!loading" x-cloak class="hier-layout">
 
         {# ── Colonne gauche : arbre uniquement ── #}
         <div style="width:320px;flex-shrink:0;min-height:0;border-right:1px solid var(--border);overflow-y:auto;">
@@ -500,6 +500,7 @@
 
 {% block head_extra %}
 <style>
+.hier-layout { display: flex; flex: 1; min-height: 0; overflow: hidden; }
 .hier-row {
     display: flex;
     align-items: center;
