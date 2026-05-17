@@ -435,6 +435,93 @@ router.get('/location-events', (_req, res) => {
     res.json(bot.getAndClearLocationEvents());
 });
 
+// GET /rooms/:roomId/beacon-positions — positions live issues des beacons MSC3672/MSC3488
+// Stratégie hybride :
+//   1. Etat du salon (API directe, non chiffré) → qui partage activement (beacon_info live:true)
+//   2. Messages récents (API directe)           → coordonnées pour salons non E2EE
+//   3. Buffer SDK (room.event)                  → coordonnées pour salons E2EE (décryptées)
+router.get('/rooms/:roomId/beacon-positions', async (req, res) => {
+    const roomId = req.params.roomId;
+    const cfg    = bot.getBotConfig();
+
+    if (!cfg.homeserver || !cfg.accessToken) {
+        return res.status(503).json({ error: 'Bot non configuré' });
+    }
+
+    const hs      = cfg.homeserver.replace(/\/$/, '');
+    const headers = {
+        'Authorization': `Bearer ${cfg.accessToken}`,
+        'Content-Type':  'application/json',
+    };
+
+    try {
+        // ── 1. Etat du salon : qui a un beacon actif ? ─────────────────────
+        const stateResp = await fetch(
+            `${hs}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/state`,
+            { headers }
+        );
+        if (!stateResp.ok) return res.json([]);
+
+        const state       = await stateResp.json().catch(() => []);
+        const activeUsers = new Set();
+
+        for (const ev of (Array.isArray(state) ? state : [])) {
+            if (ev.type === 'org.matrix.msc3672.beacon_info' && ev.content?.live === true) {
+                activeUsers.add(ev.state_key);
+            }
+        }
+
+        if (activeUsers.size === 0) {
+            console.log(`[beacon] ${roomId} — aucun partage actif`);
+            return res.json([]);
+        }
+
+        console.log(`[beacon] ${roomId} — ${activeUsers.size} partage(s) actif(s) : ${[...activeUsers].join(', ')}`);
+
+        // ── 2. Messages récents (API directe, fonctionne en clair) ─────────
+        const positions = {};
+        const filter    = encodeURIComponent(JSON.stringify({ types: ['org.matrix.msc3488.beacon'] }));
+        const msgResp   = await fetch(
+            `${hs}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/messages?dir=b&limit=500&filter=${filter}`,
+            { headers }
+        );
+
+        if (msgResp.ok) {
+            const msgData = await msgResp.json().catch(() => ({}));
+            for (const ev of (msgData.chunk ?? [])) {
+                if (!activeUsers.has(ev.sender)) continue;
+                if (positions[ev.sender])         continue; // déjà le plus récent
+
+                const geoUri = ev.content?.['org.matrix.msc3488.location']?.uri ?? '';
+                const match  = geoUri.match(/^geo:(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
+                if (!match) continue;
+
+                const lat = parseFloat(match[1]);
+                const lon = parseFloat(match[2]);
+                if (isNaN(lat) || isNaN(lon)) continue;
+
+                positions[ev.sender] = { userId: ev.sender, lat, lon, ts: ev.origin_server_ts ?? Date.now() };
+                console.log(`[beacon/direct] ${ev.sender} → lat=${lat}, lon=${lon}`);
+            }
+        }
+
+        // ── 3. Compléter avec le buffer SDK (salons E2EE) ──────────────────
+        for (const ev of bot.peekLocationEvents()) {
+            if (!activeUsers.has(ev.userId)) continue;
+            const existing = positions[ev.userId];
+            if (!existing || ev.ts > existing.ts) {
+                positions[ev.userId] = ev;
+                console.log(`[beacon/sdk] ${ev.userId} → lat=${ev.lat}, lon=${ev.lon}`);
+            }
+        }
+
+        res.json(Object.values(positions));
+    } catch (e) {
+        console.error('[beacon-positions] Erreur :', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // ── Vérification SAS ──────────────────────────────────────────────────────
 
 // GET /verif — retourne l'état courant de la vérification SAS

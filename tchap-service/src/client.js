@@ -455,4 +455,9 @@ function getAndClearLocationEvents() {
   return _locationEvents.splice(0, _locationEvents.length);
 }
 
-module.exports = { start, loginAndRestart, importMegolmKeys, get, isReady, getBotConfig, getAndClearLocationEvents };
+/** Retourne une copie du buffer sans le vider (pour la route beacon-positions). */
+function peekLocationEvents() {
+  return [..._locationEvents];
+}
+
+module.exports = { start, loginAndRestart, importMegolmKeys, get, isReady, getBotConfig, getAndClearLocationEvents, peekLocationEvents };

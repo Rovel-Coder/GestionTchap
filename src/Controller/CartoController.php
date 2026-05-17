@@ -69,7 +69,7 @@ class CartoController extends AbstractController
             return $this->json(['error' => 'Acces a la cartographie non autorise'], 403);
         }
 
-        $this->syncBridgeLocationEvents();
+        $this->syncBeaconPositionsFromBridge();
 
         if ($user->isSysAdmin()) {
             $rows = $this->fetchAllPositionedPersonnel();
@@ -138,33 +138,49 @@ class CartoController extends AbstractController
     }
 
     /**
-     * Interroge le bridge pour récupérer les events m.location reçus depuis le dernier appel
-     * et met à jour les coordonnées des agents correspondants en base.
+     * Pour chaque salon Tchap configuré, interroge le bridge pour récupérer les positions
+     * beacon actives (MSC3672/MSC3488) et met à jour la base.
+     * Approche pull : plus fiable que le buffer push car elle interroge l'état Matrix courant.
      */
-    private function syncBridgeLocationEvents(): void
+    private function syncBeaconPositionsFromBridge(): void
     {
-        try {
-            $events = $this->tchap->callBridge('GET', '/location-events');
+        $salons = $this->db->fetchAllAssociative(
+            'SELECT "room_id" FROM salons WHERE "room_id" IS NOT NULL AND "room_id" != \'\''
+        );
 
-            foreach ($events as $event) {
-                $userId = $event['userId'] ?? null;
-                $lat    = isset($event['lat']) ? (float) $event['lat'] : null;
-                $lon    = isset($event['lon']) ? (float) $event['lon'] : null;
-
-                if (!$userId || $lat === null || $lon === null) {
-                    continue;
-                }
-                if ($lat < -90 || $lat > 90 || $lon < -180 || $lon > 180) {
-                    continue;
-                }
-
-                $this->db->executeStatement(
-                    'UPDATE personnel SET latitude = :lat, longitude = :lon, position_at = NOW() WHERE "user_id" = :uid',
-                    ['lat' => $lat, 'lon' => $lon, 'uid' => $userId]
-                );
+        foreach ($salons as $salon) {
+            $roomId = (string) ($salon['room_id'] ?? '');
+            if ($roomId === '') {
+                continue;
             }
-        } catch (\Throwable) {
-            // bridge indisponible ou erreur DB : non bloquant pour l'affichage
+
+            try {
+                $positions = $this->tchap->callBridge(
+                    'GET',
+                    '/rooms/' . rawurlencode($roomId) . '/beacon-positions'
+                );
+
+                foreach ($positions as $pos) {
+                    $userId = $pos['userId'] ?? null;
+                    $lat    = isset($pos['lat']) ? (float) $pos['lat'] : null;
+                    $lon    = isset($pos['lon']) ? (float) $pos['lon'] : null;
+
+                    if (!$userId || $lat === null || $lon === null) {
+                        continue;
+                    }
+                    if ($lat < -90 || $lat > 90 || $lon < -180 || $lon > 180) {
+                        continue;
+                    }
+
+                    $this->db->executeStatement(
+                        'UPDATE personnel SET latitude = :lat, longitude = :lon, position_at = NOW() WHERE "user_id" = :uid',
+                        ['lat' => $lat, 'lon' => $lon, 'uid' => $userId]
+                    );
+                }
+            } catch (\Throwable) {
+                // salon injoignable ou bridge indisponible : non bloquant
+                continue;
+            }
         }
     }
 
