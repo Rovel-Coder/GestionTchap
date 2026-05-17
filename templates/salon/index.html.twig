@@ -655,7 +655,7 @@
                             <div style="display:flex;gap:4px;">
                                 <template x-for="lvl in [0, 50, 100]" :key="lvl">
                                     <button
-                                        :class="(permissionsData[field.key] ?? field.default) === lvl ? 'btn-primary' : 'btn-ghost'"
+                                        :class="(permissionsData?.[field.key] ?? field.default) === lvl ? 'btn-primary' : 'btn-ghost'"
                                         style="padding:3px 10px;font-size:11px;"
                                         :disabled="permissionsSaving"
                                         @click="permissionsSet(field.key, null, lvl)"
@@ -673,7 +673,7 @@
                         <div style="display:flex;gap:4px;">
                             <template x-for="lvl in [0, 50, 100]" :key="lvl">
                                 <button
-                                    :class="((permissionsData.notifications ?? {}).room ?? 50) === lvl ? 'btn-primary' : 'btn-ghost'"
+                                    :class="((permissionsData?.notifications ?? {}).room ?? 50) === lvl ? 'btn-primary' : 'btn-ghost'"
                                     style="padding:3px 10px;font-size:11px;"
                                     :disabled="permissionsSaving"
                                     @click="permissionsSet('notifications', 'room', lvl)"
@@ -691,7 +691,7 @@
                             <div style="display:flex;gap:4px;">
                                 <template x-for="lvl in [0, 50, 100]" :key="lvl">
                                     <button
-                                        :class="((permissionsData.events ?? {})[field.key] ?? field.default) === lvl ? 'btn-primary' : 'btn-ghost'"
+                                        :class="((permissionsData?.events ?? {})[field.key] ?? field.default) === lvl ? 'btn-primary' : 'btn-ghost'"
                                         style="padding:3px 10px;font-size:11px;"
                                         :disabled="permissionsSaving"
                                         @click="permissionsSet('events', field.key, lvl)"
