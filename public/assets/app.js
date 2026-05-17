@@ -3143,7 +3143,7 @@ function cartoView() {
     async init() {
       const [u, p, s] = await Promise.all([
         apiFetch('/api/unites'),
-        apiFetch('/api/personnel'),
+        apiFetch('/api/carto/positions'),
         apiFetch('/api/salons'),
       ]);
       this.unites    = u || [];
