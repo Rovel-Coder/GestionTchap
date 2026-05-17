@@ -63,10 +63,10 @@
     <div x-show="!loading" style="display:flex;gap:16px;flex:1;min-height:0;overflow:hidden;">
 
         {# ── Colonne gauche : arbre + config unité ── #}
-        <div style="width:400px;flex-shrink:0;display:flex;flex-direction:column;gap:10px;overflow:hidden;">
+        <div style="width:340px;flex-shrink:0;display:flex;flex-direction:column;gap:10px;overflow-y:auto;">
 
             {# Arbre #}
-            <div style="flex:1;min-height:0;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-card);">
+            <div style="min-height:200px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-card);flex-shrink:0;">
                 <div x-show="tree.length === 0" class="empty-state">
                     Aucune unité trouvée
                 </div>
@@ -99,7 +99,7 @@
             </div>
 
             {# Config unité (visible quand une unité est sélectionnée) #}
-            <div x-show="selected !== null" style="overflow-y:auto;max-height:52%;display:flex;flex-direction:column;gap:8px;">
+            <div x-show="selected !== null" style="display:flex;flex-direction:column;gap:8px;flex-shrink:0;">
 
                 {# Bot Tchap dédié (admin / sysadmin uniquement) #}
                 {% if permissions.canAdmin %}
