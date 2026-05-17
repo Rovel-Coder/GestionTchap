@@ -117,7 +117,8 @@ html,body{height:100%;font-family:var(--font-body);background:var(--bg-base);col
 .salon-tag{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;font-size:11px;font-weight:500;border-radius:3px;font-family:var(--font-display);letter-spacing:.04em;cursor:pointer;transition:opacity .15s;}
 .salon-tag:hover{opacity:.75;}
 .salon-tag.type-operationnel{background:rgba(45,108,223,.2);color:#6ba3f7;border:1px solid rgba(45,108,223,.3);}
-.salon-tag.type-information{background:rgba(39,174,96,.15);color:#6ec38a;border:1px solid rgba(39,174,96,.25);}
+.salon-tag.type-information{background:rgba(173,173,189,.15);color:#adadbd;border:1px solid rgba(173,173,189,.25);}
+.salon-tag.type-vie_unite{background:rgba(39,174,96,.15);color:#6ec38a;border:1px solid rgba(39,174,96,.25);}
 .salon-tag.type-crise{background:var(--red-dim);color:#e87070;border:1px solid rgba(192,57,43,.3);}
 .salon-tag.type-admin{background:rgba(201,168,76,.12);color:#c9a84c;border:1px solid rgba(201,168,76,.25);}
 .unite-badge{display:inline-block;padding:2px 8px;background:rgba(201,168,76,.1);border:1px solid rgba(201,168,76,.25);border-radius:3px;font-size:11px;font-family:var(--font-display);letter-spacing:.05em;color:var(--gold);font-weight:600;}
@@ -126,7 +127,8 @@ html,body{height:100%;font-family:var(--font-body);background:var(--bg-base);col
 .card{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px 20px;transition:all .18s;position:relative;overflow:hidden;min-height:240px;display:flex;flex-direction:column;}
 .card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
 .card.type-operationnel::before{background:linear-gradient(90deg,var(--blue),var(--blue-light));}
-.card.type-information::before{background:linear-gradient(90deg,#27ae60,#6ec38a);}
+.card.type-information::before{background:linear-gradient(90deg,#858595,#adadbd);}
+.card.type-vie_unite::before{background:linear-gradient(90deg,#27ae60,#6ec38a);}
 .card.type-crise::before{background:linear-gradient(90deg,var(--red),var(--red-light));}
 .card.type-admin::before{background:linear-gradient(90deg,var(--gold),var(--gold-light));}
 .card.unite-card::before{background:linear-gradient(90deg,#7c3aed,#a78bfa);}
@@ -136,7 +138,8 @@ html,body{height:100%;font-family:var(--font-body);background:var(--bg-base);col
 .card-name{font-family:var(--font-display);font-size:15px;font-weight:700;letter-spacing:.06em;word-break:break-word;}
 .card-type-badge{font-family:var(--font-display);font-size:10px;font-weight:700;letter-spacing:.1em;padding:2px 7px;border-radius:3px;text-transform:uppercase;flex-shrink:0;}
 .type-operationnel .card-type-badge{background:rgba(45,108,223,.2);color:#6ba3f7;}
-.type-information .card-type-badge{background:rgba(39,174,96,.15);color:#6ec38a;}
+.type-information .card-type-badge{background:rgba(173,173,189,.15);color:#adadbd;}
+.type-vie_unite .card-type-badge{background:rgba(39,174,96,.15);color:#6ec38a;}
 .type-crise .card-type-badge{background:var(--red-dim);color:#e87070;}
 .type-admin .card-type-badge{background:var(--gold-dim);color:var(--gold);}
 .unite-card .card-type-badge{background:rgba(124,58,237,.15);color:#a78bfa;}
@@ -353,7 +356,8 @@ textarea{resize:vertical;}
 .carto-filter-item:hover .carto-filter-item-name{color:var(--text-primary);}
 .carto-filter-type-badge{font-size:9px;font-family:var(--font-display);font-weight:700;letter-spacing:.06em;padding:2px 6px;border-radius:3px;text-transform:uppercase;flex-shrink:0;}
 .carto-filter-type-badge.t-operationnel{background:rgba(45,108,223,.2);color:#6ba3f7;}
-.carto-filter-type-badge.t-information{background:rgba(39,174,96,.15);color:#6ec38a;}
+.carto-filter-type-badge.t-information{background:rgba(173,173,189,.15);color:#adadbd;}
+.carto-filter-type-badge.t-vie_unite{background:rgba(39,174,96,.15);color:#6ec38a;}
 .carto-filter-type-badge.t-crise{background:var(--red-dim);color:#e87070;}
 .carto-filter-type-badge.t-admin{background:var(--gold-dim);color:var(--gold);}
 .carto-filter-footer{display:flex;align-items:center;justify-content:space-between;padding:7px 14px;border-top:1px solid var(--border);flex-shrink:0;background:var(--bg-surface);}

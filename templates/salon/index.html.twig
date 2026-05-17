@@ -16,6 +16,7 @@
                 <button class="salon-filter-btn" :class="{ active: typeFilter === 'Tous' }" @click="typeFilter = 'Tous'">Tous</button>
                 <button class="salon-filter-btn" :class="{ active: typeFilter === 'operationnel' }" @click="typeFilter = 'operationnel'">Opérationnels</button>
                 <button class="salon-filter-btn" :class="{ active: typeFilter === 'information' }" @click="typeFilter = 'information'">Information</button>
+                <button class="salon-filter-btn" :class="{ active: typeFilter === 'vie_unite' }" @click="typeFilter = 'vie_unite'">Vie de l'unité</button>
                 <button class="salon-filter-btn" :class="{ active: typeFilter === 'crise' }" @click="typeFilter = 'crise'">Crise</button>
                 <button class="salon-filter-btn" :class="{ active: typeFilter === 'admin' }" @click="typeFilter = 'admin'">Admin</button>
             </div>
@@ -242,6 +243,7 @@
                                 <option value="">— Sélectionner —</option>
                                 <option value="operationnel">Opérationnel</option>
                                 <option value="information">Information</option>
+                                <option value="vie_unite">Vie de l'unité</option>
                                 <option value="crise">Crise</option>
                                 <option value="admin">Admin</option>
                             </select>
