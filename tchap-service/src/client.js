@@ -101,12 +101,49 @@ try {
   console.warn('[E2EE] Impossible de charger le crypto store:', e.message);
 }
 
-const DATA_DIR = path.resolve(__dirname, '../data');
-const CONFIG_FILE = path.join(DATA_DIR, 'bot-config.json');
+const DATA_DIR          = path.resolve(__dirname, '../data');
+const CONFIG_FILE       = path.join(DATA_DIR, 'bot-config.json');
+const LOCATION_STORE    = path.join(DATA_DIR, 'locations.json');
 
 let matrixClient = null;
 let _ready = false;
 const _locationEvents = [];
+
+// ── Store persistant de positions ────────────────────────────────────────────
+// Survit aux redémarrages du bridge. Seules les positions les plus récentes
+// par utilisateur sont conservées.
+
+function _loadLocationStore() {
+  try {
+    if (!fs.existsSync(LOCATION_STORE)) return;
+    const store = JSON.parse(fs.readFileSync(LOCATION_STORE, 'utf8'));
+    for (const [userId, pos] of Object.entries(store)) {
+      if (!userId || typeof pos.lat !== 'number' || typeof pos.lon !== 'number') continue;
+      _locationEvents.push({ userId, lat: pos.lat, lon: pos.lon, ts: pos.ts ?? 0 });
+    }
+    if (_locationEvents.length > 0) {
+      console.log(`[location] ${_locationEvents.length} position(s) chargée(s) depuis le store persistant`);
+    }
+  } catch (e) {
+    console.warn('[location] Impossible de charger le store:', e.message);
+  }
+}
+
+function _saveLocationToStore(userId, lat, lon, ts) {
+  try {
+    let store = {};
+    if (fs.existsSync(LOCATION_STORE)) {
+      store = JSON.parse(fs.readFileSync(LOCATION_STORE, 'utf8'));
+    }
+    store[userId] = { lat, lon, ts };
+    fs.writeFileSync(LOCATION_STORE, JSON.stringify(store));
+  } catch (e) {
+    console.warn('[location] Impossible de sauvegarder le store:', e.message);
+  }
+}
+
+// Charge le store avant même que le client Matrix soit démarré
+_loadLocationStore();
 
 // Retourne le sous-dossier dédié à un userId donné.
 // Ex: @bot.unite:agent.interieur.tchap.gouv.fr → data/bot.unite_agent.interieur.tchap.gouv.fr/
@@ -206,10 +243,14 @@ async function start() {
     const existing = _locationEvents.findIndex(e => e.userId === userId);
     if (existing !== -1) _locationEvents.splice(existing, 1);
 
-    _locationEvents.push({ userId, lat, lon, ts: event.origin_server_ts ?? Date.now() });
+    const ts = event.origin_server_ts ?? Date.now();
+    _locationEvents.push({ userId, lat, lon, ts });
 
     // Garde le buffer borné (max 1000 entrées)
     if (_locationEvents.length > 1000) _locationEvents.shift();
+
+    // Persistance sur disque pour survivre aux redémarrages
+    _saveLocationToStore(userId, lat, lon, ts);
 
     console.log(`[location${isBeacon ? '/beacon' : '/legacy'}] ${userId} → lat=${lat}, lon=${lon}`);
   }
