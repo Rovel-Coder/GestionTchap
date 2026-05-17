@@ -3501,6 +3501,50 @@ function messagesView() {
       this.attachments.splice(idx, 1);
     },
 
+    // ── Formatage du texte ──────────────────────────────────
+    format(prefix, suffix) {
+      const ta  = this.$refs.bodyTextarea;
+      if (!ta) return;
+      const s   = ta.selectionStart;
+      const e   = ta.selectionEnd;
+      const sel = this.body.substring(s, e);
+      this.body = this.body.substring(0, s) + prefix + (sel || '') + suffix + this.body.substring(e);
+      this.$nextTick(() => {
+        ta.focus();
+        if (sel) {
+          ta.selectionStart = s + prefix.length;
+          ta.selectionEnd   = e + prefix.length;
+        } else {
+          ta.selectionStart = ta.selectionEnd = s + prefix.length;
+        }
+      });
+    },
+
+    formatLine(prefix) {
+      const ta        = this.$refs.bodyTextarea;
+      if (!ta) return;
+      const s         = ta.selectionStart;
+      const lineStart = this.body.lastIndexOf('\n', s - 1) + 1;
+      this.body       = this.body.substring(0, lineStart) + prefix + this.body.substring(lineStart);
+      this.$nextTick(() => { ta.focus(); ta.selectionStart = ta.selectionEnd = s + prefix.length; });
+    },
+
+    formatLink() {
+      const ta  = this.$refs.bodyTextarea;
+      if (!ta) return;
+      const s   = ta.selectionStart;
+      const e   = ta.selectionEnd;
+      const sel = this.body.substring(s, e);
+      const ins = sel ? `[${sel}](url)` : '[texte](url)';
+      this.body = this.body.substring(0, s) + ins + this.body.substring(e);
+      this.$nextTick(() => {
+        ta.focus();
+        const urlStart = s + ins.indexOf('url');
+        ta.selectionStart = urlStart;
+        ta.selectionEnd   = urlStart + 3;
+      });
+    },
+
     async sendMessages() {
       if (!this.selected.length)                           { toast('Sélectionnez au moins un salon', 'error'); return; }
       if (!this.body.trim() && !this.attachments.length)   { toast('Message vide', 'error'); return; }
@@ -3516,10 +3560,15 @@ function messagesView() {
             attachments: this.attachments.map(a => ({ url: a.url, name: a.name, mimetype: a.mimetype, size: a.size })),
           }),
         });
-        this.results = data.results;
         if (data.failed === 0) {
-          toast(`Message envoyé dans ${data.sent} salon${data.sent > 1 ? 's' : ''}`, 'success');
+          // Succès total : réinitialiser le formulaire
+          this.body        = '';
+          this.attachments = [];
+          this.selected    = [];
+          this.results     = { success: true, sent: data.sent };
         } else {
+          // Erreurs partielles : conserver les détails
+          this.results = { errors: data.results, sent: data.sent, failed: data.failed };
           toast(`${data.sent} succès, ${data.failed} échec${data.failed > 1 ? 's' : ''}`, 'error');
         }
       } catch (e) { toast(e.message, 'error'); }

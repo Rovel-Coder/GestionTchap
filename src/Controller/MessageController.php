@@ -176,14 +176,22 @@ class MessageController extends AbstractController
     private function toHtml(string $text): string
     {
         $html = htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        // Blocs de code (avant le code inline pour éviter les collisions)
+        $html = preg_replace('/```\s*\n?(.*?)\n?```/su', '<pre><code>$1</code></pre>', $html);
+        // Code inline
+        $html = preg_replace('/`(.+?)`/su', '<code>$1</code>', $html);
         // Gras
         $html = preg_replace('/\*\*(.+?)\*\*/su', '<strong>$1</strong>', $html);
         // Italique
         $html = preg_replace('/\*(.+?)\*/su', '<em>$1</em>', $html);
-        // Code inline
-        $html = preg_replace('/`(.+?)`/su', '<code>$1</code>', $html);
-        // Sauts de ligne
-        $html = nl2br($html);
+        // Barré
+        $html = preg_replace('/~~(.+?)~~/su', '<del>$1</del>', $html);
+        // Citation (> au début de ligne — htmlspecialchars a transformé > en &gt;)
+        $html = preg_replace('/^&gt; (.+)$/mu', '<blockquote>$1</blockquote>', $html);
+        // Lien [texte](url)
+        $html = preg_replace('/\[([^\]]+)]\(([^)]+)\)/u', '<a href="$2">$1</a>', $html);
+        // Sauts de ligne (hors blocs pre)
+        $html = preg_replace('/(?<!>)\n(?!<\/?(pre|blockquote))/u', '<br>', $html);
 
         return $html;
     }
