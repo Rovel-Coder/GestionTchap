@@ -3545,6 +3545,14 @@ function messagesView() {
       });
     },
 
+    insertAtRoom() {
+      const ta = this.$refs.bodyTextarea;
+      if (!ta) return;
+      const s  = ta.selectionStart;
+      this.body = this.body.substring(0, s) + '@room' + this.body.substring(s);
+      this.$nextTick(() => { ta.focus(); ta.selectionStart = ta.selectionEnd = s + 5; });
+    },
+
     async sendMessages() {
       if (!this.selected.length)                           { toast('Sélectionnez au moins un salon', 'error'); return; }
       if (!this.body.trim() && !this.attachments.length)   { toast('Message vide', 'error'); return; }

@@ -33,25 +33,20 @@
                 <div x-show="loading" style="padding:20px;text-align:center;"><div class="spinner"></div></div>
 
                 <div x-show="!loading && filteredSalons.length === 0"
-                    style="padding:16px;font-size:12px;color:var(--text-muted);text-align:center);">
+                    style="padding:16px;font-size:12px;color:var(--text-muted);text-align:center;">
                     Aucun salon disponible
                 </div>
 
                 <template x-for="salon in filteredSalons" :key="salon.id">
-                    <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s;"
-                        :style="isSelected(salon.id) ? 'background:rgba(45,108,223,.1);' : ''"
+                    <div class="salon-row" :class="isSelected(salon.id) ? 'salon-row-selected' : ''"
                         @click="toggleSalon(salon.id)">
-                        <div style="width:16px;height:16px;border-radius:3px;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:.1s;"
-                            :style="isSelected(salon.id) ? 'background:var(--blue-light);border-color:var(--blue-light);' : ''">
-                            <i x-show="isSelected(salon.id)" class="fa-solid fa-check" style="font-size:9px;color:#fff;"></i>
-                        </div>
+                        <i :class="isSelected(salon.id) ? 'fa-solid fa-square-check' : 'fa-regular fa-square'"
+                            :style="isSelected(salon.id) ? 'color:var(--blue-light);' : 'color:var(--text-muted);'"
+                            style="font-size:15px;flex-shrink:0;"></i>
                         <div style="flex:1;min-width:0;">
                             <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" x-text="salon.Nom"></div>
-                            <div style="font-size:11px;color:var(--text-muted);" x-text="salon.Type || '—'"></div>
+                            <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;" x-text="salon.Type || '—'"></div>
                         </div>
-                        <span x-show="!salon.room_id" style="font-size:10px;color:var(--red-light);flex-shrink:0;">
-                            <i class="fa-solid fa-circle-xmark"></i>
-                        </span>
                     </div>
                 </template>
             </div>
@@ -91,6 +86,11 @@
                         </button>
                         <button type="button" class="fmt-btn fmt-btn-wide" title="Lien" @click="formatLink()">
                             <i class="fa-solid fa-link" style="font-size:10px;"></i>
+                        </button>
+                        <div style="width:1px;background:var(--border);margin:0 4px;align-self:stretch;"></div>
+                        <button type="button" class="fmt-btn fmt-btn-wide" title="Notifier tout le monde (@room)" @click="insertAtRoom()"
+                            style="color:var(--gold);font-weight:700;font-size:11px;">
+                            @room
                         </button>
                     </div>
                 </div>
@@ -247,5 +247,22 @@
     border-color: var(--blue-light);
 }
 .fmt-btn-wide { min-width: 36px; }
+
+.salon-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    border-left: 2px solid transparent;
+    cursor: pointer;
+    transition: background .1s, border-color .1s;
+    user-select: none;
+}
+.salon-row:hover { background: var(--bg-hover); }
+.salon-row-selected {
+    background: rgba(45,108,223,.06);
+    border-left-color: var(--blue-light);
+}
 </style>
 {% endblock %}
