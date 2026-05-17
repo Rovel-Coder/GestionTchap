@@ -2475,10 +2475,14 @@ function configView() {
         return;
       }
       if (phase === 'sas') {
-        this.verifState = 'sas';
-        this.verifEmoji  = r.emoji  || [];
+        this.verifState  = 'sas';
         this.verifUserId = r.userId || '';
-        this._stopVerifPoll();
+        if (r.emoji && r.emoji.length > 0) {
+          this.verifEmoji = r.emoji;
+          this._stopVerifPoll();   // emojis reçus → plus besoin de poller
+        } else {
+          this._startVerifPoll(); // emojis pas encore prêts → continuer à poller
+        }
         return;
       }
       this.verifState  = phase;

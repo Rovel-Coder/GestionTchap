@@ -454,8 +454,11 @@
                         <p style="font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:10px;">
                             Comparez ces 7 emojis avec ceux affichés dans Tchap :
                         </p>
-                        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
-                            <template x-for="e in verifEmoji" :key="e.label">
+                        <div x-show="verifEmoji.length === 0" style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:6px;margin-bottom:14px;">
+                            <i class="fa-solid fa-spinner fa-spin"></i> Calcul des emojis…
+                        </div>
+                        <div x-show="verifEmoji.length > 0" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
+                            <template x-for="(e, i) in verifEmoji" :key="i">
                                 <div style="text-align:center;min-width:48px;">
                                     <div style="font-size:28px;" x-text="e.emoji"></div>
                                     <div style="font-size:10px;color:var(--text-muted);margin-top:3px;" x-text="e.label"></div>

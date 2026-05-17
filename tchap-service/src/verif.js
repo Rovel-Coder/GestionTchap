@@ -344,6 +344,16 @@ async function _computeSas() {
 
   // Alice = sender of Start = leur côté (theirUserId/Device/Key)
   // Bob   = nous (cfg.userId/cfg.deviceId/ourKeyB64)
+  const info = [
+    'MATRIX_KEY_VERIFICATION_SAS',
+    theirUserId, theirDeviceId, theirKeyB64,
+    cfg.userId,  cfg.deviceId,  ourKeyB64,
+    txnId,
+  ].join('|');
+  console.log('[SAS][DEBUG] HKDF info =', info);
+  console.log('[SAS][DEBUG] Alice (start) :', theirUserId, '/', theirDeviceId, '/ key:', theirKeyB64.slice(0, 12) + '…');
+  console.log('[SAS][DEBUG] Bob   (accept):', cfg.userId,  '/', cfg.deviceId,  '/ key:', ourKeyB64.slice(0, 12)   + '…');
+
   s.emoji = calcEmoji(
     sharedSecret,
     theirUserId,  theirDeviceId, theirKeyB64,
@@ -352,7 +362,7 @@ async function _computeSas() {
   );
 
   s.phase = 'sas';
-  console.log(`[SAS] Emojis : ${s.emoji.map(e => e.emoji).join(' ')}`);
+  console.log(`[SAS] Emojis calculés : ${s.emoji.map(e => e.emoji + ' ' + e.label).join('  ')}`);
 }
 
 // ── Confirmer que les emojis correspondent ────────────────────────────────
