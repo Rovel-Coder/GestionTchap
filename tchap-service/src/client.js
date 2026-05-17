@@ -174,22 +174,10 @@ async function start() {
     //   2. Les clés Olm sont publiées sur le homeserver : voir log [E2EE] ✓ Clés device publiées
   });
 
-  // Écoute des événements to-device pour la vérification SAS
-  const VERIF_TYPES = [
-    'm.key.verification.request',
-    'm.key.verification.start',
-    'm.key.verification.accept',
-    'm.key.verification.key',
-    'm.key.verification.mac',
-    'm.key.verification.done',
-    'm.key.verification.cancel',
-  ];
-  VERIF_TYPES.forEach(type => {
-    matrixClient.on(`toDevice.${type}`, event => {
-      const cfg = loadBotConfig();
-      verif.onToDevice(type, event, cfg);
-    });
-  });
+  // Les événements to-device de vérification SAS sont traités exclusivement
+  // par l'intercepteur setRequestFn ci-dessus (avant que le Rust SDK les voie).
+  // Ne pas ajouter de listeners matrixClient.on('toDevice.*') ici pour éviter
+  // un double-traitement → deux paires de clés ECDH → MAC incorrect.
 
   try {
     await matrixClient.start();

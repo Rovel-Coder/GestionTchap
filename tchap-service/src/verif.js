@@ -42,56 +42,25 @@ function spkiToRaw(derBuf) {
   return Buffer.from(derBuf).slice(-32);
 }
 
-// ── Sync indépendant pour récupérer les événements to-device de verif ────
-// Le Rust SDK intercepte ces événements avant notre listener ; on fait notre
-// propre mini-sync ciblé sur les types m.key.verification.*.
-let _syncBatch = null;
-
-const VERIF_TYPES = [
-  'm.key.verification.request', 'm.key.verification.ready',
-  'm.key.verification.start',   'm.key.verification.accept',
-  'm.key.verification.key',     'm.key.verification.mac',
-  'm.key.verification.done',    'm.key.verification.cancel',
-];
-
-const SYNC_FILTER = JSON.stringify({
-  room:         { rooms: [] },
-  account_data: { types: [] },
-  presence:     { types: [] },
-  to_device:    { types: VERIF_TYPES },
-});
-
-const UA = 'Element/1.11.52 (Node.js bridge; linux; X-No-Client)';
-
-async function pollSync(cfg) {
-  const hs  = cfg.homeserver.replace(/\/$/, '');
-  const hdrs = { Authorization: `Bearer ${cfg.accessToken}`, 'User-Agent': UA };
-  const isFirstCall = !_syncBatch;
-
-  const url = _syncBatch
-    ? `${hs}/_matrix/client/v3/sync?timeout=0&since=${encodeURIComponent(_syncBatch)}&filter=${encodeURIComponent(SYNC_FILTER)}`
-    : `${hs}/_matrix/client/v3/sync?timeout=0&filter=${encodeURIComponent(SYNC_FILTER)}`;
-
-  const resp = await fetch(url, { headers: hdrs });
-  const data = await resp.json();
-  if (data.next_batch) _syncBatch = data.next_batch;
-
-  const events = (data.to_device && data.to_device.events) || [];
-
-  if (isFirstCall) {
-    // Premier appel : initialiser la position sans traiter les vieux événements
-    if (events.length) console.log(`[SAS] pollSync initialisé (${events.length} événement(s) anciens ignorés)`);
-    return;
-  }
-
-  for (const event of events) {
-    console.log(`[SAS] to-device reçu via pollSync: ${event.type} de ${event.sender}`);
-    onToDevice(event.type, event, cfg);
-  }
-}
+// pollSync désactivé : tous les événements SAS passent par l'intercepteur
+// du SDK dans client.js (setRequestFn). Appeler pollSync en parallèle
+// provoquait un double-traitement → deux paires de clés ECDH → MAC incorrect.
+async function pollSync(_cfg) { /* no-op */ }
 
 // ── État global (une seule vérification à la fois) ────────────────────────
 let s = null;
+
+// Déduplication : évite de traiter deux fois le même événement
+// (ex : intercepteur SDK + listener toDevice en parallèle).
+// On garde uniquement les 20 derniers event-ids pour limiter la mémoire.
+const _seen = new Set();
+function _dedupe(type, txnId) {
+  const key = `${type}|${txnId}`;
+  if (_seen.has(key)) return true; // déjà traité
+  _seen.add(key);
+  if (_seen.size > 20) _seen.delete(_seen.values().next().value);
+  return false;
+}
 
 function reset() { s = null; }
 function getStatus() {
@@ -178,6 +147,12 @@ function onToDevice(type, event, cfg) {
   const c = event.content || {};
   const txnId = c.transaction_id;
 
+  // Ignorer les doublons (même type + même txnId déjà traité)
+  if (txnId && _dedupe(type, txnId)) {
+    console.log(`[SAS] Doublon ignoré : ${type} txn=${txnId}`);
+    return;
+  }
+
   if (type === 'm.key.verification.request') {
     if (s) return; // déjà en cours
     if (!c.methods?.includes('m.sas.v1')) return;
@@ -244,13 +219,8 @@ function onToDevice(type, event, cfg) {
   }
 
   if (type === 'm.key.verification.cancel') {
-    if (s && s.phase === 'sas') {
-      // Les emojis sont prêts — ne pas reset, laisser l'utilisateur confirmer
-      console.log('[SAS] Cancel reçu mais emojis calculés, maintien état pour confirmation');
-    } else {
-      s = null;
-      console.log('[SAS] Vérification annulée (code: ' + (c.code || '?') + ')');
-    }
+    s = null;
+    console.log('[SAS] Vérification annulée (code: ' + (c.code || '?') + ')');
     return;
   }
 }

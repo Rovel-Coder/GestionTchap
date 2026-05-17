@@ -432,14 +432,9 @@ router.post('/spaces/:spaceId/invite', async (req, res) => {
 
 // ── Vérification SAS ──────────────────────────────────────────────────────
 
-// GET /verif — poll les événements to-device puis retourne l'état
-router.get('/verif', async (_req, res) => {
-  try {
-    const cfg = bot.getBotConfig();
-    await verif.pollSync(cfg);
-  } catch (e) {
-    console.warn('[SAS] pollSync error:', e.message);
-  }
+// GET /verif — retourne l'état courant de la vérification SAS
+// Les événements sont traités par l'intercepteur SDK (client.js setRequestFn)
+router.get('/verif', (_req, res) => {
   res.json(verif.getStatus());
 });
 
@@ -447,8 +442,6 @@ router.get('/verif', async (_req, res) => {
 router.post('/verif/accept', async (_req, res) => {
   try {
     const cfg = bot.getBotConfig();
-    // S'assurer qu'on a les derniers événements avant d'accepter
-    await verif.pollSync(cfg);
     await verif.acceptVerif(cfg);
     res.json({ ok: true });
   } catch (e) {
