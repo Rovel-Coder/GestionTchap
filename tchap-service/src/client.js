@@ -106,6 +106,7 @@ const CONFIG_FILE = path.join(DATA_DIR, 'bot-config.json');
 
 let matrixClient = null;
 let _ready = false;
+const _locationEvents = [];
 
 // Retourne le sous-dossier dédié à un userId donné.
 // Ex: @bot.unite:agent.interieur.tchap.gouv.fr → data/bot.unite_agent.interieur.tchap.gouv.fr/
@@ -162,6 +163,39 @@ async function start() {
   matrixClient = crypto
     ? new MatrixClient(config.homeserver, config.accessToken, storage, crypto)
     : new MatrixClient(config.homeserver, config.accessToken, storage);
+
+  matrixClient.on('room.message', (roomId, event) => {
+    const content = event?.content ?? {};
+    if (content.msgtype !== 'm.location') return;
+
+    // Supporte geo_uri standard et la variante MSC3488
+    const geoUri = content.geo_uri
+      ?? content['org.matrix.msc3488.location']?.uri
+      ?? '';
+    if (!geoUri) return;
+
+    // Format : "geo:latitude,longitude" ou "geo:latitude,longitude,altitude"
+    const match = geoUri.match(/^geo:(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
+    if (!match) return;
+
+    const lat    = parseFloat(match[1]);
+    const lon    = parseFloat(match[2]);
+    const userId = event.sender ?? '';
+
+    if (!userId || isNaN(lat) || isNaN(lon)) return;
+    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return;
+
+    // On ne conserve que la position la plus récente par utilisateur
+    const existing = _locationEvents.findIndex(e => e.userId === userId);
+    if (existing !== -1) _locationEvents.splice(existing, 1);
+
+    _locationEvents.push({ userId, lat, lon, ts: event.origin_server_ts ?? Date.now() });
+
+    // Garde le buffer borné (max 1000 entrées)
+    if (_locationEvents.length > 1000) _locationEvents.shift();
+
+    console.log(`[location] ${userId} → lat=${lat}, lon=${lon}`);
+  });
 
   matrixClient.on('room.failed_decryption', (roomId, event, err) => {
     const session = event?.content?.session_id ?? '?';
@@ -395,4 +429,9 @@ function get() {
 function isReady() { return _ready; }
 function getBotConfig() { return loadBotConfig(); }
 
-module.exports = { start, loginAndRestart, importMegolmKeys, get, isReady, getBotConfig };
+/** Retourne les événements de géolocalisation en attente et vide le buffer. */
+function getAndClearLocationEvents() {
+  return _locationEvents.splice(0, _locationEvents.length);
+}
+
+module.exports = { start, loginAndRestart, importMegolmKeys, get, isReady, getBotConfig, getAndClearLocationEvents };

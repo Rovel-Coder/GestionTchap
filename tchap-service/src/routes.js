@@ -430,6 +430,11 @@ router.post('/spaces/:spaceId/invite', async (req, res) => {
     }
 });
 
+// GET /location-events — retourne les événements m.location en attente et vide le buffer
+router.get('/location-events', (_req, res) => {
+    res.json(bot.getAndClearLocationEvents());
+});
+
 // ── Vérification SAS ──────────────────────────────────────────────────────
 
 // GET /verif — retourne l'état courant de la vérification SAS

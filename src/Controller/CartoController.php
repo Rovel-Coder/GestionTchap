@@ -69,14 +69,12 @@ class CartoController extends AbstractController
             return $this->json(['error' => 'Acces a la cartographie non autorise'], 403);
         }
 
-        $candidateIds = $this->getPersonnelIdsFromManagedRooms();
+        $this->syncBridgeLocationEvents();
 
         if ($user->isSysAdmin()) {
-            if (empty($candidateIds)) {
-                return $this->json([]);
-            }
-            $rows = $this->fetchPositionedPersonnelByIds($candidateIds);
+            $rows = $this->fetchAllPositionedPersonnel();
         } else {
+            $candidateIds = $this->getPersonnelIdsFromManagedRooms();
             $rows = $this->fetchPositionedPersonnelByIds($candidateIds);
         }
 
@@ -137,6 +135,49 @@ class CartoController extends AbstractController
         );
 
         return $this->json(['ok' => true]);
+    }
+
+    /**
+     * Interroge le bridge pour récupérer les events m.location reçus depuis le dernier appel
+     * et met à jour les coordonnées des agents correspondants en base.
+     */
+    private function syncBridgeLocationEvents(): void
+    {
+        try {
+            $events = $this->tchap->callBridge('GET', '/location-events');
+        } catch (\Throwable) {
+            return;
+        }
+
+        foreach ($events as $event) {
+            $userId = $event['userId'] ?? null;
+            $lat    = isset($event['lat']) ? (float) $event['lat'] : null;
+            $lon    = isset($event['lon']) ? (float) $event['lon'] : null;
+
+            if (!$userId || $lat === null || $lon === null) {
+                continue;
+            }
+            if ($lat < -90 || $lat > 90 || $lon < -180 || $lon > 180) {
+                continue;
+            }
+
+            $this->db->executeStatement(
+                'UPDATE personnel SET latitude = :lat, longitude = :lon, position_at = NOW() WHERE "user_id" = :uid',
+                ['lat' => $lat, 'lon' => $lon, 'uid' => $userId]
+            );
+        }
+    }
+
+    private function fetchAllPositionedPersonnel(): array
+    {
+        return $this->db->fetchAllAssociative(
+            'SELECT id, "Nom", "Prenom", "Grade", "Mail", "Unite", "Salons_Extra", "user_id",
+                    latitude, longitude, position_at
+             FROM personnel
+             WHERE latitude IS NOT NULL
+               AND longitude IS NOT NULL
+             ORDER BY position_at DESC'
+        );
     }
 
     /**
