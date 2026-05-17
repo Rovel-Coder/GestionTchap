@@ -173,7 +173,7 @@ class CartoController extends AbstractController
                     }
 
                     $this->db->executeStatement(
-                        'UPDATE personnel SET latitude = :lat, longitude = :lon, position_at = NOW() WHERE "user_id" = :uid',
+                        'UPDATE personnel SET latitude = :lat, longitude = :lon, position_at = NOW() WHERE LOWER("user_id") = LOWER(:uid)',
                         ['lat' => $lat, 'lon' => $lon, 'uid' => $userId]
                     );
                 }
