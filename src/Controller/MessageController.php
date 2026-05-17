@@ -202,8 +202,7 @@ class MessageController extends AbstractController
         $html = preg_replace('/^&gt; (.+)$/mu', '<blockquote>$1</blockquote>', $html);
         // Lien [texte](url)
         $html = preg_replace('/\[([^\]]+)]\(([^)]+)\)/u', '<a href="$2">$1</a>', $html);
-        // @room — mention spéciale Matrix qui notifie tous les membres
-        $html = str_replace('@room', '<a href="https://matrix.to/#/@room">@room</a>', $html);
+        // @room reste tel quel — la notification est portée par m.mentions, pas par un lien HTML
         // Sauts de ligne (hors balises de blocs)
         $html = preg_replace('/\n/', '<br>', $html);
 
