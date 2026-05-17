@@ -357,6 +357,47 @@ class TchapController extends AbstractController
         }
     }
 
+    // GET /api/tchap/room-permissions/{roomId} — seuils d'action du salon
+    #[Route('/room-permissions/{roomId}', name: 'room_permissions_get', methods: ['GET'], requirements: ['roomId' => '.+'])]
+    public function getRoomPermissions(string $roomId): JsonResponse
+    {
+        /** @var AppUser $user */
+        $user = $this->getUser();
+        if (!$this->roles->canManage($user)) {
+            return $this->json(['error' => 'Accès réservé aux gestionnaires'], 403);
+        }
+
+        try {
+            $cfg = $this->getCfgForRoom($roomId);
+            return $this->json($this->tchap->getRoomPermissions($roomId, $cfg));
+        } catch (\Throwable $e) {
+            return $this->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    // PUT /api/tchap/room-permissions/{roomId} — mettre à jour les seuils d'action
+    #[Route('/room-permissions/{roomId}', name: 'room_permissions_put', methods: ['PUT'], requirements: ['roomId' => '.+'])]
+    public function setRoomPermissions(string $roomId, Request $request): JsonResponse
+    {
+        /** @var AppUser $user */
+        $user = $this->getUser();
+        if (!$this->roles->canManage($user)) {
+            return $this->json(['error' => 'Accès réservé aux gestionnaires'], 403);
+        }
+
+        $updates = json_decode($request->getContent(), true) ?? [];
+        if (empty($updates)) {
+            return $this->json(['error' => 'Aucune modification fournie'], 400);
+        }
+
+        try {
+            $cfg = $this->getCfgForRoom($roomId);
+            return $this->json($this->tchap->setRoomPermissions($roomId, $updates, $cfg));
+        } catch (\Throwable $e) {
+            return $this->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
     // POST /api/tchap/invite
     #[Route('/invite', name: 'invite', methods: ['POST'])]
     public function invite(Request $request): JsonResponse

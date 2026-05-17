@@ -767,6 +767,35 @@ function salonView() {
     moderatorsList:   [],
     moderatorsLoading: false,
     moderatorsError:  null,
+    // Autorisations
+    permissionsOpen:   false,
+    permissionsSalon:  null,
+    permissionsData:   null,
+    permissionsLoading: false,
+    permissionsError:  null,
+    permissionsSaving: false,
+    // Définition des champs de permission
+    permissionsTopFields: [
+      { key: 'events_default', label: 'Envoyer des messages', default: 0 },
+      { key: 'invite',         label: 'Inviter des membres',  default: 50 },
+      { key: 'kick',           label: 'Expulser des membres', default: 50 },
+      { key: 'ban',            label: 'Bannir des membres',   default: 50 },
+      { key: 'redact',         label: 'Supprimer des messages (redact)', default: 50 },
+    ],
+    permissionsEventFields: [
+      { key: 'm.room.name',              label: 'Modifier le nom du salon',          default: 50  },
+      { key: 'm.room.avatar',            label: 'Modifier l\'avatar du salon',        default: 50  },
+      { key: 'm.room.topic',             label: 'Modifier la description (topic)',    default: 100 },
+      { key: 'm.room.canonical_alias',   label: 'Modifier l\'alias du salon',         default: 50  },
+      { key: 'm.room.pinned_events',     label: 'Épingler des messages',             default: 100 },
+      { key: 'm.room.history_visibility',label: 'Modifier la visibilité de l\'historique', default: 100 },
+      { key: 'm.room.power_levels',      label: 'Modifier les autorisations',        default: 100 },
+      { key: 'm.room.server_acl',        label: 'Modifier les ACL serveur',          default: 100 },
+      { key: 'm.room.tombstone',         label: 'Mettre le salon en tombstone',      default: 100 },
+      { key: 'm.reaction',               label: 'Envoyer des réactions',             default: 0   },
+      { key: 'm.room.redaction',         label: 'Envoyer des événements de redaction', default: 0 },
+      { key: 'im.vector.modular.widgets',label: 'Gérer les widgets',                 default: 100 },
+    ],
     // Ajout de membres
     addMembersTarget:   null,
     addMembersTab:      'personnel', // 'personnel' | 'manual' | 'csv'
@@ -1140,6 +1169,51 @@ function salonView() {
         toast(e.message, 'error');
       }
       member.saving = false;
+    },
+
+    // ── Autorisations ────────────────────────────────────────
+    async openPermissions(salon) {
+      this.permissionsSalon   = salon;
+      this.permissionsData    = null;
+      this.permissionsError   = null;
+      this.permissionsLoading = true;
+      this.permissionsOpen    = true;
+
+      try {
+        this.permissionsData = await apiFetch(`/api/tchap/room-permissions/${encodeURIComponent(salon.room_id)}`);
+      } catch (e) {
+        this.permissionsError = e.message;
+      }
+      this.permissionsLoading = false;
+    },
+
+    async permissionsSet(section, subKey, level) {
+      if (!this.permissionsData) return;
+      this.permissionsSaving = true;
+      try {
+        let updates;
+        if (subKey === null) {
+          // top-level field (events_default, invite, kick…)
+          updates = { [section]: level };
+          this.permissionsData[section] = level;
+        } else {
+          // nested field (events.*, notifications.*)
+          updates = { [section]: { [subKey]: level } };
+          this.permissionsData[section] = { ...(this.permissionsData[section] ?? {}), [subKey]: level };
+        }
+        await apiFetch(`/api/tchap/room-permissions/${encodeURIComponent(this.permissionsSalon.room_id)}`, {
+          method: 'PUT',
+          body: JSON.stringify(updates),
+        });
+        toast('Autorisation mise à jour', 'success');
+      } catch (e) {
+        toast(e.message, 'error');
+        // Reload to resync on error
+        try {
+          this.permissionsData = await apiFetch(`/api/tchap/room-permissions/${encodeURIComponent(this.permissionsSalon.room_id)}`);
+        } catch (_) { /* ignore */ }
+      }
+      this.permissionsSaving = false;
     },
 
     // ── Ajout de membres ────────────────────────────────────

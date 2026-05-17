@@ -259,6 +259,38 @@ class TchapService
         return $this->call('GET', '/rooms/' . rawurlencode($roomId) . '/state', $config);
     }
 
+    public function getRoomPermissions(string $roomId, array $config): array
+    {
+        if ($this->bridgeEnabled()) {
+            return $this->callBridge('GET', '/rooms/' . rawurlencode($roomId) . '/permissions');
+        }
+
+        $pl = $this->call('GET', '/rooms/' . rawurlencode($roomId) . '/state/m.room.power_levels', $config);
+        unset($pl['users']);
+        return $pl;
+    }
+
+    public function setRoomPermissions(string $roomId, array $updates, array $config): array
+    {
+        if ($this->bridgeEnabled()) {
+            return $this->callBridge('PUT', '/rooms/' . rawurlencode($roomId) . '/permissions', $updates);
+        }
+
+        $current = $this->call('GET', '/rooms/' . rawurlencode($roomId) . '/state/m.room.power_levels', $config);
+        $events = $updates['events'] ?? null;
+        $notif  = $updates['notifications'] ?? null;
+        unset($updates['events'], $updates['notifications']);
+        $current = array_merge($current, $updates);
+        if ($events !== null) {
+            $current['events'] = array_merge($current['events'] ?? [], $events);
+        }
+        if ($notif !== null) {
+            $current['notifications'] = array_merge($current['notifications'] ?? [], $notif);
+        }
+
+        return $this->call('PUT', '/rooms/' . rawurlencode($roomId) . '/state/m.room.power_levels', $config, $current);
+    }
+
     public function sendMessage(string $roomId, string $body, string $msgtype = 'm.text'): array
     {
         if (!$this->bridgeEnabled()) {

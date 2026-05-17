@@ -256,6 +256,34 @@ router.put('/rooms/:roomId/power-levels', async (req, res) => {
     }
 });
 
+// GET /rooms/:roomId/permissions — seuils d'action du salon (hors carte users)
+router.get('/rooms/:roomId/permissions', async (req, res) => {
+    try {
+        const pl = await bot.get().getRoomStateEvent(req.params.roomId, 'm.room.power_levels', '');
+        const { users, ...permissions } = pl;
+        res.json(permissions);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// PUT /rooms/:roomId/permissions — mise à jour des seuils d'action (merge)
+router.put('/rooms/:roomId/permissions', async (req, res) => {
+    const updates = req.body ?? {};
+    try {
+        const c       = bot.get();
+        const current = await c.getRoomStateEvent(req.params.roomId, 'm.room.power_levels', '');
+        const { events: updEvents, notifications: updNotif, ...topLevel } = updates;
+        Object.assign(current, topLevel);
+        if (updEvents)  current.events        = { ...(current.events ?? {}),        ...updEvents };
+        if (updNotif)   current.notifications = { ...(current.notifications ?? {}), ...updNotif };
+        await c.sendStateEvent(req.params.roomId, 'm.room.power_levels', '', current);
+        res.json({ ok: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // GET /rooms/:roomId/state — état complet d'un salon
 router.get('/rooms/:roomId/state', async (req, res) => {
     try {
