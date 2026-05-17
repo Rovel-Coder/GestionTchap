@@ -1,34 +1,11 @@
 # Déploiement — Gestion Personnel Tchap
 
-Deux approches sont disponibles selon votre infrastructure :
+> **Ce document est remplacé par [GUIDE.md](GUIDE.md)** — guide unique couvrant développement local, déploiement Ansible, configuration post-déploiement et maintenance.
 
 ---
 
-## Avec Docker
+Pour référence, les anciens documents fragmentés sont conservés :
 
-Couvre le développement local et la production sur VM via Ansible.
-Tous les services (PHP, Nginx, PostgreSQL, bridge Tchap) tournent dans des containers.
-
-→ **[DEPLOIEMENT-DOCKER.md](DEPLOIEMENT-DOCKER.md)**
-
-| Mode | Quand |
-|------|-------|
-| Docker local | Développement, test rapide sur un poste |
-| Ansible (recommandé pour la prod) | Serveur de production — Docker installé et mis à jour automatiquement |
-
----
-
-## Sans Docker
-
-Installation native sur Ubuntu 24.04 LTS : PHP-FPM, Nginx, PostgreSQL et Node.js directement sur le système.
-À privilégier uniquement si votre infrastructure interdit Docker.
-
-→ **[DEPLOIEMENT-VM.md](DEPLOIEMENT-VM.md)**
-
----
-
-## Configuration avancée de la VM
-
-Réglages complémentaires (PHP-FPM, PostgreSQL, Nginx, sauvegardes, supervision) :
-
-→ **[VM_CONFIGURATION.md](VM_CONFIGURATION.md)**
+- [DEPLOIEMENT-DOCKER.md](DEPLOIEMENT-DOCKER.md) — Docker local + vue d'ensemble Ansible
+- [DEPLOIEMENT-VM.md](DEPLOIEMENT-VM.md) — déploiement sans Docker (cas marginal)
+- [VM_CONFIGURATION.md](VM_CONFIGURATION.md) — réglages avancés PHP-FPM / PostgreSQL / Nginx
