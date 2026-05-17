@@ -59,6 +59,12 @@
             </a>
             {% endif %}
             {# Carto temporairement désactivé #}
+            {% if permissions.canManage %}
+            <a href="{{ path('app_carto') }}" class="nav-btn {% if app.request.attributes.get('_route') starts with 'app_carto' %}active{% endif %}">
+                <i class="fa-solid fa-map-location-dot"></i>
+                <span class="nav-label">Carto</span>
+            </a>
+            {% endif %}
             <a href="{{ path('app_messages_page') }}" class="nav-btn {% if app.request.attributes.get('_route') starts with 'app_messages' %}active{% endif %}">
                 <i class="fa-solid fa-paper-plane"></i>
                 <span class="nav-label">Messages</span>

@@ -16,18 +16,16 @@ use Symfony\Component\Routing\Attribute\Route;
 class CartoController extends AbstractController
 {
     public function __construct(
-        private readonly RoleService   $roles,
+        private readonly RoleService $roles,
         private readonly ConfigService $config,
-        private readonly TchapService  $tchap,
-        private readonly Connection    $db,
+        private readonly TchapService $tchap,
+        private readonly Connection $db,
     ) {
     }
 
     #[Route('/carto', name: 'app_carto', methods: ['GET'])]
     public function page(): Response
     {
-        throw $this->createNotFoundException('La cartographie est temporairement désactivée.');
-
         /** @var AppUser $user */
         $user = $this->getUser();
 
@@ -40,20 +38,19 @@ class CartoController extends AbstractController
             || ($uiConfig['roleFeatures'][$baseRole]['carto'] ?? false);
 
         if (!$hasCarto) {
-            throw $this->createAccessDeniedException('Accès à la cartographie non autorisé');
+            throw $this->createAccessDeniedException('Acces a la cartographie non autorise');
         }
 
         $tchapCfg = $this->config->getTchapConfig();
 
         return $this->render('carto/index.html.twig', [
-            'user'            => $user->toArray(),
-            'permissions'     => $this->roles->getPermissionsArray($user),
-            'uiConfig'        => $uiConfig,
+            'user' => $user->toArray(),
+            'permissions' => $this->roles->getPermissionsArray($user),
+            'uiConfig' => $uiConfig,
             'tchapHomeserver' => $tchapCfg['homeserver'] ?? '',
         ]);
     }
 
-    // GET /api/carto/positions — personnel ayant partagé leur position
     #[Route('/api/carto/positions', name: 'api_carto_positions', methods: ['GET'])]
     public function positions(): JsonResponse
     {
@@ -66,14 +63,13 @@ class CartoController extends AbstractController
         );
 
         foreach ($rows as &$row) {
-            $row['Unite']        = $row['Unite']        ? json_decode($row['Unite'], true)        : [];
+            $row['Unite'] = $row['Unite'] ? json_decode($row['Unite'], true) : [];
             $row['Salons_Extra'] = $row['Salons_Extra'] ? json_decode($row['Salons_Extra'], true) : [];
         }
 
         return $this->json($rows);
     }
 
-    // POST /api/carto/position — partager / mettre à jour sa position
     #[Route('/api/carto/position', name: 'api_carto_share_position', methods: ['POST'])]
     public function sharePosition(Request $request): JsonResponse
     {
@@ -85,8 +81,8 @@ class CartoController extends AbstractController
         }
 
         $data = json_decode($request->getContent(), true) ?? [];
-        $lat  = $data['latitude']  ?? null;
-        $lon  = $data['longitude'] ?? null;
+        $lat = $data['latitude'] ?? null;
+        $lon = $data['longitude'] ?? null;
 
         if (!is_numeric($lat) || !is_numeric($lon)) {
             return $this->json(['error' => 'latitude et longitude requis'], 400);
@@ -96,7 +92,7 @@ class CartoController extends AbstractController
         $lon = (float) $lon;
 
         if ($lat < -90 || $lat > 90 || $lon < -180 || $lon > 180) {
-            return $this->json(['error' => 'Coordonnées hors limites'], 400);
+            return $this->json(['error' => 'Coordonnees hors limites'], 400);
         }
 
         $this->db->executeStatement(
@@ -107,7 +103,6 @@ class CartoController extends AbstractController
         return $this->json(['ok' => true]);
     }
 
-    // DELETE /api/carto/position — arrêter de partager
     #[Route('/api/carto/position', name: 'api_carto_remove_position', methods: ['DELETE'])]
     public function removePosition(): JsonResponse
     {
