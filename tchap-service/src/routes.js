@@ -268,14 +268,36 @@ router.get('/rooms/:roomId/state', async (req, res) => {
 
 // POST /rooms/:roomId/send — envoyer un message dans un salon E2EE
 router.post('/rooms/:roomId/send', async (req, res) => {
-    const { body, msgtype } = req.body ?? {};
-    if (!body) return res.status(400).json({ error: 'body requis' });
+    const { body, msgtype, formatted_body, url, info } = req.body ?? {};
+    if (!body && !url) return res.status(400).json({ error: 'body ou url requis' });
     try {
-        const eventId = await bot.get().sendMessage(req.params.roomId, {
-            msgtype: msgtype ?? 'm.text',
-            body,
-        });
+        const content = { msgtype: msgtype ?? 'm.text', body: body ?? '' };
+        if (formatted_body) {
+            content.format          = 'org.matrix.custom.html';
+            content.formatted_body  = formatted_body;
+        }
+        if (url) {
+            content.url  = url;
+            if (info) content.info = info;
+        }
+        const eventId = await bot.get().sendMessage(req.params.roomId, content);
         res.json({ event_id: eventId });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST /upload — upload d'un fichier vers le serveur Matrix (retourne mxc://)
+// Corps JSON : { data: "<base64>", filename: "...", mimetype: "..." }
+router.post('/upload', async (req, res) => {
+    const { data, filename, mimetype } = req.body ?? {};
+    if (!data || !filename || !mimetype) {
+        return res.status(400).json({ error: 'data (base64), filename et mimetype requis' });
+    }
+    try {
+        const buffer  = Buffer.from(data, 'base64');
+        const mxcUrl  = await bot.get().uploadContent(buffer, mimetype, filename);
+        res.json({ url: mxcUrl });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }

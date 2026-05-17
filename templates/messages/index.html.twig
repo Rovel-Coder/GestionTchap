@@ -1,0 +1,179 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Messages — Gestion Tchap{% endblock %}
+
+{% block content %}
+<div class="view" x-data="messagesView()" x-init="load()">
+
+    {# ── Toolbar ── #}
+    <div class="view-toolbar">
+        <div class="toolbar-left">
+            <span class="view-title">MESSAGES</span>
+            <span class="badge" x-text="selected.length + ' salon' + (selected.length > 1 ? 's' : '') + ' sélectionné' + (selected.length > 1 ? 's' : '')"></span>
+        </div>
+    </div>
+
+    {# ── Layout deux colonnes ── #}
+    <div style="display:flex;gap:16px;flex:1;min-height:0;overflow:hidden;">
+
+        {# ── Colonne gauche : sélecteur de salons ── #}
+        <div style="width:300px;flex-shrink:0;display:flex;flex-direction:column;gap:8px;">
+
+            <div style="display:flex;align-items:center;gap:8px;">
+                <div class="search-box" style="flex:1;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    <input type="text" x-model="search" placeholder="Filtrer les salons…" autocomplete="off">
+                </div>
+            </div>
+
+            <div style="display:flex;gap:6px;">
+                <button class="btn-ghost" style="flex:1;font-size:11px;padding:4px;" @click="selectAll()">Tout sélectionner</button>
+                <button class="btn-ghost" style="flex:1;font-size:11px;padding:4px;" @click="selected = []">Effacer</button>
+            </div>
+
+            <div style="flex:1;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-card);">
+                <div x-show="loading" style="padding:20px;text-align:center;"><div class="spinner"></div></div>
+
+                <div x-show="!loading && filteredSalons.length === 0"
+                    style="padding:16px;font-size:12px;color:var(--text-muted);text-align:center);">
+                    Aucun salon disponible
+                </div>
+
+                <template x-for="salon in filteredSalons" :key="salon.id">
+                    <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s;"
+                        :style="isSelected(salon.id) ? 'background:rgba(45,108,223,.1);' : ''"
+                        @click="toggleSalon(salon.id)">
+                        <div style="width:16px;height:16px;border-radius:3px;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:.1s;"
+                            :style="isSelected(salon.id) ? 'background:var(--blue-light);border-color:var(--blue-light);' : ''">
+                            <i x-show="isSelected(salon.id)" class="fa-solid fa-check" style="font-size:9px;color:#fff;"></i>
+                        </div>
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" x-text="salon.Nom"></div>
+                            <div style="font-size:11px;color:var(--text-muted);" x-text="salon.Type || '—'"></div>
+                        </div>
+                        <span x-show="!salon.room_id" style="font-size:10px;color:var(--red-light);flex-shrink:0;">
+                            <i class="fa-solid fa-circle-xmark"></i>
+                        </span>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        {# ── Colonne droite : composer ── #}
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:12px;overflow-y:auto;">
+
+            {# Zone de texte #}
+            <div style="border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-card);overflow:hidden;">
+                <div style="padding:10px 14px;border-bottom:1px solid var(--border);font-family:var(--font-display);font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--text-muted);display:flex;align-items:center;gap:8px;">
+                    <i class="fa-solid fa-pen-to-square" style="color:var(--blue-light);"></i>
+                    MESSAGE
+                    <span style="font-weight:400;font-style:italic;letter-spacing:0;">— Supporte **gras**, *italique*, `code`</span>
+                </div>
+                <textarea x-model="body"
+                    placeholder="Rédigez votre message…"
+                    style="width:100%;min-height:180px;padding:14px;background:transparent;border:none;outline:none;resize:vertical;font-size:14px;color:var(--text-primary);font-family:inherit;box-sizing:border-box;"
+                    :disabled="sending"></textarea>
+            </div>
+
+            {# Zone pièces jointes #}
+            <div style="border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-card);overflow:hidden;">
+                <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+                    <span style="font-family:var(--font-display);font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--text-muted);">
+                        <i class="fa-solid fa-paperclip" style="color:var(--blue-light);margin-right:6px;"></i>
+                        PIÈCES JOINTES
+                    </span>
+                    <span style="font-size:11px;color:var(--text-muted);" x-text="attachments.length + '/5'"></span>
+                </div>
+
+                {# Drop zone #}
+                <div style="padding:12px 14px;"
+                    @dragover.prevent="dragOver = true"
+                    @dragleave="dragOver = false"
+                    @drop.prevent="dragOver = false; handleFiles($event.dataTransfer.files)">
+
+                    <label style="display:flex;align-items:center;justify-content:center;gap:10px;padding:14px;border:2px dashed var(--border);border-radius:var(--radius-sm);cursor:pointer;transition:.15s;"
+                        :style="dragOver ? 'border-color:var(--blue-light);background:rgba(45,108,223,.05);' : ''"
+                        :class="attachments.length >= 5 ? 'disabled' : ''">
+                        <i class="fa-solid fa-cloud-arrow-up" style="font-size:18px;color:var(--text-muted);"></i>
+                        <span style="font-size:13px;color:var(--text-muted);" x-show="!uploading">
+                            Glissez un fichier ici ou <span style="color:var(--blue-light);">cliquez pour parcourir</span>
+                            <span style="display:block;font-size:11px;margin-top:2px;">Max 20 Mo par fichier · 5 fichiers max</span>
+                        </span>
+                        <span x-show="uploading" style="font-size:13px;color:var(--text-muted);">
+                            <i class="fa-solid fa-spinner fa-spin"></i> Upload en cours…
+                        </span>
+                        <input type="file" multiple style="display:none;" :disabled="attachments.length >= 5 || uploading"
+                            @change="handleFiles($event.target.files); $event.target.value = ''">
+                    </label>
+
+                    {# Liste des fichiers uploadés #}
+                    <template x-for="(att, idx) in attachments" :key="idx">
+                        <div style="display:flex;align-items:center;gap:10px;margin-top:8px;padding:8px 10px;background:var(--bg-elevated);border-radius:var(--radius-sm);">
+                            <img x-show="att.mimetype && att.mimetype.startsWith('image/')"
+                                :src="att.preview" style="width:36px;height:36px;object-fit:cover;border-radius:4px;flex-shrink:0;">
+                            <i x-show="!att.mimetype || !att.mimetype.startsWith('image/')"
+                                class="fa-solid fa-file" style="font-size:20px;color:var(--blue-light);flex-shrink:0;width:36px;text-align:center;"></i>
+                            <div style="flex:1;min-width:0;">
+                                <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" x-text="att.name"></div>
+                                <div style="font-size:11px;color:var(--text-muted);" x-text="formatSize(att.size) + ' · ' + (att.mimetype || '?')"></div>
+                            </div>
+                            <button class="btn-icon" @click="removeAttachment(idx)" style="color:var(--red-light);flex-shrink:0;">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            {# Bouton envoi #}
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+                <div style="font-size:12px;color:var(--text-muted);">
+                    <template x-if="selected.length === 0">
+                        <span>Sélectionnez au moins un salon à gauche</span>
+                    </template>
+                    <template x-if="selected.length > 0">
+                        <span>Envoi vers <strong style="color:var(--text-primary);" x-text="selected.length"></strong> salon<span x-show="selected.length > 1">s</span></span>
+                    </template>
+                </div>
+                <button class="btn-primary" style="min-width:140px;"
+                    :disabled="sending || selected.length === 0 || (!body.trim() && attachments.length === 0)"
+                    @click="sendMessages()">
+                    <i x-show="sending" class="fa-solid fa-spinner fa-spin"></i>
+                    <span x-show="!sending">
+                        <i class="fa-solid fa-paper-plane" style="margin-right:6px;"></i>
+                        Envoyer
+                    </span>
+                </button>
+            </div>
+
+            {# Résultats #}
+            <div x-show="results !== null" style="border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-card);overflow:hidden;">
+                <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">
+                    <span style="font-family:var(--font-display);font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--text-muted);">RÉSULTATS</span>
+                    <span x-show="results && results.filter(r=>r.ok).length > 0"
+                        style="font-size:11px;font-weight:600;color:var(--green-light);"
+                        x-text="results.filter(r=>r.ok).length + ' envoyé' + (results.filter(r=>r.ok).length > 1 ? 's' : '')"></span>
+                    <span x-show="results && results.filter(r=>!r.ok).length > 0"
+                        style="font-size:11px;font-weight:600;color:var(--red-light);margin-left:4px;"
+                        x-text="results.filter(r=>!r.ok).length + ' échec' + (results.filter(r=>!r.ok).length > 1 ? 's' : '')"></span>
+                </div>
+                <div style="max-height:240px;overflow-y:auto;">
+                    <template x-for="r in (results || [])" :key="r.id">
+                        <div style="display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--border);">
+                            <i :class="r.ok ? 'fa-solid fa-circle-check' : 'fa-solid fa-circle-xmark'"
+                                :style="r.ok ? 'color:var(--green-light);' : 'color:var(--red-light);'"
+                                style="font-size:14px;flex-shrink:0;"></i>
+                            <div style="flex:1;min-width:0;">
+                                <div style="font-size:13px;font-weight:600;" x-text="r.nom"></div>
+                                <div x-show="r.error" style="font-size:11px;color:var(--red-light);margin-top:2px;" x-text="r.error"></div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+{% endblock %}

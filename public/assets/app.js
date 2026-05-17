@@ -3425,6 +3425,109 @@ function hierarchieView() {
   };
 }
 
+function messagesView() {
+  return {
+    salons:      [],
+    selected:    [],   // IDs des salons cochés
+    search:      '',
+    body:        '',
+    attachments: [],   // [{url, name, mimetype, size, preview}]
+    dragOver:    false,
+    uploading:   false,
+    sending:     false,
+    results:     null,
+    loading:     true,
+
+    async load() {
+      this.loading = true;
+      try {
+        const s = await apiFetch('/api/salons');
+        this.salons = (s || []).filter(s => s.room_id);
+      } catch (e) { toast(e.message, 'error'); }
+      this.loading = false;
+    },
+
+    get filteredSalons() {
+      const q = this.search.toLowerCase();
+      return this.salons.filter(s => !q || s.Nom.toLowerCase().includes(q) || (s.Type || '').toLowerCase().includes(q));
+    },
+
+    isSelected(id) { return this.selected.includes(id); },
+
+    toggleSalon(id) {
+      const idx = this.selected.indexOf(id);
+      if (idx >= 0) this.selected.splice(idx, 1);
+      else this.selected.push(id);
+    },
+
+    selectAll() {
+      this.selected = this.filteredSalons.map(s => s.id);
+    },
+
+    formatSize(bytes) {
+      if (!bytes) return '0 o';
+      const u = ['o', 'Ko', 'Mo'];
+      let i = 0;
+      while (bytes >= 1024 && i < u.length - 1) { bytes /= 1024; i++; }
+      return Math.round(bytes * 10) / 10 + ' ' + u[i];
+    },
+
+    async handleFiles(fileList) {
+      for (const file of Array.from(fileList)) {
+        if (this.attachments.length >= 5) { toast('Maximum 5 pièces jointes', 'error'); break; }
+        if (file.size > 20 * 1024 * 1024)  { toast(`${file.name} dépasse 20 Mo`, 'error'); continue; }
+
+        this.uploading = true;
+        try {
+          const form = new FormData();
+          form.append('file', file);
+          const headers = { 'X-Requested-With': 'XMLHttpRequest' };
+          if (window.CSRF_TOKEN) headers['X-CSRF-Token'] = window.CSRF_TOKEN;
+
+          const resp   = await fetch('/messages/upload', { method: 'POST', headers, body: form });
+          const result = await resp.json();
+          if (result.error) throw new Error(result.error);
+
+          const preview = file.type.startsWith('image/') ? URL.createObjectURL(file) : null;
+          this.attachments.push({ ...result, preview });
+        } catch (e) { toast('Upload : ' + e.message, 'error'); }
+        this.uploading = false;
+      }
+    },
+
+    removeAttachment(idx) {
+      const att = this.attachments[idx];
+      if (att?.preview) URL.revokeObjectURL(att.preview);
+      this.attachments.splice(idx, 1);
+    },
+
+    async sendMessages() {
+      if (!this.selected.length)                           { toast('Sélectionnez au moins un salon', 'error'); return; }
+      if (!this.body.trim() && !this.attachments.length)   { toast('Message vide', 'error'); return; }
+
+      this.sending = true;
+      this.results = null;
+      try {
+        const data = await apiFetch('/messages/send', {
+          method: 'POST',
+          body:   JSON.stringify({
+            salonIds:    this.selected,
+            body:        this.body,
+            attachments: this.attachments.map(a => ({ url: a.url, name: a.name, mimetype: a.mimetype, size: a.size })),
+          }),
+        });
+        this.results = data.results;
+        if (data.failed === 0) {
+          toast(`Message envoyé dans ${data.sent} salon${data.sent > 1 ? 's' : ''}`, 'success');
+        } else {
+          toast(`${data.sent} succès, ${data.failed} échec${data.failed > 1 ? 's' : ''}`, 'error');
+        }
+      } catch (e) { toast(e.message, 'error'); }
+      this.sending = false;
+    },
+  };
+}
+
 // ── Enregistrement Alpine ──────────────────────────────────
 document.addEventListener('alpine:init', () => {
   Alpine.data('appRoot',        appRoot);
@@ -3437,4 +3540,5 @@ document.addEventListener('alpine:init', () => {
   Alpine.data('suiviCriseView', suiviCriseView);
   Alpine.data('cartoView',      cartoView);
   Alpine.data('hierarchieView', hierarchieView);
+  Alpine.data('messagesView',   messagesView);
 });

@@ -268,6 +268,91 @@ class TchapService
         return $this->callBridge('POST', '/rooms/' . rawurlencode($roomId) . '/send', ['body' => $body, 'msgtype' => $msgtype]);
     }
 
+    /**
+     * Envoie un message en utilisant le bot configuré pour la salle (bridge ou API directe).
+     * Supporte le texte formaté (HTML) et les pièces jointes (m.file / m.image).
+     *
+     * @param array|null $fileInfo ['url' => 'mxc://...', 'info' => ['mimetype' => ..., 'size' => ...]]
+     */
+    public function sendMessageWithConfig(
+        string  $roomId,
+        string  $body,
+        array   $config,
+        string  $msgtype       = 'm.text',
+        ?string $formattedBody = null,
+        ?array  $fileInfo      = null,
+    ): array {
+        $payload = ['body' => $body, 'msgtype' => $msgtype];
+
+        if ($formattedBody !== null) {
+            $payload['format']         = 'org.matrix.custom.html';
+            $payload['formatted_body'] = $formattedBody;
+        }
+
+        if ($fileInfo !== null) {
+            $payload['url'] = $fileInfo['url'];
+            if (isset($fileInfo['info'])) {
+                $payload['info'] = $fileInfo['info'];
+            }
+        }
+
+        if ($this->bridgeEnabled() && !($config['bypass_bridge'] ?? false)) {
+            return $this->callBridge('POST', '/rooms/' . rawurlencode($roomId) . '/send', $payload);
+        }
+
+        // Appel direct Matrix : PUT /rooms/{roomId}/send/m.room.message/{txnId}
+        $txnId = 'php_' . bin2hex(random_bytes(8));
+
+        return $this->call(
+            'PUT',
+            '/rooms/' . rawurlencode($roomId) . '/send/m.room.message/' . $txnId,
+            $config,
+            $payload
+        );
+    }
+
+    /**
+     * Upload un fichier vers le serveur Matrix et retourne son URI mxc://.
+     * Passe par le bridge (E2EE) si disponible, sinon par l'API Matrix directe.
+     */
+    public function uploadMedia(string $fileContent, string $filename, string $mimetype, array $config): string
+    {
+        if ($this->bridgeEnabled()) {
+            $result = $this->callBridge('POST', '/upload', [
+                'data'     => base64_encode($fileContent),
+                'filename' => $filename,
+                'mimetype' => $mimetype,
+            ]);
+
+            return $result['url'] ?? throw new \RuntimeException('Bridge upload : url absent dans la réponse');
+        }
+
+        // Fallback : upload direct Matrix media
+        if (empty($config['token']) || empty($config['homeserver'])) {
+            throw new \RuntimeException('Bot non configuré pour l\'upload (token ou homeserver manquant)');
+        }
+
+        $homeserver = rtrim($config['homeserver'], '/');
+        $url        = $homeserver . '/_matrix/media/v3/upload?filename=' . rawurlencode($filename);
+
+        $response = $this->httpClient->request('POST', $url, [
+            'headers' => [
+                'Authorization' => 'Bearer ' . $config['token'],
+                'Content-Type'  => $mimetype,
+            ],
+            'body' => $fileContent,
+        ]);
+
+        $data   = $response->toArray(false);
+        $status = $response->getStatusCode();
+
+        if ($status >= 400) {
+            throw new \RuntimeException($data['error'] ?? "Upload échoué (HTTP $status)");
+        }
+
+        return $data['content_uri'] ?? throw new \RuntimeException('Upload direct : content_uri absent dans la réponse');
+    }
+
     public function loginWithPassword(string $homeserver, string $username, string $password): array
     {
         // En mode bridge, déléguer au service Node qui gère lui-même les credentials et la session E2EE
