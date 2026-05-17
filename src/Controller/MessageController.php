@@ -65,7 +65,7 @@ class MessageController extends AbstractController
         try {
             $cfg      = $this->config->getTchapConfig();
             $content  = file_get_contents($file->getPathname());
-            $mimetype = $file->getMimeType() ?: 'application/octet-stream';
+            $mimetype = $file->getClientMimeType() ?: 'application/octet-stream';
             $name     = $file->getClientOriginalName();
 
             $mxcUrl = $this->tchap->uploadMedia($content, $name, $mimetype, $cfg);
