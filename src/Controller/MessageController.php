@@ -180,10 +180,13 @@ class MessageController extends AbstractController
         $html = preg_replace('/```\s*\n?(.*?)\n?```/su', '<pre><code>$1</code></pre>', $html);
         // Code inline
         $html = preg_replace('/`(.+?)`/su', '<code>$1</code>', $html);
-        // Titres H1–H3 (début de ligne)
-        $html = preg_replace('/^### (.+)$/mu', '<h3>$1</h3>', $html);
-        $html = preg_replace('/^## (.+)$/mu',  '<h2>$1</h2>', $html);
-        $html = preg_replace('/^# (.+)$/mu',   '<h1>$1</h1>', $html);
+        // Titres H1–H6 (du plus spécifique au moins spécifique pour éviter les collisions)
+        $html = preg_replace('/^###### (.+)$/mu', '<h6>$1</h6>', $html);
+        $html = preg_replace('/^##### (.+)$/mu',  '<h5>$1</h5>', $html);
+        $html = preg_replace('/^#### (.+)$/mu',   '<h4>$1</h4>', $html);
+        $html = preg_replace('/^### (.+)$/mu',    '<h3>$1</h3>', $html);
+        $html = preg_replace('/^## (.+)$/mu',     '<h2>$1</h2>', $html);
+        $html = preg_replace('/^# (.+)$/mu',      '<h1>$1</h1>', $html);
         // Listes à puces
         $html = preg_replace('/^- (.+)$/mu', '<li>$1</li>', $html);
         $html = preg_replace('/^[0-9]+\. (.+)$/mu', '<li>$1</li>', $html);

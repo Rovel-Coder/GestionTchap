@@ -73,10 +73,26 @@
 
                         <div style="width:1px;background:var(--border);margin:0 4px;align-self:stretch;"></div>
 
-                        {# Titres #}
-                        <button type="button" class="fmt-btn" title="Titre 1" @click="formatLine('# ')"><strong>Titre 1</strong></button>
-                        <button type="button" class="fmt-btn" title="Titre 2" @click="formatLine('## ')"><strong style="font-size:11px;">Titre 2</strong></button>
-                        <button type="button" class="fmt-btn" title="Titre 3" @click="formatLine('### ')"><strong style="font-size:10px;">Titre 3</strong></button>
+                        {# Titres — dropdown #}
+                        <div style="position:relative;" x-data="{ open: false }" @click.outside="open = false">
+                            <button type="button" class="fmt-btn" title="Titres" @click="open = !open">
+                                <strong>Titre</strong>
+                                <i class="fa-solid fa-chevron-down" style="font-size:8px;margin-left:3px;"></i>
+                            </button>
+                            <div x-show="open" x-cloak
+                                style="position:absolute;top:calc(100% + 4px);left:0;z-index:200;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);min-width:110px;box-shadow:0 4px 12px rgba(0,0,0,.3);overflow:hidden;">
+                                <template x-for="h in [{n:1,p:'# '},{n:2,p:'## '},{n:3,p:'### '},{n:4,p:'#### '},{n:5,p:'##### '},{n:6,p:'###### '}]" :key="h.n">
+                                    <button type="button"
+                                        style="display:block;width:100%;text-align:left;padding:6px 12px;background:none;border:none;cursor:pointer;color:var(--text-primary);transition:background .1s;"
+                                        :style="`font-size:${15 - h.n}px;font-weight:700;`"
+                                        @mouseenter="$el.style.background='var(--bg-hover)'"
+                                        @mouseleave="$el.style.background=''"
+                                        @click="formatLine(h.p); open = false"
+                                        x-text="'Titre ' + h.n">
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
 
                         <div style="width:1px;background:var(--border);margin:0 4px;align-self:stretch;"></div>
 
