@@ -296,7 +296,7 @@ window.TCHAP_SERVERS  = {{ tchap_servers()|json_encode|raw }};
 /**
  * Composant Alpine réutilisable : avatar Tchap avec fallback initiales.
  * Usage : <div x-data="avatarComp('@user:server', 'Prénom Nom')"> ... </div>
- * Ou via le macro Twig : {{ tchap_avatar(userId, displayName) }}
+ * Ou via : x-data="avatarComp(userId, displayName)" dans un template Twig
  *
  * Le composant expose :
  *   - imgSrc    : URL de l'image (null si non chargée ou erreur)
