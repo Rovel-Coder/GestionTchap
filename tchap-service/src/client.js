@@ -164,14 +164,31 @@ async function start() {
     ? new MatrixClient(config.homeserver, config.accessToken, storage, crypto)
     : new MatrixClient(config.homeserver, config.accessToken, storage);
 
-  matrixClient.on('room.message', (roomId, event) => {
-    const content = event?.content ?? {};
-    if (content.msgtype !== 'm.location') return;
+  // Extrait un geo_uri depuis un contenu d'événement Matrix (plusieurs formats supportés)
+  function extractGeoUri(content) {
+    // MSC3488 beacon : org.matrix.msc3488.beacon
+    if (content['org.matrix.msc3488.location']?.uri) {
+      return content['org.matrix.msc3488.location'].uri;
+    }
+    // Ancien format : m.room.message msgtype m.location
+    if (content.geo_uri) {
+      return content.geo_uri;
+    }
+    return null;
+  }
 
-    // Supporte geo_uri standard et la variante MSC3488
-    const geoUri = content.geo_uri
-      ?? content['org.matrix.msc3488.location']?.uri
-      ?? '';
+  function handleLocationEvent(event) {
+    const content = event?.content ?? {};
+    const type    = event?.type ?? '';
+
+    // Événement de position live (MSC3672/MSC3488 beacon)
+    const isBeacon  = type === 'org.matrix.msc3488.beacon';
+    // Ancien message de localisation ponctuelle
+    const isLegacy  = type === 'm.room.message' && content.msgtype === 'm.location';
+
+    if (!isBeacon && !isLegacy) return;
+
+    const geoUri = extractGeoUri(content);
     if (!geoUri) return;
 
     // Format : "geo:latitude,longitude" ou "geo:latitude,longitude,altitude"
@@ -194,8 +211,12 @@ async function start() {
     // Garde le buffer borné (max 1000 entrées)
     if (_locationEvents.length > 1000) _locationEvents.shift();
 
-    console.log(`[location] ${userId} → lat=${lat}, lon=${lon}`);
-  });
+    console.log(`[location${isBeacon ? '/beacon' : '/legacy'}] ${userId} → lat=${lat}, lon=${lon}`);
+  }
+
+  // room.event couvre tous les événements timeline (chiffrés ou non),
+  // y compris org.matrix.msc3488.beacon et m.room.message
+  matrixClient.on('room.event', (_roomId, event) => handleLocationEvent(event));
 
   matrixClient.on('room.failed_decryption', (roomId, event, err) => {
     const session = event?.content?.session_id ?? '?';
