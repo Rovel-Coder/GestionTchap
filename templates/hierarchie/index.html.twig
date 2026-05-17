@@ -62,173 +62,100 @@
     {# ── Layout deux colonnes ── #}
     <div x-show="!loading" style="display:flex;gap:16px;flex:1;min-height:0;overflow:hidden;">
 
-        {# ── Colonne gauche : arbre (largeur fixe) ── #}
-        <div style="width:340px;flex-shrink:0;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-card);">
-            <div x-show="tree.length === 0" class="empty-state">
-                Aucune unité trouvée
-            </div>
-            <template x-for="u in tree" :key="u.id">
-                <div class="hier-row"
-                    :class="{ 'hier-row-selected': selected && selected.id === u.id }"
-                    :style="'padding-left:' + (16 + u._depth * 24) + 'px'"
-                    @click="selectUnite(u)">
+        {# ── Colonne gauche : arbre + config unité ── #}
+        <div style="width:400px;flex-shrink:0;display:flex;flex-direction:column;gap:10px;overflow:hidden;">
 
-                    {# Toggle collapse #}
-                    <span class="hier-toggle" @click.stop="toggleCollapse(u.id)" :style="u._hasChildren ? '' : 'visibility:hidden'">
-                        <i class="fa-solid" :class="collapsedMap[u.id] ? 'fa-chevron-right' : 'fa-chevron-down'"
-                            style="font-size:10px;color:var(--text-muted);"></i>
-                    </span>
-
-                    {# Pastille niveau #}
-                    <span class="hier-dot" :style="'background:' + niveauColor(u.niveau_id)"></span>
-
-                    {# Nom #}
-                    <span class="hier-nom" x-text="u.Nom"></span>
-
-                    {# Code #}
-                    <span x-show="u.code" class="hier-code" x-text="u.code"></span>
-
-                    {# Type badge #}
-                    <span x-show="u.type === 'virtuel'" class="hier-type-badge">virtuel</span>
-
-                    {# Actions #}
-                    <div class="hier-actions" @click.stop>
-                        <button class="btn-icon" @click="openCreate(u.id)" title="Ajouter une unité subordonnée">
-                            <i class="fa-solid fa-plus" style="font-size:10px;"></i>
-                        </button>
-                        {% if permissions.canAdmin %}
-                        <button class="btn-icon" @click="openEdit(u)" title="Modifier">
-                            <i class="fa-solid fa-pen" style="font-size:10px;"></i>
-                        </button>
-                        {% endif %}
-                    </div>
-
+            {# Arbre #}
+            <div style="flex:1;min-height:0;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-card);">
+                <div x-show="tree.length === 0" class="empty-state">
+                    Aucune unité trouvée
                 </div>
-            </template>
-        </div>
+                <template x-for="u in tree" :key="u.id">
+                    <div class="hier-row"
+                        :class="{ 'hier-row-selected': selected && selected.id === u.id }"
+                        :style="'padding-left:' + (16 + u._depth * 24) + 'px'"
+                        @click="selectUnite(u)">
 
-        {# ── Colonne droite : panneau détail (prend tout l'espace restant) ── #}
-        <div style="flex:1;min-width:0;overflow-y:auto;">
-
-            {# État vide #}
-            <div x-show="selected === null" style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-muted);gap:10px;border:1px dashed var(--border);border-radius:var(--radius);padding:40px;">
-                <i class="fa-solid fa-sitemap" style="font-size:28px;opacity:.3;"></i>
-                <span style="font-size:13px;">Sélectionnez une unité</span>
-            </div>
-
-            {# Panneau unité sélectionnée #}
-            <div x-show="selected !== null" style="display:flex;flex-direction:column;gap:12px;">
-
-                {# En-tête #}
-                <div style="border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-card);padding:16px;">
-                    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
-                        <div>
-                            <div style="font-size:16px;font-weight:700;color:var(--text-primary);" x-text="selected?.Nom"></div>
-                            <div style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap;">
-                                <span style="font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;border:1px solid var(--border);"
-                                    :style="'color:' + niveauColor(selected?.niveau_id)"
-                                    x-text="niveauLabel(selected?.niveau_id)"></span>
-                                <span x-show="selected?.type === 'virtuel'" style="font-size:11px;color:var(--text-muted);font-style:italic;">virtuel</span>
-                                <span x-show="selected?.code" style="font-size:12px;color:var(--text-muted);font-family:monospace;" x-text="selected?.code"></span>
-                            </div>
-                            <div x-show="selected?.parent_id" style="font-size:11px;color:var(--text-muted);margin-top:4px;">
-                                <i class="fa-solid fa-arrow-up" style="font-size:9px;"></i>
-                                <span x-text="parentLabel(selected?.parent_id)"></span>
-                            </div>
-                        </div>
-                        <div style="display:flex;gap:6px;flex-shrink:0;">
-                            {% if permissions.canAdmin %}
-                            <button class="btn-icon" @click="openEdit(selected)" title="Modifier">
-                                <i class="fa-solid fa-pen"></i>
+                        <span class="hier-toggle" @click.stop="toggleCollapse(u.id)" :style="u._hasChildren ? '' : 'visibility:hidden'">
+                            <i class="fa-solid" :class="collapsedMap[u.id] ? 'fa-chevron-right' : 'fa-chevron-down'"
+                                style="font-size:10px;color:var(--text-muted);"></i>
+                        </span>
+                        <span class="hier-dot" :style="'background:' + niveauColor(u.niveau_id)"></span>
+                        <span class="hier-nom" x-text="u.Nom"></span>
+                        <span x-show="u.code" class="hier-code" x-text="u.code"></span>
+                        <span x-show="u.type === 'virtuel'" class="hier-type-badge">virtuel</span>
+                        <div class="hier-actions" @click.stop>
+                            <button class="btn-icon" @click="openCreate(u.id)" title="Ajouter une unité subordonnée">
+                                <i class="fa-solid fa-plus" style="font-size:10px;"></i>
                             </button>
-                            <button class="btn-icon" @click="deleteSelected()" title="Supprimer" style="color:var(--red-light);">
-                                <i class="fa-solid fa-trash"></i>
+                            {% if permissions.canAdmin %}
+                            <button class="btn-icon" @click="openEdit(u)" title="Modifier">
+                                <i class="fa-solid fa-pen" style="font-size:10px;"></i>
                             </button>
                             {% endif %}
                         </div>
                     </div>
+                </template>
+            </div>
 
-                    {# Stats #}
-                    <div style="display:flex;gap:16px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
-                        <div style="text-align:center;">
-                            <div style="font-size:18px;font-weight:700;color:var(--text-primary);" x-text="childCount(selected?.id)"></div>
-                            <div style="font-size:10px;color:var(--text-muted);">Subordonnées</div>
-                        </div>
-                        <div style="text-align:center;">
-                            <div style="font-size:18px;font-weight:700;color:var(--text-primary);" x-text="agentCount(selected?.id)"></div>
-                            <div style="font-size:10px;color:var(--text-muted);">Agents</div>
-                        </div>
-                        <div style="text-align:center;">
-                            <div style="font-size:18px;font-weight:700;color:var(--text-primary);" x-text="(selected?.Salons || []).length"></div>
-                            <div style="font-size:10px;color:var(--text-muted);">Salons</div>
-                        </div>
-                    </div>
-                </div>
+            {# Config unité (visible quand une unité est sélectionnée) #}
+            <div x-show="selected !== null" style="overflow-y:auto;max-height:52%;display:flex;flex-direction:column;gap:8px;">
 
                 {# Bot Tchap dédié (admin / sysadmin uniquement) #}
                 {% if permissions.canAdmin %}
-                <div style="border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-card);overflow:hidden;">
-                    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);">
-                        <div>
-                            <span style="font-family:var(--font-display);font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--text-muted);">BOT TCHAP DÉDIÉ</span>
-                            <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Bot secondaire utilisé pour cette unité (laissez vide pour le bot principal)</div>
-                        </div>
+                <div style="border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-card);overflow:hidden;flex-shrink:0;">
+                    <div style="padding:10px 14px;border-bottom:1px solid var(--border);">
+                        <span style="font-family:var(--font-display);font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--text-muted);">BOT TCHAP DÉDIÉ</span>
+                        <div style="font-size:11px;color:var(--text-muted);margin-top:1px;">Bot secondaire pour cette unité (vide = bot principal)</div>
                     </div>
-                    <div style="padding:14px 16px;display:flex;align-items:center;gap:10px;">
-                        <select x-model.number="selectedBotId" style="flex:1;">
+                    <div style="padding:10px 14px;display:flex;align-items:center;gap:8px;">
+                        <select x-model.number="selectedBotId" style="flex:1;font-size:12px;">
                             <option :value="null">— Bot principal (par défaut) —</option>
                             <template x-for="bot in bots.filter(b => !b.isPrincipal)" :key="bot.id">
                                 <option :value="bot.id"
-                                    x-text="bot.name + ' (' + bot.userId + ')' + (!bot.connected ? ' ✗ non connecté' : ' ✓')">
+                                    x-text="bot.name + ' (' + bot.userId + ')' + (!bot.connected ? ' ✗' : ' ✓')">
                                 </option>
                             </template>
                         </select>
-                        <button class="btn-primary" style="white-space:nowrap;"
-                            :disabled="botSaving"
-                            @click="saveBotId()">
+                        <button class="btn-primary" style="white-space:nowrap;font-size:12px;padding:6px 12px;"
+                            :disabled="botSaving" @click="saveBotId()">
                             <i x-show="botSaving" class="fa-solid fa-spinner fa-spin"></i>
                             <span x-show="!botSaving">Enregistrer</span>
                         </button>
                     </div>
                     <div x-show="selectedBotId && !bots.find(b => b.id === selectedBotId)?.connected"
-                        style="padding:6px 16px 12px;font-size:11px;color:var(--yellow,#c9a84c);">
+                        style="padding:4px 14px 10px;font-size:11px;color:var(--yellow,#c9a84c);">
                         <i class="fa-solid fa-triangle-exclamation" style="margin-right:4px;"></i>
-                        Ce bot n'est pas connecté. Connectez-le depuis la page Configuration.
+                        Bot non connecté — configurez-le dans la page Configuration.
                     </div>
                 </div>
                 {% endif %}
 
-                {# Administrateurs côte à côte #}
-                <div style="display:flex;gap:12px;align-items:flex-start;">
-
                 {# Administrateurs de l'unité #}
-                <div style="flex:1;min-width:0;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-card);overflow:hidden;">
-                    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);">
+                <div style="border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-card);overflow:hidden;flex-shrink:0;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border);">
                         <span style="font-family:var(--font-display);font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--text-muted);">ADMINISTRATEURS</span>
-                        <button class="btn-ghost" style="padding:3px 10px;font-size:11px;"
+                        <button class="btn-ghost" style="padding:2px 8px;font-size:11px;"
                             @click="addAdminOpen = true; addAdminForm = { personnel_id: null, role: 'gestionnaire' }; addAdminSearch = '';">
                             <i class="fa-solid fa-plus" style="font-size:10px;"></i> Ajouter
                         </button>
                     </div>
-
-                    <div x-show="loadingAdmins" style="padding:20px;text-align:center;">
-                        <div class="spinner" style="width:20px;height:20px;"></div>
+                    <div x-show="loadingAdmins" style="padding:16px;text-align:center;">
+                        <div class="spinner" style="width:18px;height:18px;"></div>
                     </div>
-
                     <div x-show="!loadingAdmins && admins.length === 0"
-                        style="padding:16px;font-size:12px;color:var(--text-muted);text-align:center;">
+                        style="padding:12px 14px;font-size:12px;color:var(--text-muted);text-align:center;">
                         Aucun administrateur défini
                     </div>
-
                     <template x-for="admin in admins" :key="admin.id">
-                        <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border);">
-                            <div style="width:30px;height:30px;border-radius:50%;background:var(--bg-elevated);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--gold);flex-shrink:0;"
+                        <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--border);">
+                            <div style="width:26px;height:26px;border-radius:50%;background:var(--bg-elevated);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--gold);flex-shrink:0;"
                                 x-text="(admin.Prenom?.[0] || '') + (admin.Nom?.[0] || '')"></div>
                             <div style="flex:1;min-width:0;">
-                                <div style="font-size:13px;font-weight:600;" x-text="admin.Prenom + ' ' + admin.Nom"></div>
-                                <div style="font-size:11px;color:var(--text-muted);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" x-text="admin.Mail || admin.Grade || ''"></div>
+                                <div style="font-size:12px;font-weight:600;" x-text="admin.Prenom + ' ' + admin.Nom"></div>
+                                <div style="font-size:11px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" x-text="admin.Mail || admin.Grade || ''"></div>
                             </div>
-                            <span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:999px;text-transform:uppercase;"
+                            <span style="font-size:10px;font-weight:600;padding:1px 6px;border-radius:999px;text-transform:uppercase;"
                                 :style="admin.role === 'admin' ? 'background:rgba(201,168,76,.15);color:var(--gold)' : 'background:rgba(45,108,223,.1);color:var(--blue-light)'"
                                 x-text="admin.role"></span>
                             <button class="btn-icon" @click="removeAdmin(admin)" title="Retirer" style="color:var(--red-light);">
@@ -238,36 +165,33 @@
                     </template>
                 </div>
 
-                {# ── Unités administratrices ── #}
-                <div style="flex:1;min-width:0;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-card);overflow:hidden;">
-                    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);">
+                {# Unités administratrices #}
+                <div style="border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-card);overflow:hidden;flex-shrink:0;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border);">
                         <div>
                             <span style="font-family:var(--font-display);font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--text-muted);">UNITÉS ADMINISTRATRICES</span>
-                            <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Toute unité listée ici donne ses droits à ses membres</div>
+                            <div style="font-size:11px;color:var(--text-muted);margin-top:1px;">Donne les droits de l'unité à ses membres</div>
                         </div>
-                        <button class="btn-ghost" style="padding:3px 10px;font-size:11px;"
+                        <button class="btn-ghost" style="padding:2px 8px;font-size:11px;"
                             @click="addUniteAdminOpen = true; addUniteAdminForm = { unite_source_id: null, role: 'gestionnaire' }; addUniteAdminSearch = '';">
                             <i class="fa-solid fa-plus" style="font-size:10px;"></i> Ajouter
                         </button>
                     </div>
-
-                    <div x-show="loadingUniteAdmins" style="padding:20px;text-align:center;">
-                        <div class="spinner" style="width:20px;height:20px;"></div>
+                    <div x-show="loadingUniteAdmins" style="padding:16px;text-align:center;">
+                        <div class="spinner" style="width:18px;height:18px;"></div>
                     </div>
-
                     <div x-show="!loadingUniteAdmins && uniteAdmins.length === 0"
-                        style="padding:16px;font-size:12px;color:var(--text-muted);text-align:center;">
+                        style="padding:12px 14px;font-size:12px;color:var(--text-muted);text-align:center;">
                         Aucune unité administratrice définie
                     </div>
-
                     <template x-for="entry in uniteAdmins" :key="entry.id">
-                        <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border);">
-                            <i class="fa-solid fa-building" style="color:var(--blue-light);font-size:13px;flex-shrink:0;"></i>
+                        <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--border);">
+                            <i class="fa-solid fa-building" style="color:var(--blue-light);font-size:12px;flex-shrink:0;"></i>
                             <div style="flex:1;min-width:0;">
-                                <div style="font-size:13px;font-weight:600;" x-text="entry.source_nom"></div>
+                                <div style="font-size:12px;font-weight:600;" x-text="entry.source_nom"></div>
                                 <div style="font-size:11px;color:var(--text-muted);" x-text="entry.niveau_nom || '—'"></div>
                             </div>
-                            <span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:999px;text-transform:uppercase;"
+                            <span style="font-size:10px;font-weight:600;padding:1px 6px;border-radius:999px;text-transform:uppercase;"
                                 :style="entry.role === 'admin' ? 'background:rgba(201,168,76,.15);color:var(--gold)' : 'background:rgba(45,108,223,.1);color:var(--blue-light)'"
                                 x-text="entry.role"></span>
                             <button class="btn-icon" @click="removeUniteAdmin(entry)" title="Retirer" style="color:var(--red-light);">
@@ -277,9 +201,62 @@
                     </template>
                 </div>
 
-                </div>{# fin flex côte à côte #}
+            </div>{# fin config unité #}
+        </div>
 
+        {# ── Colonne droite : fiche de l'unité sélectionnée ── #}
+        <div style="flex:1;min-width:0;overflow-y:auto;">
+
+            {# État vide #}
+            <div x-show="selected === null" style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-muted);gap:10px;border:1px dashed var(--border);border-radius:var(--radius);padding:40px;">
+                <i class="fa-solid fa-sitemap" style="font-size:28px;opacity:.3;"></i>
+                <span style="font-size:13px;">Sélectionnez une unité</span>
             </div>
+
+            {# En-tête unité #}
+            <div x-show="selected !== null" style="border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-card);padding:16px;">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+                    <div>
+                        <div style="font-size:16px;font-weight:700;color:var(--text-primary);" x-text="selected?.Nom"></div>
+                        <div style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap;">
+                            <span style="font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;border:1px solid var(--border);"
+                                :style="'color:' + niveauColor(selected?.niveau_id)"
+                                x-text="niveauLabel(selected?.niveau_id)"></span>
+                            <span x-show="selected?.type === 'virtuel'" style="font-size:11px;color:var(--text-muted);font-style:italic;">virtuel</span>
+                            <span x-show="selected?.code" style="font-size:12px;color:var(--text-muted);font-family:monospace;" x-text="selected?.code"></span>
+                        </div>
+                        <div x-show="selected?.parent_id" style="font-size:11px;color:var(--text-muted);margin-top:4px;">
+                            <i class="fa-solid fa-arrow-up" style="font-size:9px;"></i>
+                            <span x-text="parentLabel(selected?.parent_id)"></span>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:6px;flex-shrink:0;">
+                        {% if permissions.canAdmin %}
+                        <button class="btn-icon" @click="openEdit(selected)" title="Modifier">
+                            <i class="fa-solid fa-pen"></i>
+                        </button>
+                        <button class="btn-icon" @click="deleteSelected()" title="Supprimer" style="color:var(--red-light);">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+                <div style="display:flex;gap:24px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+                    <div style="text-align:center;">
+                        <div style="font-size:20px;font-weight:700;color:var(--text-primary);" x-text="childCount(selected?.id)"></div>
+                        <div style="font-size:10px;color:var(--text-muted);">Subordonnées</div>
+                    </div>
+                    <div style="text-align:center;">
+                        <div style="font-size:20px;font-weight:700;color:var(--text-primary);" x-text="agentCount(selected?.id)"></div>
+                        <div style="font-size:10px;color:var(--text-muted);">Agents</div>
+                    </div>
+                    <div style="text-align:center;">
+                        <div style="font-size:20px;font-weight:700;color:var(--text-primary);" x-text="(selected?.Salons || []).length"></div>
+                        <div style="font-size:10px;color:var(--text-muted);">Salons</div>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 
