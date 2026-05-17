@@ -176,14 +176,23 @@ class MessageController extends AbstractController
     private function toHtml(string $text): string
     {
         $html = htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        // Blocs de code (avant le code inline pour éviter les collisions)
+        // Blocs de code (avant tout autre traitement pour éviter les collisions)
         $html = preg_replace('/```\s*\n?(.*?)\n?```/su', '<pre><code>$1</code></pre>', $html);
         // Code inline
         $html = preg_replace('/`(.+?)`/su', '<code>$1</code>', $html);
+        // Titres H1–H3 (début de ligne)
+        $html = preg_replace('/^### (.+)$/mu', '<h3>$1</h3>', $html);
+        $html = preg_replace('/^## (.+)$/mu',  '<h2>$1</h2>', $html);
+        $html = preg_replace('/^# (.+)$/mu',   '<h1>$1</h1>', $html);
+        // Listes à puces
+        $html = preg_replace('/^- (.+)$/mu', '<li>$1</li>', $html);
+        $html = preg_replace('/^[0-9]+\. (.+)$/mu', '<li>$1</li>', $html);
         // Gras
         $html = preg_replace('/\*\*(.+?)\*\*/su', '<strong>$1</strong>', $html);
         // Italique
         $html = preg_replace('/\*(.+?)\*/su', '<em>$1</em>', $html);
+        // Souligné
+        $html = preg_replace('/__(.+?)__/su', '<u>$1</u>', $html);
         // Barré
         $html = preg_replace('/~~(.+?)~~/su', '<del>$1</del>', $html);
         // Citation (> au début de ligne — htmlspecialchars a transformé > en &gt;)
@@ -192,8 +201,8 @@ class MessageController extends AbstractController
         $html = preg_replace('/\[([^\]]+)]\(([^)]+)\)/u', '<a href="$2">$1</a>', $html);
         // @room — mention spéciale Matrix qui notifie tous les membres
         $html = str_replace('@room', '<a href="https://matrix.to/#/@room">@room</a>', $html);
-        // Sauts de ligne (hors blocs pre)
-        $html = preg_replace('/(?<!>)\n(?!<\/?(pre|blockquote))/u', '<br>', $html);
+        // Sauts de ligne (hors balises de blocs)
+        $html = preg_replace('/\n/', '<br>', $html);
 
         return $html;
     }
