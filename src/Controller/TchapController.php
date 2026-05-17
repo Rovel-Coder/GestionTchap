@@ -323,7 +323,7 @@ class TchapController extends AbstractController
         }
 
         try {
-            $cfg    = $this->config->getTchapConfig();
+            $cfg    = $this->getCfgForRoom($roomId);
             $result = $this->tchap->invite($roomId, $userId, $cfg);
             return $this->json($result);
         } catch (\Throwable $e) {
@@ -351,7 +351,7 @@ class TchapController extends AbstractController
         }
 
         try {
-            $cfg    = $this->config->getTchapConfig();
+            $cfg    = $this->getCfgForRoom($roomId);
             $result = $this->tchap->kick($roomId, $userId, $reason, $cfg);
             return $this->json($result);
         } catch (\Throwable $e) {
@@ -376,7 +376,7 @@ class TchapController extends AbstractController
         }
 
         try {
-            $cfg     = $this->config->getTchapConfig();
+            $cfg     = $this->getCfgForRoom($roomId);
             $members = $this->tchap->getMembers($roomId, $cfg);
             $botId   = strtolower($cfg['botUserId'] ?? '');
 

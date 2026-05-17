@@ -158,12 +158,26 @@ class SalonController extends AbstractController
             // Utiliser le bot dédié de l'unité s'il est configuré et connecté
             if ($uniteId) {
                 $unite = $this->db->fetchAssociative('SELECT * FROM unites WHERE id = :id', ['id' => $uniteId]);
-                if ($unite && !empty($unite['bot_access_token']) && !empty($unite['bot_user_id'])) {
-                    $cfg = array_merge($cfg, [
-                        'token'         => $unite['bot_access_token'],
-                        'botUserId'     => $unite['bot_user_id'],
-                        'bypass_bridge' => true, // bot dédié → appel direct Matrix, pas via le bridge global
-                    ]);
+                if ($unite) {
+                    // Priorité 1 : bot_id référence la table bots
+                    if (!empty($unite['bot_id'])) {
+                        $bot = $this->db->fetchAssociative('SELECT * FROM bots WHERE id = :id', ['id' => (int) $unite['bot_id']]);
+                        if ($bot && !empty($bot['access_token'])) {
+                            $cfg = array_merge($cfg, [
+                                'token'         => $bot['access_token'],
+                                'botUserId'     => $bot['user_id'],
+                                'homeserver'    => $bot['homeserver'] ?: $cfg['homeserver'],
+                                'bypass_bridge' => !$bot['is_principal'],
+                            ]);
+                        }
+                    // Priorité 2 : legacy bot_user_id + bot_access_token
+                    } elseif (!empty($unite['bot_access_token']) && !empty($unite['bot_user_id'])) {
+                        $cfg = array_merge($cfg, [
+                            'token'         => $unite['bot_access_token'],
+                            'botUserId'     => $unite['bot_user_id'],
+                            'bypass_bridge' => true,
+                        ]);
+                    }
                 }
             }
 
