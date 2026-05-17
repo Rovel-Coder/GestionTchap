@@ -121,7 +121,7 @@ function calcMac(sharedSecret, senderUserId, senderDeviceId,
     senderUserId, senderDeviceId,
     receiverUserId, receiverDeviceId,
     txnId, keyId,
-  ].join('|');
+  ].join('');
   const macKey = Buffer.from(crypto.hkdfSync('sha256', sharedSecret, Buffer.alloc(0), infoMac, 32));
   return crypto.createHmac('sha256', macKey).update(keyValue).digest('base64').replace(/=+$/, '');
 }
