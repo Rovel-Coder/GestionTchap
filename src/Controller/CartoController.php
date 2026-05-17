@@ -145,26 +145,26 @@ class CartoController extends AbstractController
     {
         try {
             $events = $this->tchap->callBridge('GET', '/location-events');
+
+            foreach ($events as $event) {
+                $userId = $event['userId'] ?? null;
+                $lat    = isset($event['lat']) ? (float) $event['lat'] : null;
+                $lon    = isset($event['lon']) ? (float) $event['lon'] : null;
+
+                if (!$userId || $lat === null || $lon === null) {
+                    continue;
+                }
+                if ($lat < -90 || $lat > 90 || $lon < -180 || $lon > 180) {
+                    continue;
+                }
+
+                $this->db->executeStatement(
+                    'UPDATE personnel SET latitude = :lat, longitude = :lon, position_at = NOW() WHERE "user_id" = :uid',
+                    ['lat' => $lat, 'lon' => $lon, 'uid' => $userId]
+                );
+            }
         } catch (\Throwable) {
-            return;
-        }
-
-        foreach ($events as $event) {
-            $userId = $event['userId'] ?? null;
-            $lat    = isset($event['lat']) ? (float) $event['lat'] : null;
-            $lon    = isset($event['lon']) ? (float) $event['lon'] : null;
-
-            if (!$userId || $lat === null || $lon === null) {
-                continue;
-            }
-            if ($lat < -90 || $lat > 90 || $lon < -180 || $lon > 180) {
-                continue;
-            }
-
-            $this->db->executeStatement(
-                'UPDATE personnel SET latitude = :lat, longitude = :lon, position_at = NOW() WHERE "user_id" = :uid',
-                ['lat' => $lat, 'lon' => $lon, 'uid' => $userId]
-            );
+            // bridge indisponible ou erreur DB : non bloquant pour l'affichage
         }
     }
 

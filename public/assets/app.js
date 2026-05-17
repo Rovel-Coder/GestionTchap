@@ -3153,6 +3153,7 @@ function cartoView() {
       await this.$nextTick();
 
       if (typeof L !== 'undefined') {
+        if (this.map) { this.map.remove(); this.map = null; }
         this.map = L.map('map').setView([46.5, 2.5], 6);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           attribution: '© OpenStreetMap contributors',
@@ -3163,6 +3164,10 @@ function cartoView() {
 
       this.$watch('search',           () => this.$nextTick(() => this.updateMarkers()));
       this.$watch('selectedSalonIds', () => this.$nextTick(() => this.updateMarkers()));
+    },
+
+    destroy() {
+      if (this.map) { this.map.remove(); this.map = null; }
     },
   };
 }
