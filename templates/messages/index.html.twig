@@ -66,53 +66,41 @@
                     <div style="display:flex;gap:2px;flex-wrap:wrap;row-gap:4px;">
 
                         {# Formatage de caractères #}
-                        <button type="button" class="fmt-btn" title="Gras (Ctrl+B)" @click="format('**','**')"><strong>B</strong></button>
-                        <button type="button" class="fmt-btn" title="Italique (Ctrl+I)" @click="format('*','*')"><em>I</em></button>
-                        <button type="button" class="fmt-btn" title="Souligné (Ctrl+U)" @click="format('__','__')">
-                            <span style="text-decoration:underline;">U</span>
-                        </button>
-                        <button type="button" class="fmt-btn" title="Barré" @click="format('~~','~~')">
-                            <span style="text-decoration:line-through;">S</span>
-                        </button>
+                        <button type="button" class="fmt-btn" title="Gras (Ctrl+B)" @click="format('**','**')"><strong>Gras</strong></button>
+                        <button type="button" class="fmt-btn" title="Italique (Ctrl+I)" @click="format('*','*')"><em>Italique</em></button>
+                        <button type="button" class="fmt-btn" title="Souligné (Ctrl+U)" @click="format('__','__')"><span style="text-decoration:underline;">Souligné</span></button>
+                        <button type="button" class="fmt-btn" title="Barré" @click="format('~~','~~')"><span style="text-decoration:line-through;">Barré</span></button>
 
                         <div style="width:1px;background:var(--border);margin:0 4px;align-self:stretch;"></div>
 
                         {# Titres #}
-                        <button type="button" class="fmt-btn" title="Titre H1" @click="formatLine('# ')"><strong style="font-size:13px;">H1</strong></button>
-                        <button type="button" class="fmt-btn" title="Titre H2" @click="formatLine('## ')"><strong style="font-size:12px;">H2</strong></button>
-                        <button type="button" class="fmt-btn" title="Titre H3" @click="formatLine('### ')"><strong style="font-size:11px;">H3</strong></button>
+                        <button type="button" class="fmt-btn" title="Titre 1" @click="formatLine('# ')"><strong>Titre 1</strong></button>
+                        <button type="button" class="fmt-btn" title="Titre 2" @click="formatLine('## ')"><strong style="font-size:11px;">Titre 2</strong></button>
+                        <button type="button" class="fmt-btn" title="Titre 3" @click="formatLine('### ')"><strong style="font-size:10px;">Titre 3</strong></button>
 
                         <div style="width:1px;background:var(--border);margin:0 4px;align-self:stretch;"></div>
 
                         {# Listes #}
-                        <button type="button" class="fmt-btn" title="Liste à puces" @click="formatLine('- ')">
-                            <i class="fa-solid fa-list-ul" style="font-size:10px;"></i>
-                        </button>
-                        <button type="button" class="fmt-btn" title="Liste numérotée" @click="formatLine('1. ')">
-                            <i class="fa-solid fa-list-ol" style="font-size:10px;"></i>
-                        </button>
+                        <button type="button" class="fmt-btn" title="Liste à puces" @click="formatLine('- ')">• Liste</button>
+                        <button type="button" class="fmt-btn" title="Liste numérotée" @click="formatLine('1. ')">1. Liste</button>
 
                         <div style="width:1px;background:var(--border);margin:0 4px;align-self:stretch;"></div>
 
                         {# Code #}
-                        <button type="button" class="fmt-btn" title="Code inline" @click="format('`','`')" style="font-family:monospace;">&lt;/&gt;</button>
-                        <button type="button" class="fmt-btn fmt-btn-wide" title="Bloc de code" @click="format('```\n','\n```')" style="font-family:monospace;">```</button>
+                        <button type="button" class="fmt-btn" title="Code inline" @click="format('`','`')" style="font-family:monospace;">Code</button>
+                        <button type="button" class="fmt-btn" title="Bloc de code" @click="format('```\n','\n```')" style="font-family:monospace;">Bloc code</button>
 
                         <div style="width:1px;background:var(--border);margin:0 4px;align-self:stretch;"></div>
 
                         {# Bloc / liens #}
-                        <button type="button" class="fmt-btn" title="Citation" @click="formatLine('&gt; ')">
-                            <i class="fa-solid fa-quote-left" style="font-size:10px;"></i>
-                        </button>
-                        <button type="button" class="fmt-btn" title="Lien" @click="formatLink()">
-                            <i class="fa-solid fa-link" style="font-size:10px;"></i>
-                        </button>
+                        <button type="button" class="fmt-btn" title="Citation" @click="formatLine('&gt; ')">Citation</button>
+                        <button type="button" class="fmt-btn" title="Lien" @click="formatLink()">Lien</button>
 
                         <div style="width:1px;background:var(--border);margin:0 4px;align-self:stretch;"></div>
 
                         {# Mention #}
-                        <button type="button" class="fmt-btn fmt-btn-wide" title="Notifier tout le monde (@room)" @click="insertAtRoom()"
-                            style="color:var(--gold);font-weight:700;font-size:11px;">
+                        <button type="button" class="fmt-btn" title="Notifier tout le monde" @click="insertAtRoom()"
+                            style="color:var(--gold);font-weight:700;">
                             @room
                         </button>
                     </div>
