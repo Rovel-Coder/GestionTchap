@@ -593,6 +593,14 @@ router.get('/rooms/:roomId/beacon-positions', async (req, res) => {
             }
         }
 
+        const withoutCoords = Object.values(positions)
+            .filter(p => p.lat == null || p.lon == null)
+            .map(p => p.userId);
+
+        if (withoutCoords.length > 0) {
+            console.log(`[beacon] ${roomId} — partage actif sans coordonnées : ${withoutCoords.join(', ')}`);
+        }
+
         res.json(Object.values(positions));
     } catch (e) {
         console.error('[beacon-positions] Erreur :', e.message);

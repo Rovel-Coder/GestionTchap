@@ -7,6 +7,7 @@ use App\Service\ConfigService;
 use App\Service\RoleService;
 use App\Service\TchapService;
 use Doctrine\DBAL\Connection;
+use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -20,6 +21,7 @@ class CartoController extends AbstractController
         private readonly ConfigService $config,
         private readonly TchapService $tchap,
         private readonly Connection $db,
+        private readonly LoggerInterface $logger,
     ) {
     }
 
@@ -188,16 +190,50 @@ class CartoController extends AbstractController
                     ];
 
                     if ($lat === null || $lon === null) {
+                        $this->logger->info('[carto] Partage live détecté sans coordonnées exploitables', [
+                            'user_id' => $userId,
+                            'room_id' => $roomId,
+                            'salon_id' => (int) $salon['id'],
+                            'salon_nom' => (string) ($salon['Nom'] ?? ''),
+                        ]);
                         continue;
                     }
                     if ($lat < -90 || $lat > 90 || $lon < -180 || $lon > 180) {
+                        $this->logger->warning('[carto] Coordonnées hors limites ignorées', [
+                            'user_id' => $userId,
+                            'room_id' => $roomId,
+                            'salon_id' => (int) $salon['id'],
+                            'latitude' => $lat,
+                            'longitude' => $lon,
+                        ]);
                         continue;
                     }
 
-                    $this->db->executeStatement(
+                    $updated = $this->db->executeStatement(
                         'UPDATE personnel SET latitude = :lat, longitude = :lon, position_at = NOW() WHERE LOWER("user_id") = LOWER(:uid)',
                         ['lat' => $lat, 'lon' => $lon, 'uid' => $userId]
                     );
+
+                    if ($updated > 0) {
+                        $this->logger->info('[carto] Position mise à jour depuis Tchap', [
+                            'user_id' => $userId,
+                            'room_id' => $roomId,
+                            'salon_id' => (int) $salon['id'],
+                            'salon_nom' => (string) ($salon['Nom'] ?? ''),
+                            'latitude' => $lat,
+                            'longitude' => $lon,
+                            'rows' => $updated,
+                        ]);
+                    } else {
+                        $this->logger->warning('[carto] Position reçue mais aucun personnel trouvé pour ce Matrix ID', [
+                            'user_id' => $userId,
+                            'room_id' => $roomId,
+                            'salon_id' => (int) $salon['id'],
+                            'salon_nom' => (string) ($salon['Nom'] ?? ''),
+                            'latitude' => $lat,
+                            'longitude' => $lon,
+                        ]);
+                    }
                 }
             } catch (\Throwable) {
                 // salon injoignable ou bridge indisponible : non bloquant
