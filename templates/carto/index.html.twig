@@ -115,13 +115,14 @@
                 </div>
                 <template x-for="p in filteredPersonnel" :key="p.id">
                     <div class="carto-member-item" @click="openMember(p)">
-                        <div class="carto-pos-dot" :class="hasPosition(p) ? 'pos-known' : 'pos-unknown'"></div>
+                        <div class="carto-pos-dot" :class="hasPosition(p) || isLiveSharing(p) ? 'pos-known' : 'pos-unknown'"></div>
                         <div class="carto-member-body">
                             <div class="carto-member-name"
                                 x-text="(p.Prenom || '') + ' ' + (p.Nom || '').toUpperCase()"></div>
                             <div class="carto-member-meta">
                                 <span x-show="p.Grade" x-text="p.Grade + ' · '"></span>
                                 <span x-text="getUniteLabel(p)"></span>
+                                <span x-show="isLiveSharing(p) && !hasPosition(p)" style="color:#6ec38a;"> · partage actif</span>
                             </div>
                         </div>
                         <i class="fa-solid fa-chevron-right carto-member-chevron"></i>
@@ -189,8 +190,9 @@
                             </div>
                         </div>
                         <div class="carto-pos-card" x-show="!hasPosition(selectedMember)">
-                            <div class="carto-pos-dot pos-unknown"></div>
-                            <span style="font-size:12px;color:var(--text-muted);">Position non disponible</span>
+                            <div class="carto-pos-dot" :class="isLiveSharing(selectedMember) ? 'pos-known' : 'pos-unknown'"></div>
+                            <span style="font-size:12px;color:var(--text-muted);"
+                                x-text="isLiveSharing(selectedMember) ? 'Partage détecté, coordonnées non encore récupérées' : 'Position non disponible'"></span>
                         </div>
                     </div>
                 </div>

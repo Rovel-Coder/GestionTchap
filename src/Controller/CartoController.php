@@ -69,18 +69,25 @@ class CartoController extends AbstractController
             return $this->json(['error' => 'Acces a la cartographie non autorise'], 403);
         }
 
-        $this->syncBeaconPositionsFromBridge();
+        $liveUserIds = $this->syncBeaconPositionsFromBridge();
 
         if ($user->isSysAdmin()) {
             $rows = $this->fetchAllPositionedPersonnel();
+            $rows = $this->mergePersonnelRows($rows, $this->fetchPersonnelByUserIds($liveUserIds));
         } else {
             $candidateIds = $this->getPersonnelIdsFromManagedRooms();
             $rows = $this->fetchPositionedPersonnelByIds($candidateIds);
+            $rows = $this->mergePersonnelRows(
+                $rows,
+                $this->fetchPersonnelByUserIds($liveUserIds, $candidateIds)
+            );
         }
 
+        $liveLookup = array_fill_keys(array_map('strtolower', $liveUserIds), true);
         foreach ($rows as &$row) {
             $row['Unite'] = $this->decodePgArray($row['Unite'] ?? '{}');
             $row['Salons_Extra'] = $this->decodePgArray($row['Salons_Extra'] ?? '{}');
+            $row['sharing_live'] = isset($liveLookup[strtolower((string) ($row['user_id'] ?? ''))]);
         }
 
         return $this->json($rows);
@@ -142,11 +149,12 @@ class CartoController extends AbstractController
      * beacon actives (MSC3672/MSC3488) et met à jour la base.
      * Approche pull : plus fiable que le buffer push car elle interroge l'état Matrix courant.
      */
-    private function syncBeaconPositionsFromBridge(): void
+    private function syncBeaconPositionsFromBridge(): array
     {
         $salons = $this->db->fetchAllAssociative(
             'SELECT "room_id" FROM salons WHERE "room_id" IS NOT NULL AND "room_id" != \'\''
         );
+        $liveUserIds = [];
 
         foreach ($salons as $salon) {
             $roomId = (string) ($salon['room_id'] ?? '');
@@ -165,7 +173,12 @@ class CartoController extends AbstractController
                     $lat    = isset($pos['lat']) ? (float) $pos['lat'] : null;
                     $lon    = isset($pos['lon']) ? (float) $pos['lon'] : null;
 
-                    if (!$userId || $lat === null || $lon === null) {
+                    if (!$userId) {
+                        continue;
+                    }
+                    $liveUserIds[] = strtolower((string) $userId);
+
+                    if ($lat === null || $lon === null) {
                         continue;
                     }
                     if ($lat < -90 || $lat > 90 || $lon < -180 || $lon > 180) {
@@ -182,6 +195,8 @@ class CartoController extends AbstractController
                 continue;
             }
         }
+
+        return array_values(array_unique($liveUserIds));
     }
 
     private function fetchAllPositionedPersonnel(): array
@@ -284,6 +299,67 @@ class CartoController extends AbstractController
              ORDER BY position_at DESC',
             ['ids' => $pgIds]
         );
+    }
+
+    private function fetchPersonnelByUserIds(array $userIds, ?array $restrictIds = null): array
+    {
+        $userIds = array_values(array_filter(array_map(
+            static fn($id) => strtolower(trim((string) $id)),
+            $userIds
+        )));
+        if (empty($userIds)) {
+            return [];
+        }
+
+        $params = [];
+        $userPh = [];
+        foreach ($userIds as $i => $userId) {
+            $key = 'u' . $i;
+            $userPh[] = ':' . $key;
+            $params[$key] = $userId;
+        }
+
+        $sql = 'SELECT id, "Nom", "Prenom", "Grade", "Mail", "Unite", "Salons_Extra", "user_id",
+                       latitude, longitude, position_at
+                FROM personnel
+                WHERE LOWER("user_id") IN (' . implode(',', $userPh) . ')';
+
+        if ($restrictIds !== null) {
+            $restrictIds = array_values(array_unique(array_map('intval', $restrictIds)));
+            if (empty($restrictIds)) {
+                return [];
+            }
+
+            $idPh = [];
+            foreach ($restrictIds as $i => $id) {
+                $key = 'id' . $i;
+                $idPh[] = ':' . $key;
+                $params[$key] = $id;
+            }
+
+            $sql .= ' AND id IN (' . implode(',', $idPh) . ')';
+        }
+
+        $sql .= ' ORDER BY position_at DESC NULLS LAST, "Nom", "Prenom"';
+
+        return $this->db->fetchAllAssociative($sql, $params);
+    }
+
+    private function mergePersonnelRows(array $baseRows, array $extraRows): array
+    {
+        $merged = [];
+
+        foreach ([$baseRows, $extraRows] as $rows) {
+            foreach ($rows as $row) {
+                $id = (int) ($row['id'] ?? 0);
+                if ($id <= 0 || isset($merged[$id])) {
+                    continue;
+                }
+                $merged[$id] = $row;
+            }
+        }
+
+        return array_values($merged);
     }
 
     private function decodePgArray(mixed $value): array

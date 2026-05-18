@@ -543,6 +543,9 @@ router.get('/rooms/:roomId/beacon-positions', async (req, res) => {
 
         // ── 2. Messages récents (API directe, fonctionne en clair) ─────────
         const positions = {};
+        for (const userId of activeUsers) {
+            positions[userId] = { userId, lat: null, lon: null, ts: null, active: true };
+        }
         const filter    = encodeURIComponent(JSON.stringify({ types: ['m.beacon', 'org.matrix.msc3488.beacon'] }));
         const msgResp   = await fetch(
             `${hs}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/messages?dir=b&limit=500&filter=${filter}`,
@@ -553,7 +556,7 @@ router.get('/rooms/:roomId/beacon-positions', async (req, res) => {
             const msgData = await msgResp.json().catch(() => ({}));
             for (const ev of (msgData.chunk ?? [])) {
                 if (!activeUsers.has(ev.sender)) continue;
-                if (positions[ev.sender])         continue; // déjà le plus récent
+                if (positions[ev.sender]?.lat != null && positions[ev.sender]?.lon != null) continue; // déjà le plus récent exploitable
 
                 const geoUri = ev.content?.['m.location']?.uri
                     ?? ev.content?.['org.matrix.msc3488.location']?.uri
@@ -565,7 +568,7 @@ router.get('/rooms/:roomId/beacon-positions', async (req, res) => {
                 const lon = parseFloat(match[2]);
                 if (isNaN(lat) || isNaN(lon)) continue;
 
-                positions[ev.sender] = { userId: ev.sender, lat, lon, ts: ev.origin_server_ts ?? Date.now() };
+                positions[ev.sender] = { userId: ev.sender, lat, lon, ts: ev.origin_server_ts ?? Date.now(), active: true };
                 console.log(`[beacon/direct] ${ev.sender} → lat=${lat}, lon=${lon}`);
             }
         }
@@ -574,8 +577,8 @@ router.get('/rooms/:roomId/beacon-positions', async (req, res) => {
         for (const ev of bot.peekLocationEvents()) {
             if (!activeUsers.has(ev.userId)) continue;
             const existing = positions[ev.userId];
-            if (!existing || ev.ts > existing.ts) {
-                positions[ev.userId] = ev;
+            if (!existing || existing.ts == null || ev.ts > existing.ts) {
+                positions[ev.userId] = { ...ev, active: true };
                 console.log(`[beacon/sdk] ${ev.userId} → lat=${ev.lat}, lon=${ev.lon}`);
             }
         }

@@ -3023,8 +3023,12 @@ function cartoView() {
         });
       }
 
-      // Géolocalisés en premier
-      return [...result].sort((a, b) => (this.hasPosition(b) ? 1 : 0) - (this.hasPosition(a) ? 1 : 0));
+      // Géolocalisés en premier, puis partages live détectés
+      return [...result].sort((a, b) => {
+        const bScore = (this.hasPosition(b) ? 2 : 0) + (this.isLiveSharing(b) ? 1 : 0);
+        const aScore = (this.hasPosition(a) ? 2 : 0) + (this.isLiveSharing(a) ? 1 : 0);
+        return bScore - aScore;
+      });
     },
 
     get positionCount() {
@@ -3034,6 +3038,10 @@ function cartoView() {
     // ── Helpers ─────────────────────────────────────────────────
     hasPosition(p) {
       return p != null && p.latitude != null && p.longitude != null;
+    },
+
+    isLiveSharing(p) {
+      return !!(p && p.sharing_live);
     },
 
     getUniteLabel(p) {
