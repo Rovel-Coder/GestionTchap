@@ -3054,6 +3054,14 @@ function cartoView() {
       }).filter(Boolean).join(', ') || '';
     },
 
+    getSharingSalonLabel(p) {
+      if (!p || !Array.isArray(p.sharing_salons) || p.sharing_salons.length === 0) return '';
+      return p.sharing_salons
+        .map(s => s?.Nom || s?.room_id || '')
+        .filter(Boolean)
+        .join(', ');
+    },
+
     mxcToHttp(mxcUrl) {
       if (!mxcUrl || !mxcUrl.startsWith('mxc://') || !this.tchapHomeserver) return null;
       const path  = mxcUrl.slice(6);
@@ -3127,6 +3135,10 @@ function cartoView() {
       try {
         const data = await apiFetch('/api/carto/positions');
         this.personnel = data || [];
+        if (this.memberModalOpen && this.selectedMember?.id) {
+          const updated = this.personnel.find(p => p.id === this.selectedMember.id);
+          if (updated) this.selectedMember = updated;
+        }
         await this.$nextTick();
         this.updateMarkers();
       } catch (e) {

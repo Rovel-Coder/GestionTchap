@@ -69,7 +69,8 @@ class CartoController extends AbstractController
             return $this->json(['error' => 'Acces a la cartographie non autorise'], 403);
         }
 
-        $liveUserIds = $this->syncBeaconPositionsFromBridge();
+        $liveSharing = $this->syncBeaconPositionsFromBridge();
+        $liveUserIds = array_keys($liveSharing);
 
         if ($user->isSysAdmin()) {
             $rows = $this->fetchAllPositionedPersonnel();
@@ -83,11 +84,13 @@ class CartoController extends AbstractController
             );
         }
 
-        $liveLookup = array_fill_keys(array_map('strtolower', $liveUserIds), true);
+        $liveLookup = $liveSharing;
         foreach ($rows as &$row) {
             $row['Unite'] = $this->decodePgArray($row['Unite'] ?? '{}');
             $row['Salons_Extra'] = $this->decodePgArray($row['Salons_Extra'] ?? '{}');
-            $row['sharing_live'] = isset($liveLookup[strtolower((string) ($row['user_id'] ?? ''))]);
+            $liveData = $liveLookup[strtolower((string) ($row['user_id'] ?? ''))] ?? null;
+            $row['sharing_live'] = $liveData !== null;
+            $row['sharing_salons'] = $liveData['salons'] ?? [];
         }
 
         return $this->json($rows);
@@ -152,9 +155,9 @@ class CartoController extends AbstractController
     private function syncBeaconPositionsFromBridge(): array
     {
         $salons = $this->db->fetchAllAssociative(
-            'SELECT "room_id" FROM salons WHERE "room_id" IS NOT NULL AND "room_id" != \'\''
+            'SELECT id, "Nom", "room_id" FROM salons WHERE "room_id" IS NOT NULL AND "room_id" != \'\''
         );
-        $liveUserIds = [];
+        $liveSharing = [];
 
         foreach ($salons as $salon) {
             $roomId = (string) ($salon['room_id'] ?? '');
@@ -176,7 +179,13 @@ class CartoController extends AbstractController
                     if (!$userId) {
                         continue;
                     }
-                    $liveUserIds[] = strtolower((string) $userId);
+                    $userKey = strtolower((string) $userId);
+                    $liveSharing[$userKey] ??= ['salons' => []];
+                    $liveSharing[$userKey]['salons'][(int) $salon['id']] = [
+                        'id' => (int) $salon['id'],
+                        'Nom' => (string) ($salon['Nom'] ?? ''),
+                        'room_id' => $roomId,
+                    ];
 
                     if ($lat === null || $lon === null) {
                         continue;
@@ -196,7 +205,11 @@ class CartoController extends AbstractController
             }
         }
 
-        return array_values(array_unique($liveUserIds));
+        foreach ($liveSharing as &$data) {
+            $data['salons'] = array_values($data['salons']);
+        }
+
+        return $liveSharing;
     }
 
     private function fetchAllPositionedPersonnel(): array
