@@ -5,6 +5,7 @@ namespace App\Controller;
 use App\Security\AppUser;
 use App\Service\ConfigService;
 use App\Service\RoleService;
+use App\Service\ScopeService;
 use App\Service\TchapService;
 use Doctrine\DBAL\Connection;
 use Psr\Log\LoggerInterface;
@@ -18,6 +19,7 @@ class CartoController extends AbstractController
 {
     public function __construct(
         private readonly RoleService $roles,
+        private readonly ScopeService $scope,
         private readonly ConfigService $config,
         private readonly TchapService $tchap,
         private readonly Connection $db,
@@ -78,11 +80,11 @@ class CartoController extends AbstractController
             $rows = $this->fetchAllPositionedPersonnel();
             $rows = $this->mergePersonnelRows($rows, $this->fetchPersonnelByUserIds($liveUserIds));
         } else {
-            $candidateIds = $this->getPersonnelIdsFromManagedRooms();
-            $rows = $this->fetchPositionedPersonnelByIds($candidateIds);
+            $perimeterIds = $this->scope->getPerimeterIds($user);
+            $rows = $this->fetchPositionedPersonnelByPerimeter($perimeterIds);
             $rows = $this->mergePersonnelRows(
                 $rows,
-                $this->fetchPersonnelByUserIds($liveUserIds, $candidateIds)
+                $this->fetchPersonnelByUserIds($liveUserIds, $perimeterIds)
             );
         }
 
@@ -350,7 +352,36 @@ class CartoController extends AbstractController
         );
     }
 
-    private function fetchPersonnelByUserIds(array $userIds, ?array $restrictIds = null): array
+    private function fetchPositionedPersonnelByPerimeter(array $unitIds): array
+    {
+        $unitIds = array_values(array_unique(array_map('intval', $unitIds)));
+        if (empty($unitIds)) {
+            return [];
+        }
+
+        $pgIds = '{' . implode(',', $unitIds) . '}';
+
+        return $this->db->fetchAllAssociative(
+            'SELECT DISTINCT p.id, p."Nom", p."Prenom", p."Grade", p."Mail", p."Unite", p."Salons_Extra", p."user_id",
+                    p.latitude, p.longitude, p.position_at
+             FROM personnel p
+             WHERE (
+                 EXISTS (
+                     SELECT 1
+                     FROM personnel_unite pu
+                     WHERE pu.personnel_id = p.id
+                       AND pu.unite_id = ANY(:ids::int[])
+                 )
+                 OR p."Unite" && :ids::int[]
+             )
+               AND p.latitude IS NOT NULL
+               AND p.longitude IS NOT NULL
+             ORDER BY p.position_at DESC',
+            ['ids' => $pgIds]
+        );
+    }
+
+    private function fetchPersonnelByUserIds(array $userIds, ?array $restrictUnitIds = null): array
     {
         $userIds = array_values(array_filter(array_map(
             static fn($id) => strtolower(trim((string) $id)),
@@ -368,28 +399,36 @@ class CartoController extends AbstractController
             $params[$key] = $userId;
         }
 
-        $sql = 'SELECT id, "Nom", "Prenom", "Grade", "Mail", "Unite", "Salons_Extra", "user_id",
-                       latitude, longitude, position_at
-                FROM personnel
-                WHERE LOWER("user_id") IN (' . implode(',', $userPh) . ')';
+        $sql = 'SELECT p.id, p."Nom", p."Prenom", p."Grade", p."Mail", p."Unite", p."Salons_Extra", p."user_id",
+                       p.latitude, p.longitude, p.position_at
+                FROM personnel p
+                WHERE LOWER(p."user_id") IN (' . implode(',', $userPh) . ')';
 
-        if ($restrictIds !== null) {
-            $restrictIds = array_values(array_unique(array_map('intval', $restrictIds)));
-            if (empty($restrictIds)) {
+        if ($restrictUnitIds !== null) {
+            $restrictUnitIds = array_values(array_unique(array_map('intval', $restrictUnitIds)));
+            if (empty($restrictUnitIds)) {
                 return [];
             }
 
             $idPh = [];
-            foreach ($restrictIds as $i => $id) {
+            foreach ($restrictUnitIds as $i => $id) {
                 $key = 'id' . $i;
                 $idPh[] = ':' . $key;
                 $params[$key] = $id;
             }
 
-            $sql .= ' AND id IN (' . implode(',', $idPh) . ')';
+            $sql .= ' AND (
+                EXISTS (
+                    SELECT 1
+                    FROM personnel_unite pu
+                    WHERE pu.personnel_id = p.id
+                      AND pu.unite_id IN (' . implode(',', $idPh) . ')
+                )
+                OR p."Unite" && ARRAY[' . implode(',', $idPh) . ']::int[]
+            )';
         }
 
-        $sql .= ' ORDER BY position_at DESC NULLS LAST, "Nom", "Prenom"';
+        $sql .= ' ORDER BY p.position_at DESC NULLS LAST, p."Nom", p."Prenom"';
 
         return $this->db->fetchAllAssociative($sql, $params);
     }
