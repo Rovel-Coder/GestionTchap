@@ -3196,10 +3196,14 @@ function cartoView() {
       if (!this.map || typeof L === 'undefined') return;
 
       const keep = new Set(this.filteredPersonnel.filter(p => this.hasPosition(p)).map(p => p.id));
+      console.log('[carto] updateMarkers keep=', [...keep], 'markers=', Object.keys(_leafletMarkers), 'personnel=', this.personnel.map(p=>({id:p.id,lat:p.latitude})));
 
       // Supprimer les marqueurs obsolètes
       for (const [id, marker] of Object.entries(_leafletMarkers)) {
-        if (!keep.has(Number(id))) { marker.remove(); delete _leafletMarkers[id]; }
+        if (!keep.has(Number(id))) {
+          console.error('[carto] SUPPRESSION marqueur id=', id, 'keep=', [...keep]);
+          marker.remove(); delete _leafletMarkers[id];
+        }
       }
 
       // Ajouter les nouveaux marqueurs
