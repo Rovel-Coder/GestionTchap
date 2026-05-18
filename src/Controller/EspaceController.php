@@ -7,6 +7,7 @@ use App\Service\ConfigService;
 use App\Service\RoleService;
 use App\Service\TchapService;
 use Doctrine\DBAL\Connection;
+use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -23,6 +24,7 @@ class EspaceController extends AbstractController
         private readonly RoleService   $roles,
         private readonly ConfigService $config,
         private readonly TchapService  $tchap,
+        private readonly LoggerInterface $logger,
     ) {
     }
 
@@ -140,6 +142,14 @@ class EspaceController extends AbstractController
 
         $row           = $this->db->fetchAssociative('SELECT * FROM espaces WHERE id = :id', ['id' => $id]);
         $row['_salons'] = $this->getSalons($id);
+
+        if (isset($fields['Description']) && !empty($row['space_id'])) {
+            try {
+                $this->tchap->setRoomTopic($row['space_id'], $fields['Description'], $this->config->getTchapConfig());
+            } catch (\Throwable $e) {
+                $this->logger->warning('[EspaceController] Impossible de mettre à jour le topic Tchap', ['error' => $e->getMessage()]);
+            }
+        }
 
         return $this->json($row);
     }

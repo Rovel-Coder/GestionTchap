@@ -233,6 +233,15 @@ class TchapService
         ]);
     }
 
+    public function setRoomTopic(string $roomId, string $topic, array $config): array
+    {
+        if ($this->bridgeEnabled()) {
+            return $this->callBridge('PUT', '/rooms/' . rawurlencode($roomId) . '/topic', ['topic' => $topic]);
+        }
+
+        return $this->call('PUT', '/rooms/' . rawurlencode($roomId) . '/state/m.room.topic', $config, ['topic' => $topic]);
+    }
+
     public function setPowerLevel(string $roomId, string $userId, int $level, array $config): array
     {
         if ($this->bridgeEnabled()) {

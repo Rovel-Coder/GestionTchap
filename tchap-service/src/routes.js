@@ -268,6 +268,39 @@ router.post('/rooms', async (req, res) => {
     }
 });
 
+// PUT /rooms/:roomId/topic — mettre à jour la description (topic) d'un salon ou espace
+router.put('/rooms/:roomId/topic', async (req, res) => {
+    const { topic } = req.body ?? {};
+    if (topic === undefined) return res.status(400).json({ error: 'topic requis' });
+
+    const roomId = req.params.roomId;
+    const cfg    = bot.getBotConfig();
+
+    if (!cfg.homeserver || !cfg.accessToken) {
+        return res.status(503).json({ error: 'Bot non configuré (homeserver ou accessToken manquant)' });
+    }
+
+    const url = `${cfg.homeserver.replace(/\/$/, '')}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/state/m.room.topic`;
+
+    try {
+        const resp = await fetch(url, {
+            method:  'PUT',
+            headers: { 'Authorization': `Bearer ${cfg.accessToken}`, 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ topic }),
+        });
+        const data = await resp.json().catch(() => ({}));
+
+        if (!resp.ok) {
+            const errMsg = data.error ?? data.errcode ?? `HTTP ${resp.status}`;
+            return res.status(resp.status === 403 ? 403 : 500).json({ error: errMsg });
+        }
+
+        res.json({ ok: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // PUT /rooms/:roomId/power-levels — modifier le niveau de permission d'un utilisateur
 router.put('/rooms/:roomId/power-levels', async (req, res) => {
     const { userId, level } = req.body ?? {};
