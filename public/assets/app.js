@@ -1136,6 +1136,7 @@ function salonView() {
 
         this.moderatorsList = raw
           .filter(m => (m.content?.membership ?? m.membership) === 'join')
+          .filter(m => !botId || (m.state_key || m.userId || '').toLowerCase() !== botId)
           .map(m => {
             const userId = (m.state_key || m.userId || '').toLowerCase();
             return {
