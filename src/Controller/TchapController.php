@@ -320,7 +320,11 @@ class TchapController extends AbstractController
                     break;
                 }
             }
-            return $this->json(['users' => $users, 'botUserId' => $cfg['botUserId'] ?? '']);
+            $allBotIds = array_values(array_filter(array_column(
+                $this->db->fetchAllAssociative("SELECT user_id FROM bots WHERE user_id IS NOT NULL AND user_id <> ''"),
+                'user_id'
+            )));
+            return $this->json(['users' => $users, 'botUserId' => $cfg['botUserId'] ?? '', 'botUserIds' => $allBotIds]);
         } catch (\Throwable $e) {
             return $this->json(['error' => $e->getMessage()], 500);
         }

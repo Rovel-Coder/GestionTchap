@@ -1130,13 +1130,18 @@ function salonView() {
           apiFetch(`/api/tchap/power-levels/${encodeURIComponent(salon.room_id)}`),
         ]);
 
-        const raw     = Array.isArray(membersData) ? membersData : (membersData.members || []);
-        const botId   = (plData.botUserId || membersData.botUserId || '').toLowerCase();
-        const levels  = plData.users || {};
+        const raw      = Array.isArray(membersData) ? membersData : (membersData.members || []);
+        const botId    = (plData.botUserId || membersData.botUserId || '').toLowerCase();
+        const botIds   = new Set([
+          ...(plData.botUserIds || []),
+          ...(membersData.botUserIds || []),
+          ...(botId ? [botId] : []),
+        ].map(s => s.toLowerCase()));
+        const levels   = plData.users || {};
 
         this.moderatorsList = raw
           .filter(m => (m.content?.membership ?? m.membership) === 'join')
-          .filter(m => !botId || (m.state_key || m.userId || '').toLowerCase() !== botId)
+          .filter(m => !botIds.has((m.state_key || m.userId || '').toLowerCase()))
           .map(m => {
             const userId = (m.state_key || m.userId || '').toLowerCase();
             return {
