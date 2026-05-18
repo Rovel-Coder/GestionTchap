@@ -526,12 +526,22 @@ router.get('/rooms/:roomId/beacon-positions', async (req, res) => {
 
         const state       = await stateResp.json().catch(() => []);
         const activeUsers = new Set();
+        const now         = Date.now();
 
         for (const ev of (Array.isArray(state) ? state : [])) {
-            if ((ev.type === 'm.beacon_info' || ev.type === 'org.matrix.msc3672.beacon_info')
-                && ev.content?.live === true) {
-                activeUsers.add(ev.state_key);
+            if (ev.type !== 'm.beacon_info' && ev.type !== 'org.matrix.msc3672.beacon_info') continue;
+            if (ev.content?.live !== true) continue;
+
+            const startedAt = Number(ev.content?.['org.matrix.msc3488.ts'] ?? ev.origin_server_ts ?? 0);
+            const timeoutMs = Number(ev.content?.timeout ?? 0);
+            const expiresAt = startedAt > 0 && timeoutMs > 0 ? startedAt + timeoutMs : null;
+
+            if (expiresAt !== null && expiresAt <= now) {
+                console.log(`[beacon] ${roomId} — beacon expiré ignoré pour ${ev.state_key}`);
+                continue;
             }
+
+            activeUsers.add(ev.state_key);
         }
 
         if (activeUsers.size === 0) {
