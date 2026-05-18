@@ -2993,6 +2993,9 @@ function cartoView() {
     memberProfileError:   null,
     memberAvatarUrl:      null,
     tchapHomeserver:      window.TCHAP_HOMESERVER || '',
+    sharingPosition:      false,
+    sharingError:         null,
+    _geoWatchId:          null,
 
     // ── Computed ────────────────────────────────────────────────
     get filteredSalonList() {
@@ -3081,6 +3084,96 @@ function cartoView() {
       return `${Math.floor(s / 86400)} j`;
     },
 
+    get currentPersonnelId() {
+      return Number(window.PERMISSIONS?.personnelId || 0);
+    },
+
+    syncSharingStateFromPersonnel() {
+      if (!this.currentPersonnelId) return;
+      const self = this.personnel.find(p => Number(p.id) === this.currentPersonnelId);
+      if (!self) return;
+      this.sharingPosition = this.hasPosition(self) || this.isLiveSharing(self);
+    },
+
+    async pushCurrentPosition(lat, lon) {
+      await apiFetch('/api/carto/position', {
+        method: 'POST',
+        body: JSON.stringify({ latitude: lat, longitude: lon }),
+      });
+    },
+
+    async startSharing() {
+      this.sharingError = null;
+
+      if (!navigator.geolocation) {
+        this.sharingError = 'La geolocalisation n est pas disponible sur cet appareil';
+        return;
+      }
+
+      const onSuccess = async (position) => {
+        try {
+          const { latitude, longitude } = position.coords || {};
+          if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+            throw new Error('Coordonnees GPS invalides');
+          }
+
+          await this.pushCurrentPosition(latitude, longitude);
+          this.sharingPosition = true;
+          await this.refreshPositions();
+        } catch (e) {
+          this.sharingError = e.message || 'Impossible de partager la position';
+          toast(this.sharingError, 'error');
+        }
+      };
+
+      const onError = (error) => {
+        const code = error?.code;
+        if (code === 1) this.sharingError = 'Autorisation de geolocalisation refusee';
+        else if (code === 2) this.sharingError = 'Position indisponible';
+        else if (code === 3) this.sharingError = 'Delai de geolocalisation depasse';
+        else this.sharingError = 'Impossible de recuperer la position';
+      };
+
+      try {
+        const initial = await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 0,
+          });
+        });
+        await onSuccess(initial);
+
+        if (this._geoWatchId != null) {
+          navigator.geolocation.clearWatch(this._geoWatchId);
+        }
+        this._geoWatchId = navigator.geolocation.watchPosition(onSuccess, onError, {
+          enableHighAccuracy: true,
+          timeout: 20000,
+          maximumAge: 5000,
+        });
+      } catch (error) {
+        onError(error);
+      }
+    },
+
+    async stopSharing() {
+      this.sharingError = null;
+
+      try {
+        await apiFetch('/api/carto/position', { method: 'DELETE' });
+        this.sharingPosition = false;
+        if (this._geoWatchId != null && navigator.geolocation) {
+          navigator.geolocation.clearWatch(this._geoWatchId);
+          this._geoWatchId = null;
+        }
+        await this.refreshPositions();
+      } catch (e) {
+        this.sharingError = e.message || 'Impossible d arreter le partage';
+        toast(this.sharingError, 'error');
+      }
+    },
+
     // ── Salon filter ─────────────────────────────────────────────
     toggleSalonFilter(id, checked) {
       if (this.selectedSalonIds.length === 0) {
@@ -3139,6 +3232,7 @@ function cartoView() {
           const updated = this.personnel.find(p => p.id === this.selectedMember.id);
           if (updated) this.selectedMember = updated;
         }
+        this.syncSharingStateFromPersonnel();
         await this.$nextTick();
         this.updateMarkers();
       } catch (e) {
@@ -3187,6 +3281,7 @@ function cartoView() {
       this.unites    = u || [];
       this.personnel = p || [];
       this.salons    = s || [];
+      this.syncSharingStateFromPersonnel();
 
       await this.$nextTick();
 
@@ -3214,6 +3309,10 @@ function cartoView() {
       if (this._refreshTimer) {
         clearInterval(this._refreshTimer);
         this._refreshTimer = null;
+      }
+      if (this._geoWatchId != null && navigator.geolocation) {
+        navigator.geolocation.clearWatch(this._geoWatchId);
+        this._geoWatchId = null;
       }
       if (this.map) { this.map.remove(); this.map = null; }
     },
