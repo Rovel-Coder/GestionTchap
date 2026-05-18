@@ -27,6 +27,48 @@ class CartoController extends AbstractController
     ) {
     }
 
+    #[Route('/api/carto/diagnostic', name: 'api_carto_diagnostic', methods: ['GET'])]
+    public function diagnostic(): JsonResponse
+    {
+        /** @var AppUser $user */
+        $user = $this->getUser();
+        if (!$this->roles->canAdmin($user)) {
+            return $this->json(['error' => 'Forbidden'], 403);
+        }
+
+        $salons = $this->db->fetchAllAssociative(
+            'SELECT id, "Nom", "room_id" FROM salons WHERE "room_id" IS NOT NULL AND "room_id" != \'\''
+        );
+
+        $results = [];
+        foreach ($salons as $salon) {
+            $roomId = (string) ($salon['room_id'] ?? '');
+            try {
+                $raw = $this->tchap->callBridge('GET', '/rooms/' . rawurlencode($roomId) . '/beacon-positions');
+                $results[] = [
+                    'salon_id'   => $salon['id'],
+                    'salon_nom'  => $salon['Nom'],
+                    'room_id'    => $roomId,
+                    'positions'  => $raw,
+                    'error'      => null,
+                ];
+            } catch (\Throwable $e) {
+                $results[] = [
+                    'salon_id'  => $salon['id'],
+                    'salon_nom' => $salon['Nom'],
+                    'room_id'   => $roomId,
+                    'positions' => [],
+                    'error'     => $e->getMessage(),
+                ];
+            }
+        }
+
+        return $this->json([
+            'salons_checked' => count($salons),
+            'results'        => $results,
+        ]);
+    }
+
     #[Route('/carto', name: 'app_carto', methods: ['GET'])]
     public function page(): Response
     {
@@ -95,6 +137,11 @@ class CartoController extends AbstractController
             $liveData = $liveLookup[strtolower((string) ($row['user_id'] ?? ''))] ?? null;
             $row['sharing_live'] = $liveData !== null;
             $row['sharing_salons'] = $liveData['salons'] ?? [];
+            $row['sharing_source'] = $liveData['source'] ?? null;
+            $row['sharing_has_coords'] = (bool) ($liveData['has_coords'] ?? false);
+            $row['diagnostic_state'] = $liveData === null
+                ? ($this->hasRowCoordinates($row) ? 'position_only' : 'inactive')
+                : (($liveData['has_coords'] ?? false) ? 'live_with_coords' : 'live_without_coords');
         }
 
         return $this->json($rows);
@@ -179,12 +226,13 @@ class CartoController extends AbstractController
                     $userId = $pos['userId'] ?? null;
                     $lat    = isset($pos['lat']) ? (float) $pos['lat'] : null;
                     $lon    = isset($pos['lon']) ? (float) $pos['lon'] : null;
+                    $source = (string) ($pos['source'] ?? 'unknown');
 
                     if (!$userId) {
                         continue;
                     }
                     $userKey = strtolower((string) $userId);
-                    $liveSharing[$userKey] ??= ['salons' => []];
+                    $liveSharing[$userKey] ??= ['salons' => [], 'source' => $source, 'has_coords' => false];
                     $liveSharing[$userKey]['salons'][(int) $salon['id']] = [
                         'id' => (int) $salon['id'],
                         'Nom' => (string) ($salon['Nom'] ?? ''),
@@ -197,6 +245,7 @@ class CartoController extends AbstractController
                             'room_id' => $roomId,
                             'salon_id' => (int) $salon['id'],
                             'salon_nom' => (string) ($salon['Nom'] ?? ''),
+                            'source' => $source,
                         ]);
                         continue;
                     }
@@ -207,9 +256,12 @@ class CartoController extends AbstractController
                             'salon_id' => (int) $salon['id'],
                             'latitude' => $lat,
                             'longitude' => $lon,
+                            'source' => $source,
                         ]);
                         continue;
                     }
+
+                    $liveSharing[$userKey]['has_coords'] = true;
 
                     $updated = $this->db->executeStatement(
                         'UPDATE personnel SET latitude = :lat, longitude = :lon, position_at = NOW() WHERE LOWER("user_id") = LOWER(:uid)',
@@ -225,6 +277,7 @@ class CartoController extends AbstractController
                             'latitude' => $lat,
                             'longitude' => $lon,
                             'rows' => $updated,
+                            'source' => $source,
                         ]);
                     } else {
                         $this->logger->warning('[carto] Position reçue mais aucun personnel trouvé pour ce Matrix ID', [
@@ -234,6 +287,8 @@ class CartoController extends AbstractController
                             'salon_nom' => (string) ($salon['Nom'] ?? ''),
                             'latitude' => $lat,
                             'longitude' => $lon,
+                            'source' => $source,
+                            'known_user_ids' => $this->findCandidateUserIds($userId),
                         ]);
                     }
                 }
@@ -448,6 +503,36 @@ class CartoController extends AbstractController
         }
 
         return array_values($merged);
+    }
+
+    private function hasRowCoordinates(array $row): bool
+    {
+        return isset($row['latitude'], $row['longitude'])
+            && $row['latitude'] !== null
+            && $row['longitude'] !== null;
+    }
+
+    private function findCandidateUserIds(string $userId): array
+    {
+        if (!preg_match('/^@([^:]+):/', $userId, $matches)) {
+            return [];
+        }
+
+        $localPart = strtolower(trim((string) ($matches[1] ?? '')));
+        if ($localPart === '') {
+            return [];
+        }
+
+        $rows = $this->db->fetchFirstColumn(
+            'SELECT "user_id"
+             FROM personnel
+             WHERE LOWER("user_id") LIKE :needle
+             ORDER BY "user_id"
+             LIMIT 5',
+            ['needle' => '@' . $localPart . ':%']
+        );
+
+        return array_values(array_filter(array_map('strval', $rows)));
     }
 
     private function decodePgArray(mixed $value): array
