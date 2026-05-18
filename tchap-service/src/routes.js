@@ -15,6 +15,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 function extractGeoUri(content = {}) {
     if (content['m.location']?.uri) return content['m.location'].uri;
     if (content['org.matrix.msc3488.location']?.uri) return content['org.matrix.msc3488.location'].uri;
+    if (content['org.matrix.msc3672.location']?.uri) return content['org.matrix.msc3672.location'].uri;
+    if (content.location?.uri) return content.location.uri;
     if (content.geo_uri) return content.geo_uri;
     return null;
 }
@@ -628,7 +630,9 @@ router.get('/rooms/:roomId/beacon-positions', async (req, res) => {
                     }
                 }
 
-                const isBeacon = processEv.type === 'm.beacon' || processEv.type === 'org.matrix.msc3488.beacon';
+                const isBeacon = processEv.type === 'm.beacon'
+                    || processEv.type === 'org.matrix.msc3488.beacon'
+                    || processEv.type === 'org.matrix.msc3672.beacon';
                 const isLegacy = processEv.type === 'm.room.message' && processEv.content?.msgtype === 'm.location';
                 if (!isBeacon && !isLegacy) continue;
 
