@@ -621,6 +621,7 @@ router.get('/rooms/:roomId/beacon-positions', async (req, res) => {
                     try {
                         processEv    = await decryptFn(ev, roomId);
                         wasEncrypted = true;
+                        console.log(`[beacon/diag] ${roomId} — déchiffré : type=${processEv?.type} sender=${processEv?.sender}`);
                     } catch (e) {
                         console.log(`[beacon/diag] ${roomId} — déchiffrement échoué : ${e.message}`);
                         continue;
