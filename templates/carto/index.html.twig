@@ -9,7 +9,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="view" x-data="Object.assign(cartoView(), { sidebarOpen: false })" x-init="init()">
+<div class="view" x-data="cartoView()" x-init="init()">
 
     {# ── Toolbar ── #}
     <div class="view-toolbar">

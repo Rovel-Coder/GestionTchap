@@ -2978,6 +2978,7 @@ function cartoView() {
     salonSearch:      '',
     salonFilterOpen:  false,
     selectedSalonIds: [],
+    sidebarOpen:      false,
     _refreshTimer:    null,
     _refreshBusy:     false,
 
