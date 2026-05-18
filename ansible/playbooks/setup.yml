@@ -2,15 +2,29 @@
 # Playbook d'initialisation de la VM (à lancer une seule fois)
 # Usage : ansible-playbook ansible/playbooks/setup.yml --ask-vault-pass
 #
-# Prérequis : accès root SSH temporaire sur la VM vierge
+# Compatible avec deux modes de connexion :
+#   - Accès root direct    : ansible_user=root (become inutile mais inoffensif)
+#   - Utilisateur sudo     : ansible_user=monuser (ex: ubuntu, vboxuser…)
+#
+# Exemples :
+#   ansible-playbook ansible/playbooks/setup.yml --ask-vault-pass
+#   ansible-playbook ansible/playbooks/setup.yml --ask-vault-pass -e ansible_user=ubuntu
+#
 # Après exécution : seul l'utilisateur 'deploy' avec clé SSH peut se connecter
 
 - name: Configuration initiale de la VM
   hosts: prod
-  remote_user: root   # Premier lancement en root, avant création de deploy
-  become: false       # Pas besoin de sudo, on est root
+  become: true
 
   pre_tasks:
+    - name: Générer la clé SSH locale si absente
+      community.crypto.openssh_keypair:
+        path: "~/.ssh/id_ed25519"
+        type: ed25519
+        comment: "gestion-tchap-controller"
+      delegate_to: localhost
+      run_once: true
+
     - name: Vérification de la connectivité
       ansible.builtin.ping:
 
@@ -23,9 +37,9 @@
       ansible.builtin.debug:
         msg:
           - "✓ VM configurée : {{ inventory_hostname }} ({{ ansible_host }})"
-          - "✓ Docker {{ ansible_facts.packages['docker-ce'][0].version | default('installé') }}"
+          - "✓ Docker installé"
           - "✓ Utilisateur deploy créé avec accès Docker"
           - "✓ UFW actif — ports ouverts : {{ ufw_rules | map(attribute='port') | list }}"
           - "✓ SSH : authentification par mot de passe désactivée"
           - ""
-          - "Prochaine étape : ansible-playbook ansible/playbooks/deploy.yml"
+          - "Prochaine étape : ansible-playbook ansible/playbooks/deploy.yml --ask-vault-pass"

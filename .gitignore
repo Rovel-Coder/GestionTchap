@@ -20,3 +20,8 @@
 
 # Claude Code (fichiers internes à l'outil)
 /.claude/
+
+# Ansible — ne jamais committer le vault déchiffré
+# (le fichier chiffré par ansible-vault est safe à committer)
+ansible/inventory/group_vars/all/.vault_pass
+.vault_pass
