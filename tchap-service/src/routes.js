@@ -574,9 +574,6 @@ router.get('/rooms/:roomId/beacon-positions', async (req, res) => {
         console.log(`[beacon] ${roomId} — ${activeUsers.size} partage(s) actif(s) : ${[...activeUsers].join(', ')}`);
 
         // ── 2. Messages récents ────────────────────────────────────────────
-        // Sans filtre de type : en E2EE les events sont stockés sous m.room.encrypted
-        // côté serveur, le filtre par type les exclut systématiquement.
-        // On filtre côté client après tentative de déchiffrement.
         const positions = {};
         for (const userId of activeUsers) {
             positions[userId] = { userId, lat: null, lon: null, ts: null, active: true };
@@ -589,29 +586,40 @@ router.get('/rooms/:roomId/beacon-positions', async (req, res) => {
         );
 
         // Résout la méthode de déchiffrement exposée par le SDK (si disponible)
-        const mc         = bot.getMatrixClient();
-        const decryptFn  = mc
+        const mc        = bot.getMatrixClient();
+        const decryptFn = mc
             ? (mc['decryptRoomEvent']?.bind(mc)
                ?? mc['encryptionSupport']?.decryptRoomEvent?.bind(mc['encryptionSupport']))
             : null;
+        console.log(`[beacon/diag] ${roomId} — décryptFn disponible : ${!!decryptFn}`);
 
-        if (msgResp.ok) {
-            const msgData = await msgResp.json().catch(() => ({}));
-            for (const ev of (msgData.chunk ?? [])) {
+        if (!msgResp.ok) {
+            console.warn(`[beacon/diag] ${roomId} — /messages HTTP ${msgResp.status} (bot non membre ou token expiré ?)`);
+        } else {
+            const msgData  = await msgResp.json().catch(() => ({}));
+            const allEvs   = msgData.chunk ?? [];
+            const typeCounts = {};
+            for (const ev of allEvs) { typeCounts[ev.type] = (typeCounts[ev.type] ?? 0) + 1; }
+            console.log(`[beacon/diag] ${roomId} — /messages : ${allEvs.length} events — types : ${JSON.stringify(typeCounts)}`);
+
+            for (const ev of allEvs) {
                 if (!activeUsers.has(ev.sender)) continue;
                 if (positions[ev.sender]?.lat != null && positions[ev.sender]?.lon != null) continue;
 
-                let processEv  = ev;
+                let processEv    = ev;
                 let wasEncrypted = false;
 
-                // Tenter le déchiffrement des events E2EE via le SDK
                 if (ev.type === 'm.room.encrypted') {
-                    if (!decryptFn) continue; // SDK sans méthode de déchiffrement : passer au buffer
+                    if (!decryptFn) {
+                        console.log(`[beacon/diag] ${roomId} — event chiffré ignoré (pas de décryptFn), session=${ev.content?.session_id}`);
+                        continue;
+                    }
                     try {
                         processEv    = await decryptFn(ev, roomId);
                         wasEncrypted = true;
-                    } catch {
-                        continue; // clé Megolm manquante — le key request automatique s'en charge
+                    } catch (e) {
+                        console.log(`[beacon/diag] ${roomId} — déchiffrement échoué : ${e.message}`);
+                        continue;
                     }
                 }
 
@@ -620,7 +628,10 @@ router.get('/rooms/:roomId/beacon-positions', async (req, res) => {
                 if (!isBeacon && !isLegacy) continue;
 
                 const coords = extractLatLon(processEv);
-                if (!coords) continue;
+                if (!coords) {
+                    console.log(`[beacon/diag] ${roomId} — event beacon sans geo_uri valide : type=${processEv.type}, content=${JSON.stringify(processEv.content)}`);
+                    continue;
+                }
 
                 const src = isLegacy
                     ? (wasEncrypted ? 'direct_legacy_decrypted' : 'direct_legacy')
@@ -638,8 +649,10 @@ router.get('/rooms/:roomId/beacon-positions', async (req, res) => {
             }
         }
 
-        // ── 3. Compléter avec le buffer SDK (salons E2EE) ──────────────────
-        for (const ev of bot.peekLocationEvents()) {
+        // ── 3. Buffer SDK (salons E2EE) ────────────────────────────────────
+        const bufferEvs = bot.peekLocationEvents();
+        console.log(`[beacon/diag] ${roomId} — buffer SDK : ${bufferEvs.length} entrée(s) — users : ${bufferEvs.map(e => e.userId).join(', ') || '(vide)'}`);
+        for (const ev of bufferEvs) {
             if (!activeUsers.has(ev.userId)) continue;
             const existing = positions[ev.userId];
             if (!existing || existing.ts == null || ev.ts > existing.ts) {
