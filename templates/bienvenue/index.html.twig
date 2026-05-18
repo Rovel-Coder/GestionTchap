@@ -160,29 +160,32 @@
                         <i class="fa-solid fa-chevron-down bv-audit-chevron"
                            :class="{ 'bv-audit-chevron--open': openGroup === group.key }"></i>
                     </div>
-                    <div class="bv-audit-list" x-show="openGroup === group.key" x-cloak @click.stop>
-                        <div x-show="loading" class="bv-audit-loading-state">
-                            <i class="fa-solid fa-spinner fa-spin"></i> Chargement…
-                        </div>
-                        <div x-show="!loading && (data[group.key] || []).length === 0" class="bv-audit-empty">
-                            Aucun titulaire
-                        </div>
-                        <div x-show="!loading">
-                            <template x-for="p in (data[group.key] || [])" :key="p.id + '_' + p.type + '_' + (p.scope || '')">
-                                <div class="bv-audit-person">
-                                    <div class="bv-audit-person-name">
-                                        <span class="bv-audit-grade" x-text="p.Grade"></span>
-                                        <span x-text="p.Nom + ' ' + p.Prenom"></span>
-                                    </div>
-                                    <div class="bv-audit-scope"
-                                         :class="p.type === 'global' ? 'bv-audit-scope--global' : 'bv-audit-scope--scoped'">
-                                        <template x-if="p.type === 'global'"><span>Global</span></template>
-                                        <template x-if="p.type !== 'global'"><span x-text="p.scope"></span></template>
-                                    </div>
+                    <template x-if="openGroup === group.key">
+                        <div class="bv-audit-list" @click.stop>
+                            <div x-show="loading" class="bv-audit-loading-state">
+                                <i class="fa-solid fa-spinner fa-spin"></i> Chargement…
+                            </div>
+                            <template x-if="!loading && (data[group.key] || []).length === 0">
+                                <div class="bv-audit-empty">Aucun titulaire</div>
+                            </template>
+                            <template x-if="!loading">
+                                <div>
+                                    <template x-for="p in (data[group.key] || [])" :key="p.id + '_' + p.type + '_' + (p.scope || '')">
+                                        <div class="bv-audit-person">
+                                            <div class="bv-audit-person-name">
+                                                <span class="bv-audit-grade" x-text="p.Grade"></span>
+                                                <span x-text="p.Nom + ' ' + p.Prenom"></span>
+                                            </div>
+                                            <span class="bv-audit-scope"
+                                                  :class="p.type === 'global' ? 'bv-audit-scope--global' : 'bv-audit-scope--scoped'"
+                                                  x-text="p.type === 'global' ? 'Global' : p.scope">
+                                            </span>
+                                        </div>
+                                    </template>
                                 </div>
                             </template>
                         </div>
-                    </div>
+                    </template>
                 </div>
             </template>
         </div>
