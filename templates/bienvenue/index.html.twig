@@ -139,53 +139,95 @@
     {# ── Audit des droits ── #}
     {% if permissions.canAdmin %}
     <div class="bv-section-title">Audit des droits</div>
-    <div x-data="auditDroits()">
-        <div class="bv-audit-cards">
-            <template x-for="group in groups" :key="group.key">
-                <div class="bv-audit-card"
-                     :class="{ 'bv-audit-card--open': openGroup === group.key }"
-                     @click="toggle(group.key)">
-                    <div class="bv-audit-card-header">
-                        <div class="bv-audit-card-icon" :style="{ background: group.bg }">
-                            <i :class="group.icon" :style="{ color: group.color }"></i>
-                        </div>
-                        <div class="bv-audit-card-info">
-                            <div class="bv-audit-card-title" x-text="group.label"></div>
-                            <div class="bv-audit-card-count">
-                                <span x-show="!loaded">—</span>
-                                <span x-show="loaded"
-                                      x-text="(data[group.key] || []).length + ' titulaire' + ((data[group.key] || []).length > 1 ? 's' : '')"></span>
+    <div x-data="auditDroits()" class="bv-audit-cards">
+
+        {# -- Administrateurs -- #}
+        <div class="bv-audit-card" :class="{ 'bv-audit-card--open': open.admins }" @click="toggle('admins')">
+            <div class="bv-audit-card-header">
+                <div class="bv-audit-card-icon" style="background:rgba(45,108,223,.12)">
+                    <i class="fa-solid fa-shield-halved" style="color:var(--blue-light)"></i>
+                </div>
+                <div class="bv-audit-card-info">
+                    <div class="bv-audit-card-title">Administrateurs</div>
+                    <div class="bv-audit-card-count" x-text="countFor('admins')"></div>
+                </div>
+                <i class="fa-solid fa-chevron-down bv-audit-chevron" :class="{ 'bv-audit-chevron--open': open.admins }"></i>
+            </div>
+            <template x-if="open.admins">
+                <div class="bv-audit-list" @click.stop>
+                    <div x-show="loading" class="bv-audit-loading-state"><i class="fa-solid fa-spinner fa-spin"></i> Chargement…</div>
+                    <div x-show="!loading && data.admins && data.admins.length === 0" class="bv-audit-empty">Aucun titulaire</div>
+                    <template x-for="p in (data.admins || [])" :key="p.id + '_' + p.type + '_' + (p.scope || '')">
+                        <div class="bv-audit-person">
+                            <div class="bv-audit-person-name">
+                                <span class="bv-audit-grade" x-text="p.Grade"></span>
+                                <span x-text="p.Nom + ' ' + p.Prenom"></span>
                             </div>
+                            <span class="bv-audit-scope" :class="p.type === 'global' ? 'bv-audit-scope--global' : 'bv-audit-scope--scoped'" x-text="p.type === 'global' ? 'Global' : p.scope"></span>
                         </div>
-                        <i class="fa-solid fa-chevron-down bv-audit-chevron"
-                           :class="{ 'bv-audit-chevron--open': openGroup === group.key }"></i>
-                    </div>
-                    <div class="bv-audit-list" x-show="openGroup === group.key" x-cloak @click.stop>
-                        <div x-show="loading" class="bv-audit-loading-state">
-                            <i class="fa-solid fa-spinner fa-spin"></i> Chargement…
-                        </div>
-                        <div x-show="!loading && (data[group.key] || []).length === 0" class="bv-audit-empty">
-                            Aucun titulaire
-                        </div>
-                        <div x-show="!loading">
-                            <template x-for="p in (data[group.key] || [])" :key="p.id + '_' + p.type + '_' + (p.scope || '')">
-                                <div class="bv-audit-person">
-                                    <div class="bv-audit-person-name">
-                                        <span class="bv-audit-grade" x-text="p.Grade"></span>
-                                        <span x-text="p.Nom + ' ' + p.Prenom"></span>
-                                    </div>
-                                    <div class="bv-audit-scope"
-                                         :class="p.type === 'global' ? 'bv-audit-scope--global' : 'bv-audit-scope--scoped'">
-                                        <template x-if="p.type === 'global'"><span>Global</span></template>
-                                        <template x-if="p.type !== 'global'"><span x-text="p.scope"></span></template>
-                                    </div>
-                                </div>
-                            </template>
-                        </div>
-                    </div>
+                    </template>
                 </div>
             </template>
         </div>
+
+        {# -- Superviseurs de crise -- #}
+        <div class="bv-audit-card" :class="{ 'bv-audit-card--open': open.superviseurs }" @click="toggle('superviseurs')">
+            <div class="bv-audit-card-header">
+                <div class="bv-audit-card-icon" style="background:rgba(192,57,43,.12)">
+                    <i class="fa-solid fa-triangle-exclamation" style="color:var(--red-light)"></i>
+                </div>
+                <div class="bv-audit-card-info">
+                    <div class="bv-audit-card-title">Superviseurs de crise</div>
+                    <div class="bv-audit-card-count" x-text="countFor('superviseurs')"></div>
+                </div>
+                <i class="fa-solid fa-chevron-down bv-audit-chevron" :class="{ 'bv-audit-chevron--open': open.superviseurs }"></i>
+            </div>
+            <template x-if="open.superviseurs">
+                <div class="bv-audit-list" @click.stop>
+                    <div x-show="loading" class="bv-audit-loading-state"><i class="fa-solid fa-spinner fa-spin"></i> Chargement…</div>
+                    <div x-show="!loading && data.superviseurs && data.superviseurs.length === 0" class="bv-audit-empty">Aucun titulaire</div>
+                    <template x-for="p in (data.superviseurs || [])" :key="p.id + '_' + p.type + '_' + (p.scope || '')">
+                        <div class="bv-audit-person">
+                            <div class="bv-audit-person-name">
+                                <span class="bv-audit-grade" x-text="p.Grade"></span>
+                                <span x-text="p.Nom + ' ' + p.Prenom"></span>
+                            </div>
+                            <span class="bv-audit-scope bv-audit-scope--global">Global</span>
+                        </div>
+                    </template>
+                </div>
+            </template>
+        </div>
+
+        {# -- Gestionnaires -- #}
+        <div class="bv-audit-card" :class="{ 'bv-audit-card--open': open.gestionnaires }" @click="toggle('gestionnaires')">
+            <div class="bv-audit-card-header">
+                <div class="bv-audit-card-icon" style="background:rgba(110,195,138,.12)">
+                    <i class="fa-solid fa-user-gear" style="color:#6ec38a"></i>
+                </div>
+                <div class="bv-audit-card-info">
+                    <div class="bv-audit-card-title">Gestionnaires</div>
+                    <div class="bv-audit-card-count" x-text="countFor('gestionnaires')"></div>
+                </div>
+                <i class="fa-solid fa-chevron-down bv-audit-chevron" :class="{ 'bv-audit-chevron--open': open.gestionnaires }"></i>
+            </div>
+            <template x-if="open.gestionnaires">
+                <div class="bv-audit-list" @click.stop>
+                    <div x-show="loading" class="bv-audit-loading-state"><i class="fa-solid fa-spinner fa-spin"></i> Chargement…</div>
+                    <div x-show="!loading && data.gestionnaires && data.gestionnaires.length === 0" class="bv-audit-empty">Aucun titulaire</div>
+                    <template x-for="p in (data.gestionnaires || [])" :key="p.id + '_' + p.type + '_' + (p.scope || '')">
+                        <div class="bv-audit-person">
+                            <div class="bv-audit-person-name">
+                                <span class="bv-audit-grade" x-text="p.Grade"></span>
+                                <span x-text="p.Nom + ' ' + p.Prenom"></span>
+                            </div>
+                            <span class="bv-audit-scope" :class="p.type === 'global' ? 'bv-audit-scope--global' : 'bv-audit-scope--scoped'" x-text="p.type === 'global' ? 'Global' : p.scope"></span>
+                        </div>
+                    </template>
+                </div>
+            </template>
+        </div>
+
     </div>
     {% endif %}
 
@@ -789,45 +831,30 @@ function bienvenueView() {
 
 function auditDroits() {
     return {
-        loading: false,
+        loading: true,
         loaded:  false,
         data:    {},
-        openGroup: null,
-        groups: [
-            {
-                key:   'admins',
-                label: 'Administrateurs',
-                icon:  'fa-solid fa-shield-halved',
-                bg:    'rgba(45,108,223,.12)',
-                color: 'var(--blue-light)',
-            },
-            {
-                key:   'superviseurs',
-                label: 'Superviseurs de crise',
-                icon:  'fa-solid fa-triangle-exclamation',
-                bg:    'rgba(192,57,43,.12)',
-                color: 'var(--red-light)',
-            },
-            {
-                key:   'gestionnaires',
-                label: 'Gestionnaires',
-                icon:  'fa-solid fa-user-gear',
-                bg:    'rgba(110,195,138,.12)',
-                color: '#6ec38a',
-            },
-        ],
+        open:    { admins: false, superviseurs: false, gestionnaires: false },
 
-        async toggle(key) {
-            if (this.openGroup === key) { this.openGroup = null; return; }
-            this.openGroup = key;
-            if (!this.loaded) await this.load();
+        async init() {
+            await this.load();
+        },
+
+        countFor(key) {
+            if (!this.loaded) return '—';
+            const n = (this.data[key] || []).length;
+            return n + ' titulaire' + (n > 1 ? 's' : '');
+        },
+
+        toggle(key) {
+            this.open[key] = !this.open[key];
         },
 
         async load() {
             this.loading = true;
             try {
-                const r = await fetch('/api/audit/droits');
-                this.data   = await r.json();
+                const r   = await fetch('/api/audit/droits');
+                this.data = await r.json();
                 this.loaded = true;
             } catch (e) {
                 console.error('Audit droits:', e);
