@@ -3051,7 +3051,12 @@ function cartoView() {
 
     // ── Helpers ─────────────────────────────────────────────────
     hasPosition(p) {
-      return p != null && p.latitude != null && p.longitude != null;
+      if (!p || p.latitude == null || p.longitude == null) return false;
+      // Beacon Tchap actif → toujours afficher
+      if (p.sharing_live) return true;
+      // Partage navigateur : afficher si position mise à jour il y a moins de 15 min
+      if (!p.position_at) return false;
+      return (Date.now() - new Date(p.position_at + 'Z').getTime()) < 15 * 60 * 1000;
     },
 
     isLiveSharing(p) {
