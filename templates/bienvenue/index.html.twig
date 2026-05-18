@@ -142,7 +142,7 @@
     <div x-data="auditDroits()" class="bv-audit-cards">
 
         {# -- Administrateurs -- #}
-        <div class="bv-audit-card" :class="{ 'bv-audit-card--open': openGroup === 'admins' }" @click="toggle('admins')">
+        <div class="bv-audit-card" :class="{ 'bv-audit-card--open': open.admins }" @click="toggle('admins')">
             <div class="bv-audit-card-header">
                 <div class="bv-audit-card-icon" style="background:rgba(45,108,223,.12)">
                     <i class="fa-solid fa-shield-halved" style="color:var(--blue-light)"></i>
@@ -151,9 +151,9 @@
                     <div class="bv-audit-card-title">Administrateurs</div>
                     <div class="bv-audit-card-count" x-text="countFor('admins')"></div>
                 </div>
-                <i class="fa-solid fa-chevron-down bv-audit-chevron" :class="{ 'bv-audit-chevron--open': openGroup === 'admins' }"></i>
+                <i class="fa-solid fa-chevron-down bv-audit-chevron" :class="{ 'bv-audit-chevron--open': open.admins }"></i>
             </div>
-            <template x-if="openGroup === 'admins'">
+            <template x-if="open.admins">
                 <div class="bv-audit-list" @click.stop>
                     <div x-show="loading" class="bv-audit-loading-state"><i class="fa-solid fa-spinner fa-spin"></i> Chargement…</div>
                     <div x-show="!loading && data.admins && data.admins.length === 0" class="bv-audit-empty">Aucun titulaire</div>
@@ -171,7 +171,7 @@
         </div>
 
         {# -- Superviseurs de crise -- #}
-        <div class="bv-audit-card" :class="{ 'bv-audit-card--open': openGroup === 'superviseurs' }" @click="toggle('superviseurs')">
+        <div class="bv-audit-card" :class="{ 'bv-audit-card--open': open.superviseurs }" @click="toggle('superviseurs')">
             <div class="bv-audit-card-header">
                 <div class="bv-audit-card-icon" style="background:rgba(192,57,43,.12)">
                     <i class="fa-solid fa-triangle-exclamation" style="color:var(--red-light)"></i>
@@ -180,9 +180,9 @@
                     <div class="bv-audit-card-title">Superviseurs de crise</div>
                     <div class="bv-audit-card-count" x-text="countFor('superviseurs')"></div>
                 </div>
-                <i class="fa-solid fa-chevron-down bv-audit-chevron" :class="{ 'bv-audit-chevron--open': openGroup === 'superviseurs' }"></i>
+                <i class="fa-solid fa-chevron-down bv-audit-chevron" :class="{ 'bv-audit-chevron--open': open.superviseurs }"></i>
             </div>
-            <template x-if="openGroup === 'superviseurs'">
+            <template x-if="open.superviseurs">
                 <div class="bv-audit-list" @click.stop>
                     <div x-show="loading" class="bv-audit-loading-state"><i class="fa-solid fa-spinner fa-spin"></i> Chargement…</div>
                     <div x-show="!loading && data.superviseurs && data.superviseurs.length === 0" class="bv-audit-empty">Aucun titulaire</div>
@@ -200,7 +200,7 @@
         </div>
 
         {# -- Gestionnaires -- #}
-        <div class="bv-audit-card" :class="{ 'bv-audit-card--open': openGroup === 'gestionnaires' }" @click="toggle('gestionnaires')">
+        <div class="bv-audit-card" :class="{ 'bv-audit-card--open': open.gestionnaires }" @click="toggle('gestionnaires')">
             <div class="bv-audit-card-header">
                 <div class="bv-audit-card-icon" style="background:rgba(110,195,138,.12)">
                     <i class="fa-solid fa-user-gear" style="color:#6ec38a"></i>
@@ -209,9 +209,9 @@
                     <div class="bv-audit-card-title">Gestionnaires</div>
                     <div class="bv-audit-card-count" x-text="countFor('gestionnaires')"></div>
                 </div>
-                <i class="fa-solid fa-chevron-down bv-audit-chevron" :class="{ 'bv-audit-chevron--open': openGroup === 'gestionnaires' }"></i>
+                <i class="fa-solid fa-chevron-down bv-audit-chevron" :class="{ 'bv-audit-chevron--open': open.gestionnaires }"></i>
             </div>
-            <template x-if="openGroup === 'gestionnaires'">
+            <template x-if="open.gestionnaires">
                 <div class="bv-audit-list" @click.stop>
                     <div x-show="loading" class="bv-audit-loading-state"><i class="fa-solid fa-spinner fa-spin"></i> Chargement…</div>
                     <div x-show="!loading && data.gestionnaires && data.gestionnaires.length === 0" class="bv-audit-empty">Aucun titulaire</div>
@@ -831,10 +831,10 @@ function bienvenueView() {
 
 function auditDroits() {
     return {
-        loading:   true,
-        loaded:    false,
-        data:      {},
-        openGroup: null,
+        loading: true,
+        loaded:  false,
+        data:    {},
+        open:    { admins: false, superviseurs: false, gestionnaires: false },
 
         async init() {
             await this.load();
@@ -847,7 +847,7 @@ function auditDroits() {
         },
 
         toggle(key) {
-            this.openGroup = this.openGroup === key ? null : key;
+            this.open[key] = !this.open[key];
         },
 
         async load() {
