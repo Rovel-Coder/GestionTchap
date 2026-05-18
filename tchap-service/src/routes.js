@@ -1,9 +1,10 @@
 'use strict';
 
-const express = require('express');
-const bot     = require('./client');
-const verif   = require('./verif');
-const ssss    = require('./ssss');
+const express              = require('express');
+const bot                  = require('./client');
+const verif                = require('./verif');
+const ssss                 = require('./ssss');
+const { EncryptedRoomEvent } = require('matrix-bot-sdk');
 
 const router = express.Router();
 
@@ -585,11 +586,14 @@ router.get('/rooms/:roomId/beacon-positions', async (req, res) => {
             '/messages'
         );
 
-        // Résout la méthode de déchiffrement exposée par le SDK (si disponible)
-        const mc        = bot.getMatrixClient();
-        const decryptFn = mc
-            ? (mc['decryptRoomEvent']?.bind(mc)
-               ?? mc['encryptionSupport']?.decryptRoomEvent?.bind(mc['encryptionSupport']))
+        // Résout la méthode de déchiffrement via matrixClient.crypto (matrix-bot-sdk)
+        const mc           = bot.getMatrixClient();
+        const cryptoClient = mc?.crypto ?? null;
+        const decryptFn    = cryptoClient?.decryptRoomEvent
+            ? async (event, rId) => {
+                const result = await cryptoClient.decryptRoomEvent(new EncryptedRoomEvent(event), rId);
+                return result.raw ?? result;
+              }
             : null;
         console.log(`[beacon/diag] ${roomId} — décryptFn disponible : ${!!decryptFn}`);
 
