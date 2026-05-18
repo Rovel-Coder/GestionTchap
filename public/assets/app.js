@@ -3079,6 +3079,22 @@ function cartoView() {
         .join(', ');
     },
 
+    getSharingSourceLabel(p) {
+      const source = p?.sharing_source || '';
+      if (source === 'sdk_buffer') return 'SDK E2EE';
+      if (source === 'direct_beacon') return 'Beacon Matrix';
+      if (source === 'direct_legacy') return 'Message localisation';
+      return 'Source inconnue';
+    },
+
+    getDiagnosticLabel(p) {
+      const state = p?.diagnostic_state || '';
+      if (state === 'live_with_coords') return 'Partage actif avec coordonnees';
+      if (state === 'live_without_coords') return 'Partage actif sans coordonnees';
+      if (state === 'position_only') return 'Derniere position connue';
+      return 'Aucune position exploitable';
+    },
+
     mxcToHttp(mxcUrl) {
       if (!mxcUrl || !mxcUrl.startsWith('mxc://') || !this.tchapHomeserver) return null;
       const path  = mxcUrl.slice(6);

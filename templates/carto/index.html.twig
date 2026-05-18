@@ -201,6 +201,14 @@
                             <span class="carto-detail-value"
                                 x-text="getSharingSalonLabel(selectedMember) || 'Salon non identifié'"></span>
                         </div>
+                        <div class="carto-detail-row" x-show="selectedMember?.diagnostic_state">
+                            <span class="carto-detail-label">Diagnostic</span>
+                            <span class="carto-detail-value" x-text="getDiagnosticLabel(selectedMember)"></span>
+                        </div>
+                        <div class="carto-detail-row" x-show="isLiveSharing(selectedMember)">
+                            <span class="carto-detail-label">Source</span>
+                            <span class="carto-detail-value" x-text="getSharingSourceLabel(selectedMember)"></span>
+                        </div>
                         <div class="carto-pos-card" x-show="!hasPosition(selectedMember)">
                             <div class="carto-pos-dot" :class="isLiveSharing(selectedMember) ? 'pos-known' : 'pos-unknown'"></div>
                             <span style="font-size:12px;color:var(--text-muted);"
