@@ -8,7 +8,7 @@
 # automatiquement APP_SECRET et TCHAP_SERVICE_KEY.
 #
 # Pour éditer après chiffrement :
-#   ansible-vault edit ansible/inventory/group_vars/vault.yml
+#   ansible-vault edit ansible/inventory/group_vars/all/vault.yml
 
 vault_db_password: "CHANGEME_mot_de_passe_postgres"
 vault_app_secret: "CHANGEME_genere_automatiquement_par_init-secrets.yml"

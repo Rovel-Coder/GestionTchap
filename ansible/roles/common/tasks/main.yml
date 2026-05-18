@@ -21,6 +21,18 @@
       - htop
     state: present
 
+- name: Création du groupe deploy
+  ansible.builtin.group:
+    name: "{{ deploy_group }}"
+    state: present
+
+# Le groupe docker doit exister avant l'ajout de l'utilisateur ;
+# Docker n'est pas encore installé à ce stade (rôle docker vient après).
+- name: Création du groupe docker
+  ansible.builtin.group:
+    name: docker
+    state: present
+
 - name: Création de l'utilisateur deploy
   ansible.builtin.user:
     name: "{{ deploy_user }}"

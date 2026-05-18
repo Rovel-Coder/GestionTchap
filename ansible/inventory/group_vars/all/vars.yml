@@ -6,9 +6,13 @@ deploy_home: /home/deploy
 
 # ── Répertoire de l'application ─────────────────────────────────────────────
 app_dir: /opt/gestion-tchap
-git_host: gitlab.votre-societe.fr              # ← hostname du GitLab interne
-app_repo: git@gitlab.votre-societe.fr:VOTRE_GROUPE/gestion-personnel-tchap-PHP.git
+git_host: github.com                           # ← hostname Git (github.com ou GitLab interne)
+app_repo: git@github.com:VOTRE_USER/gestion-personnel-tchap-PHP.git
 app_branch: main
+
+# Mettre à true uniquement si app_repo utilise SSH (git@…)
+# Laisser à false pour un repo HTTPS public
+git_use_ssh: false
 
 # ── Port exposé par Nginx ────────────────────────────────────────────────────
 app_port: 8088
