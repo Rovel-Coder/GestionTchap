@@ -316,8 +316,9 @@ textarea{resize:vertical;}
 .carto-member-chevron{font-size:9px;color:var(--border-light);flex-shrink:0;transition:color .12s;}
 .carto-member-item:hover .carto-member-chevron{color:var(--text-muted);}
 /* Map marker */
-.carto-marker{width:30px;height:30px;border-radius:50%;background:var(--blue);border:2px solid var(--blue-light);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:10px;font-weight:700;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.5);cursor:pointer;transition:transform .15s;}
+.carto-marker{width:30px;height:30px;border-radius:50%;background:var(--blue);border:2px solid var(--blue-light);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:10px;font-weight:700;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.5);cursor:pointer;transition:transform .15s;overflow:hidden;}
 .carto-marker:hover{transform:scale(1.15);}
+.carto-marker--avatar img{width:100%;height:100%;object-fit:cover;display:block;}
 /* Member detail modal */
 .carto-detail-avatar{width:52px;height:52px;border-radius:50%;background:var(--gold-dim);border:2px solid rgba(201,168,76,.4);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:20px;font-weight:700;color:var(--gold);flex-shrink:0;overflow:hidden;}
 .carto-detail-avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%;}
