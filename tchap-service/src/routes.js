@@ -82,6 +82,34 @@ router.post('/login', async (req, res) => {
     }
 });
 
+// GET /profile/:userId — profil Tchap d'un utilisateur (displayname, avatar_url)
+router.get('/profile/:userId', async (req, res) => {
+    const userId = decodeURIComponent(req.params.userId);
+    const cfg    = bot.getBotConfig();
+
+    if (!cfg.homeserver || !cfg.accessToken) {
+        return res.status(503).json({ error: 'Bot non configuré (homeserver ou accessToken manquant)' });
+    }
+
+    const url = `${cfg.homeserver.replace(/\/$/, '')}/_matrix/client/v3/profile/${encodeURIComponent(userId)}`;
+
+    try {
+        const resp = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${cfg.accessToken}` },
+        });
+        const data = await resp.json().catch(() => ({}));
+
+        if (!resp.ok) {
+            const errMsg = data.error ?? data.errcode ?? `HTTP ${resp.status}`;
+            return res.status(resp.status).json({ error: errMsg });
+        }
+
+        res.json(data);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // GET /whoami — identité du bot connecté
 router.get('/whoami', async (_req, res) => {
     try {
