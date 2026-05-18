@@ -65,10 +65,12 @@
                 <span class="nav-label">Carto</span>
             </a>
             {% endif %}
+            {% if permissions.canManage %}
             <a href="{{ path('app_messages_page') }}" class="nav-btn {% if app.request.attributes.get('_route') starts with 'app_messages' %}active{% endif %}">
                 <i class="fa-solid fa-paper-plane"></i>
                 <span class="nav-label">Messages</span>
             </a>
+            {% endif %}
             {% if permissions.canAdmin %}
             <a href="{{ path('app_hierarchie') }}" class="nav-btn {% if app.request.attributes.get('_route') starts with 'app_hierarchie' %}active{% endif %}">
                 <i class="fa-solid fa-diagram-project"></i>
