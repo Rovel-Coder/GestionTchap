@@ -728,6 +728,12 @@ class TchapController extends AbstractController
             $reinvited  = 0;
             $errors     = [];
 
+            // Tous les user_id de bots connus — jamais expulsés quelle que soit la config
+            $knownBotIds = array_map('strtolower', array_filter(array_column(
+                $this->db->fetchAllAssociative("SELECT user_id FROM bots WHERE user_id IS NOT NULL AND user_id <> ''"),
+                'user_id'
+            )));
+
             // Charger les agents concernés
             $salonPh = implode(',', array_fill(0, count($salonIds), '?'));
             $salons = $this->db->fetchAllAssociative(
@@ -829,7 +835,7 @@ class TchapController extends AbstractController
                     // — mode manuel : tous les membres avec une invitation en attente
                     $reinviteScope = $manualMode ? $memberIds : $expectedIds;
                     foreach ($reinviteScope as $uid) {
-                        if ($uid === $botId) {
+                        if ($uid === $botId || in_array($uid, $knownBotIds, true)) {
                             continue;
                         }
                         if (($memberStatus[$uid] ?? '') === 'invite') {
@@ -868,7 +874,7 @@ class TchapController extends AbstractController
                             if (!$mid || !str_starts_with($mid, '@') || !str_contains($mid, ':')) {
                                 continue;
                             }
-                            if (strtolower($mid) === $botId) {
+                            if (strtolower($mid) === $botId || in_array($mid, $knownBotIds, true)) {
                                 continue;
                             }
                             if (!in_array($mid, $expectedIds, true)) {
