@@ -136,6 +136,59 @@
 
     </div>
 
+    {# ── Audit des droits ── #}
+    {% if permissions.canAdmin %}
+    <div class="bv-section-title">Audit des droits</div>
+    <div x-data="auditDroits()">
+        <div class="bv-audit-cards">
+            <template x-for="group in groups" :key="group.key">
+                <div class="bv-audit-card"
+                     :class="{ 'bv-audit-card--open': openGroup === group.key }"
+                     @click="toggle(group.key)">
+                    <div class="bv-audit-card-header">
+                        <div class="bv-audit-card-icon" :style="{ background: group.bg }">
+                            <i :class="group.icon" :style="{ color: group.color }"></i>
+                        </div>
+                        <div class="bv-audit-card-info">
+                            <div class="bv-audit-card-title" x-text="group.label"></div>
+                            <div class="bv-audit-card-count">
+                                <span x-show="!loaded">—</span>
+                                <span x-show="loaded"
+                                      x-text="(data[group.key] || []).length + ' titulaire' + ((data[group.key] || []).length > 1 ? 's' : '')"></span>
+                            </div>
+                        </div>
+                        <i class="fa-solid fa-chevron-down bv-audit-chevron"
+                           :class="{ 'bv-audit-chevron--open': openGroup === group.key }"></i>
+                    </div>
+                    <div class="bv-audit-list" x-show="openGroup === group.key" x-cloak @click.stop>
+                        <div x-show="loading" class="bv-audit-loading-state">
+                            <i class="fa-solid fa-spinner fa-spin"></i> Chargement…
+                        </div>
+                        <div x-show="!loading && (data[group.key] || []).length === 0" class="bv-audit-empty">
+                            Aucun titulaire
+                        </div>
+                        <div x-show="!loading">
+                            <template x-for="p in (data[group.key] || [])" :key="p.id + '_' + p.type + '_' + (p.scope || '')">
+                                <div class="bv-audit-person">
+                                    <div class="bv-audit-person-name">
+                                        <span class="bv-audit-grade" x-text="p.Grade"></span>
+                                        <span x-text="p.Nom + ' ' + p.Prenom"></span>
+                                    </div>
+                                    <div class="bv-audit-scope"
+                                         :class="p.type === 'global' ? 'bv-audit-scope--global' : 'bv-audit-scope--scoped'">
+                                        <template x-if="p.type === 'global'"><span>Global</span></template>
+                                        <template x-if="p.type !== 'global'"><span x-text="p.scope"></span></template>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+    {% endif %}
+
     {# ── Modale visite guidée ── #}
     <div class="bv-tour-overlay" x-show="tourOpen" x-cloak x-transition.opacity>
         <div class="bv-tour-modal" x-transition.scale>
@@ -455,9 +508,92 @@
     padding: 5px 10px;
 }
 
+/* ── Audit des droits ── */
+.bv-audit-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+.bv-audit-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color .18s;
+}
+.bv-audit-card:hover,
+.bv-audit-card--open { border-color: var(--border-light); }
+.bv-audit-card-header {
+    padding: 13px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    user-select: none;
+}
+.bv-audit-card-icon {
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px;
+    flex-shrink: 0;
+}
+.bv-audit-card-info { flex: 1; min-width: 0; }
+.bv-audit-card-title { font-size: 13px; font-weight: 600; }
+.bv-audit-card-count { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.bv-audit-chevron {
+    color: var(--text-muted);
+    font-size: 11px;
+    transition: transform .2s;
+    flex-shrink: 0;
+}
+.bv-audit-chevron--open { transform: rotate(180deg); }
+.bv-audit-list {
+    border-top: 1px solid var(--border);
+    max-height: 260px;
+    overflow-y: auto;
+}
+.bv-audit-person {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    gap: 8px;
+    transition: background .12s;
+}
+.bv-audit-person:last-child { border-bottom: none; }
+.bv-audit-person:hover { background: var(--bg-elevated); }
+.bv-audit-person-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bv-audit-grade { color: var(--text-muted); margin-right: 5px; font-size: 11px; }
+.bv-audit-scope {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    padding: 2px 7px;
+    border-radius: 4px;
+    white-space: nowrap;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 0;
+}
+.bv-audit-scope--global { background: rgba(45,108,223,.1); color: var(--blue-light); }
+.bv-audit-scope--scoped { background: rgba(167,139,250,.1); color: #a78bfa; }
+.bv-audit-empty,
+.bv-audit-loading-state {
+    padding: 14px 16px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
 @media (max-width: 900px) {
     .bv-stats { grid-template-columns: repeat(2, 1fr); }
     .bv-shortcuts { grid-template-columns: 1fr; }
+    .bv-audit-cards { grid-template-columns: 1fr; }
     .bv-view { padding: 16px; }
 }
 </style>
@@ -647,6 +783,57 @@ function bienvenueView() {
         closeTour() {
             this.tourOpen = false;
             localStorage.setItem('bv_tour_done_v1', '1');
+        },
+    };
+}
+
+function auditDroits() {
+    return {
+        loading: false,
+        loaded:  false,
+        data:    {},
+        openGroup: null,
+        groups: [
+            {
+                key:   'admins',
+                label: 'Administrateurs',
+                icon:  'fa-solid fa-shield-halved',
+                bg:    'rgba(45,108,223,.12)',
+                color: 'var(--blue-light)',
+            },
+            {
+                key:   'superviseurs',
+                label: 'Superviseurs de crise',
+                icon:  'fa-solid fa-triangle-exclamation',
+                bg:    'rgba(192,57,43,.12)',
+                color: 'var(--red-light)',
+            },
+            {
+                key:   'gestionnaires',
+                label: 'Gestionnaires',
+                icon:  'fa-solid fa-user-gear',
+                bg:    'rgba(110,195,138,.12)',
+                color: '#6ec38a',
+            },
+        ],
+
+        async toggle(key) {
+            if (this.openGroup === key) { this.openGroup = null; return; }
+            this.openGroup = key;
+            if (!this.loaded) await this.load();
+        },
+
+        async load() {
+            this.loading = true;
+            try {
+                const r = await fetch('/api/audit/droits');
+                this.data   = await r.json();
+                this.loaded = true;
+            } catch (e) {
+                console.error('Audit droits:', e);
+            } finally {
+                this.loading = false;
+            }
         },
     };
 }
