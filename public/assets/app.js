@@ -3294,6 +3294,7 @@ function cartoView() {
 
     // ── Init ──────────────────────────────────────────────────────
     async init() {
+      console.warn('[carto] init() appelé', new Error().stack.split('\n')[1]);
       const [u, p, s] = await Promise.all([
         apiFetch('/api/unites'),
         apiFetch('/api/carto/positions'),
@@ -3307,7 +3308,7 @@ function cartoView() {
       await this.$nextTick();
 
       if (typeof L !== 'undefined') {
-        if (this.map) { this.map.remove(); this.map = null; }
+        if (this.map) { console.warn('[carto] map.remove() dans init()'); this.map.remove(); this.map = null; }
         this.map = L.map('map').setView([46.5, 2.5], 6);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           attribution: '© OpenStreetMap contributors',
