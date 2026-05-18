@@ -113,6 +113,15 @@
   register: health
   until: health.status in [200, 302, 401]
 
+- name: Exécution des migrations base de données
+  community.docker.docker_container_exec:
+    container: "{{ app_dir | basename }}-php-1"
+    command: php bin/console app:db:migrate
+    chdir: /var/www/html
+  become_user: "{{ deploy_user }}"
+  register: migrate_result
+  changed_when: "'OK' in migrate_result.stdout"
+
 # ── Timer systemd de mise à jour automatique ────────────────────────────────
 
 - name: Déploiement du script de mise à jour
