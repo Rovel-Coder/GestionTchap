@@ -505,4 +505,6 @@ function peekLocationEvents() {
   return [..._locationEvents];
 }
 
-module.exports = { start, loginAndRestart, importMegolmKeys, get, isReady, getBotConfig, getAndClearLocationEvents, peekLocationEvents };
+function getMatrixClient() { return matrixClient; }
+
+module.exports = { start, loginAndRestart, importMegolmKeys, get, isReady, getBotConfig, getAndClearLocationEvents, peekLocationEvents, getMatrixClient };

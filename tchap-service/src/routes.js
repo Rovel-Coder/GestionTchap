@@ -11,6 +11,28 @@ const router = express.Router();
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+function extractGeoUri(content = {}) {
+    if (content['m.location']?.uri) return content['m.location'].uri;
+    if (content['org.matrix.msc3488.location']?.uri) return content['org.matrix.msc3488.location'].uri;
+    if (content.geo_uri) return content.geo_uri;
+    return null;
+}
+
+function extractLatLon(event) {
+    const geoUri = extractGeoUri(event?.content ?? {});
+    if (!geoUri) return null;
+
+    const match = geoUri.match(/^geo:(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
+    if (!match) return null;
+
+    const lat = parseFloat(match[1]);
+    const lon = parseFloat(match[2]);
+    if (isNaN(lat) || isNaN(lon)) return null;
+    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+
+    return { lat, lon };
+}
+
 /**
  * Wrapper autour de fetch() avec retry automatique sur 429 (rate limit Matrix).
  * Attend retry_after_ms + 200ms de buffer avant chaque retry.
@@ -551,35 +573,68 @@ router.get('/rooms/:roomId/beacon-positions', async (req, res) => {
 
         console.log(`[beacon] ${roomId} — ${activeUsers.size} partage(s) actif(s) : ${[...activeUsers].join(', ')}`);
 
-        // ── 2. Messages récents (API directe, fonctionne en clair) ─────────
+        // ── 2. Messages récents ────────────────────────────────────────────
+        // Sans filtre de type : en E2EE les events sont stockés sous m.room.encrypted
+        // côté serveur, le filtre par type les exclut systématiquement.
+        // On filtre côté client après tentative de déchiffrement.
         const positions = {};
         for (const userId of activeUsers) {
             positions[userId] = { userId, lat: null, lon: null, ts: null, active: true };
         }
-        const filter    = encodeURIComponent(JSON.stringify({ types: ['m.beacon', 'org.matrix.msc3488.beacon'] }));
-        const msgResp   = await fetch(
-            `${hs}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/messages?dir=b&limit=500&filter=${filter}`,
-            { headers }
+
+        const msgResp = await matrixFetch(
+            `${hs}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/messages?dir=b&limit=200`,
+            { headers },
+            '/messages'
         );
+
+        // Résout la méthode de déchiffrement exposée par le SDK (si disponible)
+        const mc         = bot.getMatrixClient();
+        const decryptFn  = mc
+            ? (mc['decryptRoomEvent']?.bind(mc)
+               ?? mc['encryptionSupport']?.decryptRoomEvent?.bind(mc['encryptionSupport']))
+            : null;
 
         if (msgResp.ok) {
             const msgData = await msgResp.json().catch(() => ({}));
             for (const ev of (msgData.chunk ?? [])) {
                 if (!activeUsers.has(ev.sender)) continue;
-                if (positions[ev.sender]?.lat != null && positions[ev.sender]?.lon != null) continue; // déjà le plus récent exploitable
+                if (positions[ev.sender]?.lat != null && positions[ev.sender]?.lon != null) continue;
 
-                const geoUri = ev.content?.['m.location']?.uri
-                    ?? ev.content?.['org.matrix.msc3488.location']?.uri
-                    ?? '';
-                const match  = geoUri.match(/^geo:(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
-                if (!match) continue;
+                let processEv  = ev;
+                let wasEncrypted = false;
 
-                const lat = parseFloat(match[1]);
-                const lon = parseFloat(match[2]);
-                if (isNaN(lat) || isNaN(lon)) continue;
+                // Tenter le déchiffrement des events E2EE via le SDK
+                if (ev.type === 'm.room.encrypted') {
+                    if (!decryptFn) continue; // SDK sans méthode de déchiffrement : passer au buffer
+                    try {
+                        processEv    = await decryptFn(ev, roomId);
+                        wasEncrypted = true;
+                    } catch {
+                        continue; // clé Megolm manquante — le key request automatique s'en charge
+                    }
+                }
 
-                positions[ev.sender] = { userId: ev.sender, lat, lon, ts: ev.origin_server_ts ?? Date.now(), active: true };
-                console.log(`[beacon/direct] ${ev.sender} → lat=${lat}, lon=${lon}`);
+                const isBeacon = processEv.type === 'm.beacon' || processEv.type === 'org.matrix.msc3488.beacon';
+                const isLegacy = processEv.type === 'm.room.message' && processEv.content?.msgtype === 'm.location';
+                if (!isBeacon && !isLegacy) continue;
+
+                const coords = extractLatLon(processEv);
+                if (!coords) continue;
+
+                const src = isLegacy
+                    ? (wasEncrypted ? 'direct_legacy_decrypted' : 'direct_legacy')
+                    : (wasEncrypted ? 'direct_beacon_decrypted' : 'direct_beacon');
+
+                positions[ev.sender] = {
+                    userId: ev.sender,
+                    lat: coords.lat,
+                    lon: coords.lon,
+                    ts: ev.origin_server_ts ?? Date.now(),
+                    active: true,
+                    source: src,
+                };
+                console.log(`[beacon/${src}] ${ev.sender} → lat=${coords.lat}, lon=${coords.lon}`);
             }
         }
 
@@ -588,7 +643,7 @@ router.get('/rooms/:roomId/beacon-positions', async (req, res) => {
             if (!activeUsers.has(ev.userId)) continue;
             const existing = positions[ev.userId];
             if (!existing || existing.ts == null || ev.ts > existing.ts) {
-                positions[ev.userId] = { ...ev, active: true };
+                positions[ev.userId] = { ...ev, active: true, source: 'sdk_buffer' };
                 console.log(`[beacon/sdk] ${ev.userId} → lat=${ev.lat}, lon=${ev.lon}`);
             }
         }
