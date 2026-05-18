@@ -831,10 +831,14 @@ function bienvenueView() {
 
 function auditDroits() {
     return {
-        loading:   false,
+        loading:   true,
         loaded:    false,
         data:      {},
         openGroup: null,
+
+        async init() {
+            await this.load();
+        },
 
         countFor(key) {
             if (!this.loaded) return '—';
@@ -842,10 +846,8 @@ function auditDroits() {
             return n + ' titulaire' + (n > 1 ? 's' : '');
         },
 
-        async toggle(key) {
-            if (this.openGroup === key) { this.openGroup = null; return; }
-            this.openGroup = key;
-            if (!this.loaded) await this.load();
+        toggle(key) {
+            this.openGroup = this.openGroup === key ? null : key;
         },
 
         async load() {
