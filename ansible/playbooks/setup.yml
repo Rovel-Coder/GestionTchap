@@ -17,13 +17,6 @@
   become: true
 
   pre_tasks:
-    - name: Installer les collections Ansible requises
-      ansible.builtin.command:
-        cmd: ansible-galaxy collection install -r "{{ playbook_dir }}/../requirements.yml"
-      delegate_to: localhost
-      run_once: true
-      changed_when: false
-
     - name: Générer la clé SSH locale si absente
       community.crypto.openssh_keypair:
         path: "~/.ssh/id_ed25519"
