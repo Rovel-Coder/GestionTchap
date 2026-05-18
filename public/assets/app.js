@@ -3196,14 +3196,10 @@ function cartoView() {
       if (!this.map || typeof L === 'undefined') return;
 
       const keep = new Set(this.filteredPersonnel.filter(p => this.hasPosition(p)).map(p => p.id));
-      console.log('[carto] updateMarkers keep=', [...keep], 'markers=', Object.keys(_leafletMarkers), 'personnel=', this.personnel.map(p=>({id:p.id,lat:p.latitude})));
 
       // Supprimer les marqueurs obsolètes
       for (const [id, marker] of Object.entries(_leafletMarkers)) {
-        if (!keep.has(Number(id))) {
-          console.error('[carto] SUPPRESSION marqueur id=', id, 'keep=', [...keep]);
-          marker.remove(); delete _leafletMarkers[id];
-        }
+        if (!keep.has(Number(id))) { marker.remove(); delete _leafletMarkers[id]; }
       }
 
       // Ajouter les nouveaux marqueurs
@@ -3294,7 +3290,6 @@ function cartoView() {
 
     // ── Init ──────────────────────────────────────────────────────
     async init() {
-      console.warn('[carto] init() appelé', new Error().stack.split('\n')[1]);
       const [u, p, s] = await Promise.all([
         apiFetch('/api/unites'),
         apiFetch('/api/carto/positions'),
@@ -3308,7 +3303,12 @@ function cartoView() {
       await this.$nextTick();
 
       if (typeof L !== 'undefined') {
-        if (this.map) { console.warn('[carto] map.remove() dans init()'); this.map.remove(); this.map = null; }
+        if (this.map) {
+          // Vider les références aux anciens marqueurs (ils sont attachés à l'ancienne carte)
+          for (const id of Object.keys(_leafletMarkers)) { delete _leafletMarkers[id]; }
+          this.map.remove();
+          this.map = null;
+        }
         this.map = L.map('map').setView([46.5, 2.5], 6);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           attribution: '© OpenStreetMap contributors',
