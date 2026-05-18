@@ -2978,6 +2978,8 @@ function cartoView() {
     salonSearch:      '',
     salonFilterOpen:  false,
     selectedSalonIds: [],
+    _refreshTimer:    null,
+    _refreshBusy:     false,
 
     // ── Map ─────────────────────────────────────────────────────
     map:     null,
@@ -3118,6 +3120,22 @@ function cartoView() {
       }
     },
 
+    async refreshPositions() {
+      if (this._refreshBusy) return;
+      this._refreshBusy = true;
+
+      try {
+        const data = await apiFetch('/api/carto/positions');
+        this.personnel = data || [];
+        await this.$nextTick();
+        this.updateMarkers();
+      } catch (e) {
+        // Rafraîchissement silencieux pour garder une expérience fluide.
+      } finally {
+        this._refreshBusy = false;
+      }
+    },
+
     // ── Member modal ──────────────────────────────────────────────
     async openMember(person) {
       this.selectedMember      = person;
@@ -3172,9 +3190,19 @@ function cartoView() {
 
       this.$watch('search',           () => this.$nextTick(() => this.updateMarkers()));
       this.$watch('selectedSalonIds', () => this.$nextTick(() => this.updateMarkers()));
+
+      // Rafraîchit discrètement la carto pour faire apparaître les nouveaux
+      // partages sans imposer un rechargement de page à l'utilisateur.
+      this._refreshTimer = setInterval(() => {
+        this.refreshPositions();
+      }, 10000);
     },
 
     destroy() {
+      if (this._refreshTimer) {
+        clearInterval(this._refreshTimer);
+        this._refreshTimer = null;
+      }
       if (this.map) { this.map.remove(); this.map = null; }
     },
   };
