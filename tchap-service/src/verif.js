@@ -2,6 +2,18 @@
 
 // SAS v1 implementation for Matrix device verification.
 // https://spec.matrix.org/v1.8/client-server-api/#short-authentication-string-sas-verification
+//
+// Flow implemented here (bridge = responder, sends ready + start) :
+//   Tchap  → bridge  : m.key.verification.request
+//   bridge → Tchap   : m.key.verification.ready
+//   bridge → Tchap   : m.key.verification.start   ← bridge is Alice (start-sender)
+//   Tchap  → bridge  : m.key.verification.accept  (with commitment)
+//   bridge → Tchap   : m.key.verification.key
+//   Tchap  → bridge  : m.key.verification.key
+//   both             : compute SAS emoji
+//   user confirms →
+//   bridge → Tchap   : m.key.verification.mac + done
+//   Tchap  → bridge  : m.key.verification.mac + done
 
 const crypto = require('crypto');
 
@@ -91,12 +103,13 @@ async function fetchBotEd25519Key(cfg) {
   return dev?.keys?.[`ed25519:${cfg.deviceId}`] || null;
 }
 
-function calcEmoji(sharedSecret, senderUserId, senderDeviceId, senderKeyB64,
-  receiverUserId, receiverDeviceId, receiverKeyB64, txnId) {
+// Bridge is Alice (sent start) : info = Alice|Bob order
+function calcEmoji(sharedSecret, aliceUserId, aliceDeviceId, aliceKeyB64,
+  bobUserId, bobDeviceId, bobKeyB64, txnId) {
   const info = [
     'MATRIX_KEY_VERIFICATION_SAS',
-    senderUserId, senderDeviceId, senderKeyB64,
-    receiverUserId, receiverDeviceId, receiverKeyB64,
+    aliceUserId, aliceDeviceId, aliceKeyB64,
+    bobUserId, bobDeviceId, bobKeyB64,
     txnId,
   ].join('|');
 
@@ -148,8 +161,9 @@ function onToDevice(type, event, cfg) {
       txnId,
       theirUserId: event.sender,
       theirDeviceId: c.from_device,
-      theirStartContent: null,
       theirKeyB64: null,
+      theirCommitment: null,
+      ourStartContent: null,
       ourKeyB64: null,
       ourEcdhPriv: null,
       sharedSecret: null,
@@ -170,37 +184,35 @@ function onToDevice(type, event, cfg) {
 
   if (!s || s.txnId !== txnId) return;
 
-  if (type === 'm.key.verification.start') {
-    s.theirStartContent = c;
-
-    if (s.phase === 'requested') {
-      console.log('[SAS] Start received before local accept, waiting for ready...');
+  // Tchap responds to our start with accept
+  if (type === 'm.key.verification.accept') {
+    if (s.phase !== 'start-sent') {
+      console.log(`[SAS] Unexpected accept in phase ${s.phase}`);
       return;
     }
-    if (s.phase === 'accepting') {
-      console.log('[SAS] Start received while ready is still in flight, resuming afterwards...');
-      return;
-    }
-    if (s.phase !== 'accepted') return;
+    s.theirCommitment = c.commitment;
+    s.phase = 'accept-received';
+    console.log('[SAS] Accept received, sending our key...');
 
-    _beginSasAfterStart().catch(e => {
-      if (s) {
-        s.phase = 'error';
-        s.error = e.message;
+    sendToDevice(cfg, s.theirUserId, s.theirDeviceId, 'm.key.verification.key', {
+      key: s.ourKeyB64,
+      transaction_id: s.txnId,
+    }).then(() => {
+      s.phase = 'key-sent';
+      console.log('[SAS] Key sent');
+      if (s.theirKeyB64) {
+        _computeSas().catch(e => { if (s) { s.phase = 'error'; s.error = e.message; } });
       }
-    });
+    }).catch(e => { if (s) { s.phase = 'error'; s.error = e.message; } });
     return;
   }
 
   if (type === 'm.key.verification.key') {
     s.theirKeyB64 = (c.key || '').replace(/=+$/, '');
-    console.log(`[SAS] Key received: ${c.key?.slice(0, 10)}...`);
+    console.log(`[SAS] Their key received: ${c.key?.slice(0, 10)}...`);
     if (s.ourKeyB64 && s.theirKeyB64 && s.phase === 'key-sent') {
       _computeSas().catch(e => {
-        if (s) {
-          s.phase = 'error';
-          s.error = e.message;
-        }
+        if (s) { s.phase = 'error'; s.error = e.message; }
       });
     }
     return;
@@ -231,84 +243,55 @@ async function acceptVerif(cfg) {
   s.cfg = cfg;
   s.phase = 'accepting';
 
+  // 1. Send ready
   await sendToDevice(cfg, s.theirUserId, s.theirDeviceId, 'm.key.verification.ready', {
     from_device: cfg.deviceId,
     methods: ['m.sas.v1'],
     transaction_id: s.txnId,
   });
+  console.log('[SAS] Ready sent');
 
-  s.phase = 'accepted';
-  console.log('[SAS] Ready sent, waiting for start...');
-
-  if (s.theirStartContent) {
-    await _beginSasAfterStart();
-  }
-}
-
-async function _beginSasAfterStart() {
-  if (!s || s.phase !== 'accepted' || !s.theirStartContent) return;
-  s.phase = 'started';
-  console.log('[SAS] Start received, sending accept');
-  await _sendAcceptAndKey();
-}
-
-async function _sendAcceptAndKey() {
-  const cfg = s.cfg;
-
+  // 2. Generate our ECDH keypair now so we can commit to it in start
   const { privateKey, publicKey } = crypto.generateKeyPairSync('x25519', {
     privateKeyEncoding: { type: 'pkcs8', format: 'der' },
     publicKeyEncoding: { type: 'spki', format: 'der' },
   });
-
   const rawPub = spkiToRaw(Buffer.from(publicKey));
-  const ourKeyB64 = rawPub.toString('base64').replace(/=+$/, '');
-
-  s.ourKeyB64 = ourKeyB64;
+  s.ourKeyB64 = rawPub.toString('base64').replace(/=+$/, '');
   s.ourEcdhPriv = Buffer.from(privateKey);
 
-  const startJsonCanonical = canonicalJson(s.theirStartContent);
-  const startJsonRaw = JSON.stringify(s.theirStartContent);
-  const commitment = crypto.createHash('sha256')
-    .update(ourKeyB64 + startJsonCanonical)
-    .digest('base64')
-    .replace(/=+$/, '');
-  const commitmentRaw = crypto.createHash('sha256')
-    .update(ourKeyB64 + startJsonRaw)
-    .digest('base64')
-    .replace(/=+$/, '');
-
-  console.log('[SAS][DEBUG] ourKeyB64        =', ourKeyB64);
-  console.log('[SAS][DEBUG] startJson canon  =', startJsonCanonical);
-  console.log('[SAS][DEBUG] startJson raw    =', startJsonRaw);
-  console.log('[SAS][DEBUG] sameOrder?       =', startJsonCanonical === startJsonRaw);
-  console.log('[SAS][DEBUG] commitment canon =', commitment);
-  console.log('[SAS][DEBUG] commitment raw   =', commitmentRaw);
-
-  await sendToDevice(cfg, s.theirUserId, s.theirDeviceId, 'm.key.verification.accept', {
-    commitment,
-    hash: 'sha256',
-    key_agreement_protocol: 'curve25519-hkdf-sha256',
-    message_authentication_code: 'hkdf-hmac-sha256.v2',
+  // 3. Send start — bridge is Alice (start-sender), Tchap will respond with accept
+  const startContent = {
+    from_device: cfg.deviceId,
     method: 'm.sas.v1',
+    key_agreement_protocols: ['curve25519-hkdf-sha256'],
+    hashes: ['sha256'],
+    message_authentication_codes: ['hkdf-hmac-sha256.v2'],
     short_authentication_string: ['decimal', 'emoji'],
     transaction_id: s.txnId,
-  });
-
-  await sendToDevice(cfg, s.theirUserId, s.theirDeviceId, 'm.key.verification.key', {
-    key: ourKeyB64,
-    transaction_id: s.txnId,
-  });
-
-  s.phase = 'key-sent';
-  console.log('[SAS] Accept + key sent');
-
-  if (s.theirKeyB64) {
-    await _computeSas();
-  }
+  };
+  await sendToDevice(cfg, s.theirUserId, s.theirDeviceId, 'm.key.verification.start', startContent);
+  s.ourStartContent = startContent;
+  s.phase = 'start-sent';
+  console.log('[SAS] Start sent, waiting for accept from Tchap...');
 }
 
 async function _computeSas() {
-  const { theirUserId, theirDeviceId, theirKeyB64, ourKeyB64, ourEcdhPriv, txnId, cfg } = s;
+  const { theirUserId, theirDeviceId, theirKeyB64, ourKeyB64, ourEcdhPriv, theirCommitment, ourStartContent, txnId, cfg } = s;
+
+  // Verify Tchap's commitment : sha256(their_key + canonical(ourStartContent))
+  const expectedCommitment = crypto.createHash('sha256')
+    .update(theirKeyB64 + canonicalJson(ourStartContent))
+    .digest('base64').replace(/=+$/, '');
+
+  if (theirCommitment && expectedCommitment !== theirCommitment) {
+    console.error('[SAS] Commitment mismatch — aborting');
+    console.error('[SAS] expected:', expectedCommitment);
+    console.error('[SAS] got:     ', theirCommitment);
+    s.phase = 'error';
+    s.error = 'Commitment mismatch';
+    return;
+  }
 
   const theirRaw = Buffer.from(theirKeyB64, 'base64');
   const theirSpki = rawToSpki(theirRaw);
@@ -319,20 +302,11 @@ async function _computeSas() {
   const sharedSecret = crypto.diffieHellman({ privateKey: ourPrivKey, publicKey: theirPubKey });
   s.sharedSecret = sharedSecret;
 
-  const info = [
-    'MATRIX_KEY_VERIFICATION_SAS',
-    theirUserId, theirDeviceId, theirKeyB64,
-    cfg.userId, cfg.deviceId, ourKeyB64,
-    txnId,
-  ].join('|');
-  console.log('[SAS][DEBUG] HKDF info =', info);
-  console.log('[SAS][DEBUG] Alice (start):', theirUserId, '/', theirDeviceId, '/ key:', theirKeyB64.slice(0, 12) + '...');
-  console.log('[SAS][DEBUG] Bob   (accept):', cfg.userId, '/', cfg.deviceId, '/ key:', ourKeyB64.slice(0, 12) + '...');
-
+  // Bridge = Alice (sent start), Tchap = Bob (sent accept)
   s.emoji = calcEmoji(
     sharedSecret,
-    theirUserId, theirDeviceId, theirKeyB64,
-    cfg.userId, cfg.deviceId, ourKeyB64,
+    cfg.userId, cfg.deviceId, ourKeyB64,        // Alice = bridge
+    theirUserId, theirDeviceId, theirKeyB64,     // Bob   = Tchap
     txnId,
   );
 
