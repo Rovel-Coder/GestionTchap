@@ -144,9 +144,6 @@ class CartoController extends AbstractController
                 : (($liveData['has_coords'] ?? false) ? 'live_with_coords' : 'live_without_coords');
         }
 
-        $withLat = array_filter($rows, fn($r) => $r['latitude'] !== null);
-        error_log('[carto/positions] count=' . count($rows) . ' withLat=' . count($withLat) . ' ids=' . implode(',', array_column(array_values($withLat), 'id')));
-
         return $this->json($rows);
     }
 

@@ -2967,6 +2967,9 @@ function suiviCriseView() {
 
 // ── Vue Carto ──────────────────────────────────────────────
 function cartoView() {
+  // Hors du proxy Alpine pour éviter que Leaflet markers soient wrappés en Proxy réactif
+  const _leafletMarkers = {};
+
   return {
     // ── Data ────────────────────────────────────────────────────
     unites:           [],
@@ -2984,7 +2987,6 @@ function cartoView() {
 
     // ── Map ─────────────────────────────────────────────────────
     map:     null,
-    markers: {},   // { personId: L.Marker }
 
     // ── Member modal ────────────────────────────────────────────
     memberModalOpen:      false,
@@ -3196,13 +3198,13 @@ function cartoView() {
       const keep = new Set(this.filteredPersonnel.filter(p => this.hasPosition(p)).map(p => p.id));
 
       // Supprimer les marqueurs obsolètes
-      for (const [id, marker] of Object.entries(this.markers)) {
-        if (!keep.has(Number(id))) { marker.remove(); delete this.markers[id]; }
+      for (const [id, marker] of Object.entries(_leafletMarkers)) {
+        if (!keep.has(Number(id))) { marker.remove(); delete _leafletMarkers[id]; }
       }
 
       // Ajouter les nouveaux marqueurs
       for (const p of this.filteredPersonnel) {
-        if (!this.hasPosition(p) || this.markers[p.id]) continue;
+        if (!this.hasPosition(p) || _leafletMarkers[p.id]) continue;
         const initials = ((p.Prenom?.[0] || '') + (p.Nom?.[0] || '')).toUpperCase();
         const marker = L.marker([p.latitude, p.longitude], {
           icon: L.divIcon({
@@ -3218,13 +3220,13 @@ function cartoView() {
           (p.Grade ? `<br><small>${p.Grade}</small>` : '')
         );
         marker.on('click', () => this.openMember(p));
-        this.markers[p.id] = marker;
+        _leafletMarkers[p.id] = marker;
 
         if (p.user_id) {
           apiFetch(`/api/tchap/profile/${encodeURIComponent(p.user_id)}`).then(profile => {
             const avatarUrl = this.mxcToHttp(profile?.avatar_url);
-            if (avatarUrl && this.markers[p.id]) {
-              this.markers[p.id].setIcon(L.divIcon({
+            if (avatarUrl && _leafletMarkers[p.id]) {
+              _leafletMarkers[p.id].setIcon(L.divIcon({
                 html: `<div class="carto-marker carto-marker--avatar"><img src="${avatarUrl}" onerror="this.parentElement.innerHTML='${initials}';this.parentElement.classList.remove('carto-marker--avatar')"></div>`,
                 className: '',
                 iconSize: [30, 30],
