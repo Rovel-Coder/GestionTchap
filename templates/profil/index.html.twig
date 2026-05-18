@@ -250,7 +250,7 @@ function profilView() {
             if (!this.profil.user_id) return;
             this.avatarRefreshing = true;
             try {
-                await fetch(`/api/avatar?userId=${encodeURIComponent(this.profil.user_id)}`, { method: 'DELETE' });
+                await apiFetch(`/api/avatar?userId=${encodeURIComponent(this.profil.user_id)}`, { method: 'DELETE' });
                 // Forcer le rechargement de l'image en ajoutant un timestamp
                 const img = this.$el.querySelector('img[src*="/api/avatar"]');
                 if (img) {
