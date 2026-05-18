@@ -3219,6 +3219,20 @@ function cartoView() {
         );
         marker.on('click', () => this.openMember(p));
         this.markers[p.id] = marker;
+
+        if (p.user_id) {
+          apiFetch(`/api/tchap/profile/${encodeURIComponent(p.user_id)}`).then(profile => {
+            const avatarUrl = this.mxcToHttp(profile?.avatar_url);
+            if (avatarUrl && this.markers[p.id]) {
+              this.markers[p.id].setIcon(L.divIcon({
+                html: `<div class="carto-marker carto-marker--avatar"><img src="${avatarUrl}" onerror="this.parentElement.innerHTML='${initials}';this.parentElement.classList.remove('carto-marker--avatar')"></div>`,
+                className: '',
+                iconSize: [30, 30],
+                iconAnchor: [15, 15],
+              }));
+            }
+          }).catch(() => {});
+        }
       }
     },
 
@@ -3228,7 +3242,7 @@ function cartoView() {
 
       try {
         const data = await apiFetch('/api/carto/positions');
-        this.personnel = data || [];
+        if (Array.isArray(data) && data.length > 0) this.personnel = data;
         if (this.memberModalOpen && this.selectedMember?.id) {
           const updated = this.personnel.find(p => p.id === this.selectedMember.id);
           if (updated) this.selectedMember = updated;
@@ -3298,6 +3312,7 @@ function cartoView() {
 
       this.$watch('search',           () => this.$nextTick(() => this.updateMarkers()));
       this.$watch('selectedSalonIds', () => this.$nextTick(() => this.updateMarkers()));
+      this.$watch('personnel',        () => this.$nextTick(() => this.updateMarkers()));
 
       // Rafraîchit discrètement la carto pour faire apparaître les nouveaux
       // partages sans imposer un rechargement de page à l'utilisateur.
