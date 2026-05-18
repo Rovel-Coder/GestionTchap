@@ -480,16 +480,20 @@ class TchapService
         }
         [$server, $mediaId] = $parts;
 
-        if (empty($config['homeserver']) || empty($config['token'])) {
+        if (empty($config['homeserver'])) {
             return null;
         }
 
-        $hs  = rtrim($config['homeserver'], '/');
-        $url = "$hs/_matrix/media/v3/thumbnail/$server/$mediaId?width=$size&height=$size&method=crop";
+        $hs      = rtrim($config['homeserver'], '/');
+        $url     = "$hs/_matrix/media/v3/thumbnail/$server/$mediaId?width=$size&height=$size&method=crop";
+        $headers = ['Content-Type' => 'application/json'];
+        if (!empty($config['token'])) {
+            $headers['Authorization'] = 'Bearer ' . $config['token'];
+        }
 
         try {
             $response = $this->httpClient->request('GET', $url, [
-                'headers' => ['Authorization' => 'Bearer ' . $config['token']],
+                'headers' => $headers,
                 'timeout' => 8,
             ]);
 
