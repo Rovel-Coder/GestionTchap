@@ -218,7 +218,7 @@ class SyncTchapCommand extends Command
                             if (!$mid || !str_starts_with($mid, '@') || !str_contains($mid, ':')) {
                                 continue;
                             }
-                            if ($mid === $botId) {
+                            if (strtolower($mid) === $botId) {
                                 continue;
                             }
                             if (!in_array($mid, $expectedIds, true)) {
