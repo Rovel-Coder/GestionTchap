@@ -3332,11 +3332,10 @@ function cartoView() {
       this.$watch('selectedSalonIds', () => this.$nextTick(() => this.updateMarkers()));
       this.$watch('personnel',        () => this.$nextTick(() => this.updateMarkers()));
 
-      // Rafraîchit discrètement la carto pour faire apparaître les nouveaux
-      // partages sans imposer un rechargement de page à l'utilisateur.
+      // Rafraîchit la carto au même rythme que les beacons Tchap (~5s)
       this._refreshTimer = setInterval(() => {
         this.refreshPositions();
-      }, 10000);
+      }, 5000);
     },
 
     destroy() {
