@@ -210,6 +210,7 @@ class CartoController extends AbstractController
         }
 
         $userIds = [];
+        $globalCfg = $this->config->getTchapConfig();
 
         foreach ($salons as $salon) {
             $roomId = (string) ($salon['room_id'] ?? '');
@@ -218,8 +219,17 @@ class CartoController extends AbstractController
             }
 
             try {
-                $cfg = $this->getCfgForRoom($roomId);
-                $members = $this->tchap->getMembers($roomId, $cfg);
+                // La carto doit d'abord interroger le bot principal (bridge/Admin),
+                // car certains salons sont effectivement gérés par lui même si une
+                // unité possède aussi un bot dédié configuré localement.
+                $cfg = $globalCfg;
+                try {
+                    $members = $this->tchap->getMembers($roomId, $cfg);
+                } catch (\Throwable) {
+                    $cfg = $this->getCfgForRoom($roomId);
+                    $members = $this->tchap->getMembers($roomId, $cfg);
+                }
+
                 $botId = strtolower($cfg['botUserId'] ?? '');
 
                 foreach ($members as $member) {

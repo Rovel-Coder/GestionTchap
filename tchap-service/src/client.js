@@ -201,8 +201,12 @@ async function start() {
     ? new MatrixClient(config.homeserver, config.accessToken, storage, crypto)
     : new MatrixClient(config.homeserver, config.accessToken, storage);
 
-  // Extrait un geo_uri depuis un contenu d'événement Matrix (plusieurs formats supportés)
+  // Extrait un geo_uri depuis un contenu d'événement Matrix (formats stables et MSC)
   function extractGeoUri(content) {
+    // Format stable : m.beacon / m.location
+    if (content['m.location']?.uri) {
+      return content['m.location'].uri;
+    }
     // MSC3488 beacon : org.matrix.msc3488.beacon
     if (content['org.matrix.msc3488.location']?.uri) {
       return content['org.matrix.msc3488.location'].uri;
@@ -218,8 +222,8 @@ async function start() {
     const content = event?.content ?? {};
     const type    = event?.type ?? '';
 
-    // Événement de position live (MSC3672/MSC3488 beacon)
-    const isBeacon  = type === 'org.matrix.msc3488.beacon';
+    // Événement de position live (types stables et MSC)
+    const isBeacon  = type === 'm.beacon' || type === 'org.matrix.msc3488.beacon';
     // Ancien message de localisation ponctuelle
     const isLegacy  = type === 'm.room.message' && content.msgtype === 'm.location';
 

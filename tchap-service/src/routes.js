@@ -435,11 +435,12 @@ router.get('/location-events', (_req, res) => {
     res.json(bot.getAndClearLocationEvents());
 });
 
-// GET /rooms/:roomId/beacon-positions — positions live issues des beacons MSC3672/MSC3488
+// GET /rooms/:roomId/beacon-positions — positions live issues des beacons Matrix
 // Stratégie hybride :
 //   1. Etat du salon (API directe, non chiffré) → qui partage activement (beacon_info live:true)
 //   2. Messages récents (API directe)           → coordonnées pour salons non E2EE
 //   3. Buffer SDK (room.event)                  → coordonnées pour salons E2EE (décryptées)
+// Compatibilité : types stables (m.beacon / m.beacon_info) et MSC historiques.
 router.get('/rooms/:roomId/beacon-positions', async (req, res) => {
     const roomId = req.params.roomId;
     const cfg    = bot.getBotConfig();
@@ -466,7 +467,8 @@ router.get('/rooms/:roomId/beacon-positions', async (req, res) => {
         const activeUsers = new Set();
 
         for (const ev of (Array.isArray(state) ? state : [])) {
-            if (ev.type === 'org.matrix.msc3672.beacon_info' && ev.content?.live === true) {
+            if ((ev.type === 'm.beacon_info' || ev.type === 'org.matrix.msc3672.beacon_info')
+                && ev.content?.live === true) {
                 activeUsers.add(ev.state_key);
             }
         }
@@ -480,7 +482,7 @@ router.get('/rooms/:roomId/beacon-positions', async (req, res) => {
 
         // ── 2. Messages récents (API directe, fonctionne en clair) ─────────
         const positions = {};
-        const filter    = encodeURIComponent(JSON.stringify({ types: ['org.matrix.msc3488.beacon'] }));
+        const filter    = encodeURIComponent(JSON.stringify({ types: ['m.beacon', 'org.matrix.msc3488.beacon'] }));
         const msgResp   = await fetch(
             `${hs}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/messages?dir=b&limit=500&filter=${filter}`,
             { headers }
@@ -492,7 +494,9 @@ router.get('/rooms/:roomId/beacon-positions', async (req, res) => {
                 if (!activeUsers.has(ev.sender)) continue;
                 if (positions[ev.sender])         continue; // déjà le plus récent
 
-                const geoUri = ev.content?.['org.matrix.msc3488.location']?.uri ?? '';
+                const geoUri = ev.content?.['m.location']?.uri
+                    ?? ev.content?.['org.matrix.msc3488.location']?.uri
+                    ?? '';
                 const match  = geoUri.match(/^geo:(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
                 if (!match) continue;
 
