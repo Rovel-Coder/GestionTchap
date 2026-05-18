@@ -9,13 +9,20 @@
 {% endblock %}
 
 {% block content %}
-<div class="view" x-data="cartoView()" x-init="init()">
+<div class="view" x-data="Object.assign(cartoView(), { sidebarOpen: false })" x-init="init()">
 
     {# ── Toolbar ── #}
     <div class="view-toolbar">
         <div class="toolbar-left">
             <span class="view-title">CARTOGRAPHIE</span>
             <span class="badge" x-text="filteredPersonnel.length + ' localisé' + (filteredPersonnel.length > 1 ? 's' : '')"></span>
+            <button class="btn-ghost" @click="sidebarOpen = !sidebarOpen"
+                :class="sidebarOpen ? 'btn-ghost--active' : ''"
+                title="Afficher / masquer la liste des membres"
+                style="display:flex;align-items:center;gap:6px;font-size:12px;padding:4px 10px;">
+                <i class="fa-solid fa-users"></i>
+                <span x-text="sidebarOpen ? 'Masquer' : 'Membres'"></span>
+            </button>
         </div>
         <div class="toolbar-right">
             {# ── Bouton partage position (comptes personnel uniquement) ── #}
@@ -101,7 +108,7 @@
         <div id="map" class="carto-map"></div>
 
         {# ── Panneau membres ── #}
-        <div class="carto-sidebar">
+        <div class="carto-sidebar" x-show="sidebarOpen" x-cloak>
             <div class="carto-sidebar-header" style="display:flex;align-items:center;justify-content:space-between;">
                 <span class="carto-sidebar-title">MEMBRES</span>
                 <span x-show="selectedSalonIds.length > 0"
